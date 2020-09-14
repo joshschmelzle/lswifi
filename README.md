@@ -13,6 +13,8 @@ Installation
 > python -m pip install lswifi
 ```
 
+![](/docs/31Pu7mCVFR.gif)
+
 Usage
 -----
 
@@ -39,6 +41,16 @@ Output verbose information (including Information Elements) for BSSID `00:00:00:
 ``` {.sourceCode .bash}
 > lswifi -ies 00:00:00:00:00:00
 ```
+
+![](/docs/Wtj6xTEisE.gif)
+
+Print help information:
+
+``` {.sourceCode .bash}
+> lswifi -h
+```
+
+![](/docs/BCKaCek52E.gif)
 
 FAQs
 ----
