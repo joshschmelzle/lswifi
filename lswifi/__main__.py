@@ -78,6 +78,7 @@ def main():
 
 def user_ack_apnames_disclaimer() -> bool:
     """ tell user that BSSIDs and apnames will be cached in appdata """
+    log = logging.getLogger(__name__)
     parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), "lswifi")
     parentexportpathexists = os.path.isdir(parentexportpath)
     if not parentexportpathexists:
