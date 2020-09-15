@@ -515,12 +515,8 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                         ):  # if current AP doesn't match whats in the json
                             newapnames[
                                 scan_bssid
-                            ] = (
-                                scan_apname
-                            )  # then 1) update new hash table with current AP name
-                            bss.apname.value = (
-                                scan_apname
-                            )  # then 2) update the apname that will be displayed
+                            ] = scan_apname  # then 1) update new hash table with current AP name
+                            bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
                     log.debug(
                         f"LIVE BSSID {scan_bssid} CACHED {cachedAP} SCANNED {scan_apname}"
                     )
