@@ -52,6 +52,30 @@ Print help information:
 
 ![](/docs/BCKaCek52E.gif)
 
+Upgrading
+---------
+
+Here is how to upgrade `lswifi` when there is a new version available"
+
+```
+PS C:\Users\josh> pip install --upgrade lswifi
+Collecting lswifi
+  Using cached lswifi-0.1.1-py2.py3-none-any.whl (57 kB)
+Installing collected packages: lswifi
+  Attempting uninstall: lswifi
+    Found existing installation: lswifi 0.1
+    Uninstalling lswifi-0.1:
+      Successfully uninstalled lswifi-0.1
+Successfully installed lswifi-0.1.1
+```
+
+Check the version installed:
+
+```
+PS C:\Users\josh> lswifi -v
+lswifi 0.1.1
+```
+
 FAQs
 ----
 
