@@ -55,7 +55,7 @@ Print help information:
 Upgrading
 ---------
 
-Here is how to upgrade `lswifi` when there is a new version available"
+Here is how to upgrade `lswifi` when there is a new version available:
 
 ```
 PS C:\Users\josh> pip install --upgrade lswifi
