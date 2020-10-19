@@ -604,6 +604,38 @@ class Amendments(collections.abc.MutableSequence):
         return format("/".join(sorted(self.list)), fmt)
 
 
+class Modes(collections.abc.MutableSequence):
+    def __init__(self, *args):
+        self.list = list()
+        self.extend(list(args))
+        self.header = Header("MODES")
+        self.subheader = SubHeader("")
+
+    def out(self):
+        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
+
+    def __delitem__(self, index):
+        del self.list[index]
+
+    def __getitem__(self, index):
+        return self.list[index]
+
+    def __len__(self):
+        return len("/".join(sorted(self.list)))
+
+    def __setitem__(self, index, value):
+        self.list[index] = value
+
+    def insert(self, index, value):
+        self.list.insert(index, value)
+
+    def __str__(self):
+        return "/".join(sorted(self.list))
+
+    def __format__(self, fmt):
+        return format("/".join(sorted(self.list)), fmt)
+
+
 class IENumbers(collections.abc.MutableSequence):
     def __init__(self, *args):
         self.list = list()
@@ -673,6 +705,8 @@ class WirelessNetworkBss:
         self.beacon_interval = BeaconInterval(bss_entry.BeaconPeriod)
         self.channel_number = ChannelNumber(bss_entry)
         self.channel_frequency = ChannelFrequency(bss_entry)
+        self.is_2ghz = is_two_four_band(int(self.channel_frequency.value))
+        self.is_5ghz = is_five_band(int(self.channel_frequency.value))
         self.channel_width = ChannelWidth()
         self.channel_number_marked = self.channel_number
         self.wlanrateset = Rates(bss_entry)
@@ -687,7 +721,7 @@ class WirelessNetworkBss:
         self.utilization = Utilization()
         self.ienumbers = IENumbers()
         self.amendments = Amendments()
-        self.modes = []
+        self.modes = Modes()
         self.bssbytes = bss_entry
         self.bsscolor = BSSColor()
         self.channel_marking = ""
@@ -2153,8 +2187,9 @@ class WirelessNetworkBss:
         # parse VHT Capabilities Info
 
         if self is not None:
-            if "ac" not in self.modes:
-                self.modes.append("ac")
+            if self.is_5ghz:
+                if "ac" not in self.modes:
+                    self.modes.append("ac")
 
         out = "Info: 0x{:02x}".format(edata[3])
         out += "{:02x}".format(edata[2])
@@ -2189,8 +2224,9 @@ class WirelessNetworkBss:
         """
 
         if self is not None:
-            if "ac" not in self.modes:
-                self.modes.append("ac")
+            if self.is_5ghz:
+                if "ac" not in self.modes:
+                    self.modes.append("ac")
 
         body = list(memoryview(edata))
         channel_width = bool(body[0])

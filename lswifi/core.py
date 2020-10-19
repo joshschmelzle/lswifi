@@ -555,7 +555,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.rssi.out(),
                     bss.phy_type.out(),
                     bss.channel_number_marked.out(),
-                    # bss.channel_width.out(),
+                    # bss.modes.out(),
                     bss.spatial_streams.out(),
                     bss.security.out(),
                     bss.amendments.out(),
