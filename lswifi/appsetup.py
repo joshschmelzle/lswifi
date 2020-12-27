@@ -34,7 +34,7 @@ def setup_logger(args) -> logging.Logger:
                 "level": args.debug,
                 "formatter": "standard",
                 "class": "logging.StreamHandler",
-                "stream": "ext://sys.stdout",
+                "stream": "ext://sys.stderr",
             }
         },
         "loggers": {"": {"handlers": ["default"], "level": args.debug}},
