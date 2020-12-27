@@ -86,7 +86,7 @@ def setup_parser() -> argparse:
         fromfile_prefix_chars="@",
     )
     parser.add_argument(
-        "-version", "-V", action="version", version=f"%(prog)s {__version__}"
+        "-version", action="version", version=f"%(prog)s {__version__}"
     )
     parser.add_argument(
         "-iface", dest="iface", metavar="INTERFACE", help="what iface to use"
@@ -121,7 +121,6 @@ def setup_parser() -> argparse:
         "-exclude", dest="exclude", metavar="SSID", help="SSID exclude filter"
     )
     parser.add_argument(
-        "-b",
         "-bssid",
         dest="bssid",
         metavar="BSSID",
@@ -174,7 +173,6 @@ def setup_parser() -> argparse:
     )
     parser.add_argument(
         "-channel",
-        "-c",
         dest="get_current_channel",
         action="store_true",
         help="print the channel of the connected AP",
@@ -200,14 +198,12 @@ def setup_parser() -> argparse:
     parser.add_argument("--supported", dest="supported", action="store_true")
     # parser.add_argument(
     #    "--json",
-    #    "-j",
     #    dest="json",
     #    action="store_true",
     #    help="output will be formatted as json",
     # )
     # parser.add_argument(
     #    "--keepalive",
-    #    "-k",
     #    action="store_true",
     #    help="a keepalive to monitor and display scan results on scan complete events",
     # )
