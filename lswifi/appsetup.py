@@ -85,9 +85,7 @@ def setup_parser() -> argparse:
         epilog=f"Made with Python by Josh Schmelzle",
         fromfile_prefix_chars="@",
     )
-    parser.add_argument(
-        "-version", action="version", version=f"%(prog)s {__version__}"
-    )
+    parser.add_argument("-version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "-iface", dest="iface", metavar="INTERFACE", help="what iface to use"
     )
@@ -196,12 +194,12 @@ def setup_parser() -> argparse:
         help="print a list of available WLAN interfaces",
     )
     parser.add_argument("--supported", dest="supported", action="store_true")
-    # parser.add_argument(
-    #    "--json",
-    #    dest="json",
-    #    action="store_true",
-    #    help="output will be formatted as json",
-    # )
+    parser.add_argument(
+        "--json",
+        dest="json",
+        action="store_true",
+        help="output will be formatted as json",
+    )
     # parser.add_argument(
     #    "--keepalive",
     #    action="store_true",

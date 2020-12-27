@@ -355,6 +355,8 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
 
     newapnames = {}
 
+    json_out = []
+
     bsslen = len(wireless_network_bss_list)
     # WirelessNetworkBss object
     for index, bss in enumerate(wireless_network_bss_list):
@@ -528,8 +530,29 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         # bss.element.out() contains a tuple with the following values
         #   1. value, 2. header and alignment (left, center, right), 3. subheader
 
+        connected = False
         if bss.bssid.connected:
+            connected = True
             bss.bssid.value += "(*)"
+
+        json_out.append(
+            {
+                "amendments": str(bss.amendments.out()),
+                "apname": str(bss.apname.out()),
+                "bssid": str(bss.bssid.out()),
+                "channel_number_marked": str(bss.channel_number_marked.out()).strip(),
+                "channel_width": str(bss.channel_width.out()),
+                "connected": connected,
+                "ie_numbers": str(bss.ienumbers.out()),
+                "modes": str(bss.modes.out()),
+                "phy_type": str(bss.phy_type.out()),
+                "rssi": str(bss.rssi.out()),
+                "security": str(bss.security.out()),
+                "spatial_streams": str(bss.spatial_streams.out()),
+                "ssid": str(bss.ssid.out()),
+                "uptime": str(bss.uptime.out()),
+            }
+        )
 
         if args.apnames or args.ethers:
             out_results.append(
@@ -578,7 +601,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         return
 
     # outlist to screen
-    print(
+    log.info(
         f"display filter sensitivity {DISPLAY_SENSITIVITY}; "
         f"displaying {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results:"
     )
@@ -643,14 +666,17 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         out_results.insert(3, out_subheader_decorators)
 
         # print results
-        for row in out_results:
-            out_results = []
-            for data in row:
-                if isinstance(data, OUT_TUPLE):
-                    out_results.append(f"{data.value}")
-                else:
-                    out_results.append(f"{data}")
-            print(result.format(*tuple(out_results)))
+        if not args.json:
+            for row in out_results:
+                out_results = []
+                for data in row:
+                    if isinstance(data, OUT_TUPLE):
+                        out_results.append(f"{data.value}")
+                    else:
+                        out_results.append(f"{data}")
+                print(result.format(*tuple(out_results)))
+        else:
+            print(json.dumps(json_out))
 
     # TODO: needs a test to verify this actually does what it should. ALERT the user of dup MACs
     duplicates = set([x for x in bssid_list if bssid_list.count(x) > 1])
