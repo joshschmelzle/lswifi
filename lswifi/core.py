@@ -69,6 +69,7 @@ async def scan(args, **kwargs):
 
         if args.event_watcher:
             watch_events(args, interfaces)
+            sys.exit(0)
 
         for interface in interfaces:
             if (
