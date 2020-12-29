@@ -11,15 +11,16 @@ manager side code for managing clients, their data, and writing to screen?
 import asyncio
 import contextlib
 import datetime
+import json
 import logging
 import os
-import pprint
 import sys
+from time import sleep
 
 # app imports
 from . import wlanapi as WLAN_API
 from .__version__ import __title__
-from .client import Client
+from .client import Client, get_interface_info
 from .constants import APNAMEJSONFILE
 from .elements import WirelessNetworkBss
 from .helpers import (OUT_TUPLE, SubHeader, format_bytes_as_hex,
@@ -46,10 +47,9 @@ def watch_events(args, interfaces) -> None:
     """
     Watch for notifications on wireless interfaces
     """
-    from time import sleep
-
     for interface in interfaces:
-        Client(args, interface).watch()
+        Client(args, interface)
+
     try:
         while True:
             sleep(5)
@@ -58,7 +58,9 @@ def watch_events(args, interfaces) -> None:
 
 
 async def scan(args, **kwargs):
-    # init scan
+    """
+    async func to perform a scan
+    """
     clients = []
     log = logging.getLogger(__name__)
     interfaces = WLAN_API.WLAN.get_wireless_interfaces()
@@ -78,7 +80,7 @@ async def scan(args, **kwargs):
                 or args.get_current_channel
                 or args.supported
             ):
-                get_interface_info(args, interface)
+                print(get_interface_info(args, interface))
                 continue
             elif args.bytefile:
                 decode_bytefile(args)
@@ -169,9 +171,6 @@ def loadEthers() -> dict:
                 ethers[mac] = name.strip()
 
     return ethers
-
-
-import json
 
 
 def loadAPNames() -> dict:
@@ -632,164 +631,6 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             updateAPNames(json_names, newapnames)
 
 
-def get_interface_info(args, iface):
-    outstr = ""
-    interface_info = {}
-    connected = True
-
-    if "disconnected" in iface.state_string:
-        connected = False
-
-    if not args.get_current_channel and not args.get_current_ap:
-        if connected:
-            outstr += f"Interface: {iface.description} is connected\n"
-        else:
-            outstr += f"Interface: {iface.description} is disconnected\n"
-
-    # query interface for supported info
-    params = ["current_connection", "channel_number", "statistics", "rssi"]
-    for p in params:
-        result = WLAN_API.WLAN.query_interface(iface, p)
-        interface_info[p] = result
-
-        if args.supported:
-            if isinstance(result, tuple):
-                outstr += f"    {p}: {pprint.pformat(result, indent=4)}\n"
-            else:
-                outstr += f"    {p}: {result}\n"
-
-    if connected and not args.supported:
-        # print(interface_info.items())
-        bssid = ""
-        for key, result in interface_info.items():
-            if key == "current_connection":
-                connected_ssid = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11Ssid",
-                )
-                bssid = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11Bssid",
-                )
-                dot11PhyType = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11PhyType",
-                )
-                wlanSignalQuality = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="wlanSignalQuality",
-                )
-                ulRxRate = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="ulRxRate",
-                )
-                ulTxRate = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="ulTxRate",
-                )
-                dot11BssType = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11BssType",
-                )
-                state = parse_result(result=result[1], data_type="isState")
-                wlanConnectionMode = parse_result(
-                    result=result[1], data_type="wlanConnectionMode"
-                )
-                strProfileName = parse_result(
-                    result=result[1], data_type="strProfileName"
-                )
-                SecurityEnabled = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="bSecurityEnabled",
-                )
-                oneXEnabled = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="bOneXEnabled",
-                )
-                dot11AuthAlgorithm = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="dot11AuthAlgorithm",
-                )
-                dot11CipherAlgorithm = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="dot11CipherAlgorithm",
-                )
-
-                outstr += f"    Description: {iface.description}\n"
-                outstr += (
-                    f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
-                )
-                outstr += f"    State: {state}\n"
-                if "wlan_connection_mode_" in wlanConnectionMode:
-                    wlanConnectionMode = wlanConnectionMode[21:]
-                outstr += (
-                    f"    Connection Mode: {wlanConnectionMode}\n"
-                    f"    Profile Name: {strProfileName}\n"
-                )
-                outstr += f"    SSID: {bytes.decode(connected_ssid)}\n"
-                outstr += f"    BSSID: {bssid}\n"
-                outstr += f"    BSS Type: {dot11BssType}\n"
-                outstr += f"    PHY: {dot11PhyType}\n"
-                # out += "PH    Y Index: {}\n".format(uDot11PhyIndex)
-                outstr += f"    Signal Quality: {wlanSignalQuality}%\n"
-                outstr += f"    Rx Rate: {ulRxRate/1000} Mbps\n"
-                outstr += f"    Tx Rate: {ulTxRate/1000} Mbps\n"
-                outstr += (
-                    f"    Security: {'Enabled' if SecurityEnabled else 'Disabled'}\n"
-                )
-                outstr += f"    .1X: {'Enabled' if oneXEnabled else 'Disabled'}\n"
-                outstr += f"    Authentication: {dot11AuthAlgorithm}\n"
-                outstr += f"    Cipher: {dot11CipherAlgorithm}\n"
-
-            if "ERROR_NOT_SUPPORTED" in result:
-                pass
-
-            if "failed" not in result:
-                if key == "channel_number":
-                    channel = result[0].value
-
-                    outstr += "    Channel: {}\n".format(channel)
-
-                    if args.get_current_ap and args.get_current_channel:
-                        if args.raw:
-                            print(f"{bssid}, {channel}")
-                            return
-                        else:
-                            print(
-                                f"Interface: {iface.description}, BSSID: {bssid}, CHANNEL: {channel}"
-                            )
-                            return
-
-                    if args.get_current_ap:
-                        if args.raw:
-                            print(bssid)
-                            return
-                        else:
-                            print(f"Interface: {iface.description}, BSSID: {bssid}")
-                            return
-
-                    if args.get_current_channel:
-                        if args.raw:
-                            print(channel)
-                            return
-                        else:
-                            print(f"Interface: {iface.description}, Channel: {channel}")
-                            return
-
-    print(outstr)
-
-
 def decode_bytefile(args):
     if os.path.isfile(args.bytefile):
         if args.bytefile.lower().rsplit(".", 1)[1] == "ies":
@@ -869,17 +710,3 @@ def decode_bytefile(args):
                 fh.close()
     else:
         print(f"{args.bytefile} file does not exist on file system... exiting...")
-
-
-def parse_result(result, data_type, **kwargs):
-    data = kwargs.get("data", None)
-    try:
-        if data:
-            return result[data_type][data]
-        else:
-            return result[data_type]
-    except KeyError:
-        if data:
-            return f"unknown {data}"
-        else:
-            return f"unknown {data_type}"

@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.4 (2020-12-29)
+------------------
+
+- add AP BSSID to output on associated wlan events when using `--watchevents`
+
 0.1.3 (2020-12-28)
 ------------------
 
