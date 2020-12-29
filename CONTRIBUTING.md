@@ -49,9 +49,9 @@ Please be aware of the following things when filing bug reports:
    - Tell us **what version you're using**, and
      **how you installed it**. Different versions behave
      differently and have different bugs.
-   - Tell us **what NIC and driver** you're running this package with. Use `netsh wlan show drivers` to retrieve.   
+   - Tell us **what NIC and driver** you're running this package with. Use `netsh wlan show drivers` to retrieve.
    - **Provide a packet capture** that includes a beacon from the wireless network you have issues with.
-   
+
    If you do not provide all of these things, it can take us much longer to
    fix your problem. If we ask you to clarify these and you never respond, we
    will close your issue without fixing it.

@@ -7,12 +7,11 @@ lswifi.lswifi
 a CLI Wi-Fi scanning utility for Windows that leverages Microsofts Native Wifi wlanapi.h
 """
 
-import sys
-import platform
-import os
-import logging
 import asyncio
-from signal import SIGINT, SIGTERM
+import logging
+import os
+import platform
+import sys
 
 # hard set no support for non win32 platforms
 if sys.platform == "win32":
@@ -31,17 +30,17 @@ if sys.version_info < (3, 7):
     sys.exit(-1)
 
 # app imports
-from . import appsetup
-from . import core
+from . import appsetup, core
+from .__version__ import __title__
 from .constants import APNAMEACKFILE, APNAMEJSONFILE
 
 
 def app_path() -> None:
-    parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), "lswifi")
-    parentexportpathexists = os.path.isdir(parentexportpath)
-    if not parentexportpathexists:
-        os.makedirs(parentexportpath)
-    print(f"{parentexportpath}")
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    path_exists = os.path.isdir(appdata_path)
+    if not path_exists:
+        os.mkdir(appdata_path)
+    print(f"{appdata_path}")
 
 
 def main():
@@ -77,15 +76,19 @@ def main():
 
 
 def user_ack_apnames_disclaimer() -> bool:
-    """ tell user that BSSIDs and apnames will be cached in appdata """
-    log = logging.getLogger(__name__)
-    parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), "lswifi")
-    parentexportpathexists = os.path.isdir(parentexportpath)
-    if not parentexportpathexists:
-        log.debug(os.makedirs(parentexportpath))
-    ackfilefp = os.path.join(parentexportpath, APNAMEACKFILE)
-    apnamesfilename = os.path.join(parentexportpath, APNAMEJSONFILE)
-    if os.path.isfile(ackfilefp):
+    """ retrieve ack from user that BSSIDs and discovered apnames will be cached in appdata """
+    logger = logging.getLogger(__name__)
+    if os.getenv("LOCALAPPDATA"):
+        appdata_folder = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    else:
+        raise OSError
+    is_path = os.path.isdir(appdata_folder)
+    if not is_path:
+        os.mkdir(appdata_folder)
+        logger.debug("%s created? %s", appdata_folder, os.path.isdir(appdata_folder))
+    ack = os.path.join(appdata_folder, APNAMEACKFILE)
+    apnames = os.path.join(appdata_folder, APNAMEJSONFILE)
+    if os.path.isfile(ack):
         return True
     else:
         print(
@@ -99,17 +102,17 @@ def user_ack_apnames_disclaimer() -> bool:
             "  - Doing this helps more consistently provide AP names in output.\n"
             "Where?\n"
             "  - They are stored and read from a JSON file on your device here:\n\n"
-            f"{apnamesfilename}\n"
+            f"{apnames}\n"
             "--\n"
         )
         text = input("Do you want to enable this feature? yes/no: ")
         if "y" in text.lower()[:1]:
-            with open(ackfilefp, "w") as file:
+            with open(ack, "w") as file:
                 pass
             print(
                 "--\n"
                 "This feature has been enabled and your response stored here: \n\n"
-                f"{ackfilefp}\n\n"
+                f"{ack}\n\n"
                 "Want to disable this feature? Delete the file above\n"
                 "--"
             )

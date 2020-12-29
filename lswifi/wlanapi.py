@@ -8,24 +8,12 @@ mostly wrapper code around Native Wifi wlanapi.h
 """
 
 import contextlib
-import functools
 import sys
-from .guid import GUID
+from ctypes import (c_bool, c_byte, c_char, c_long, c_ubyte, c_uint, c_ulong,
+                    c_ulonglong, c_ushort, c_void_p, c_wchar)
 from enum import Enum
 
-from ctypes import (
-    c_uint,
-    c_long,
-    c_ulong,
-    c_ulonglong,
-    c_ushort,
-    c_char,
-    c_wchar,
-    c_bool,
-    c_byte,
-    c_ubyte,
-    c_void_p,
-)
+from .guid import GUID
 
 if sys.platform == "win32":
     from ctypes import windll
@@ -33,8 +21,8 @@ else:
     print("ERROR: win32 support only")
     sys.exit(-1)
 
-from ctypes import addressof, byref, CFUNCTYPE, pointer, POINTER, Structure, Union
-
+from ctypes import (CFUNCTYPE, POINTER, Structure, Union, addressof, byref,
+                    pointer)
 from ctypes.wintypes import BOOL, DWORD, HANDLE
 
 from .elements import WirelessNetworkBss
@@ -370,16 +358,16 @@ WLAN_OPCODE_VALUE_TYPE_DICT = {
 
 
 class CapabilityInformationBits(Structure):
-    """ 802.11-2016 9.4.1.4 Capability Information field
+    """802.11-2016 9.4.1.4 Capability Information field
 
     The 16-bit Capability Information field is used in
       Beacon transmissions to advertise the network’s capabilities.
     Capability Information is also used in Probe Request
       and Probe Response frames. In this field, each bit is used as a flag
       to advertise a particular function of the network.
-    Stations use the capability advertisement to determine 
+    Stations use the capability advertisement to determine
       whether they can support all the features in the BSS.
-    Stations that do not implement all the features in the capability 
+    Stations that do not implement all the features in the capability
       advertisement are not allowed to join.
     """
 
@@ -408,8 +396,8 @@ class CapabilityInformation(Union):
 
 
 class DOT11SSID(Structure):
-    """ A DOT11_SSID structure contains the SSID of an interface.
-    
+    """A DOT11_SSID structure contains the SSID of an interface.
+
     typedef struct _DOT11_SSID {
     ULONG uSSIDLength;
     UCHAR ucSSID[DOT11_SSID_MAX_LENGTH];
@@ -420,7 +408,7 @@ class DOT11SSID(Structure):
 
 
 class WLANAssociationAttributes(Structure):
-    """ The WLAN_ASSOCIATION_ATTRIBUTES structure contains association 
+    """The WLAN_ASSOCIATION_ATTRIBUTES structure contains association
     attributes for a connection.
 
     typedef struct _WLAN_ASSOCIATION_ATTRIBUTES {
@@ -448,7 +436,7 @@ class WLANAssociationAttributes(Structure):
 
 
 class WLANSecurityAttributes(Structure):
-    """ The WLAN_SECURITY_ATTRIBUTES structure defines the security attributes
+    """The WLAN_SECURITY_ATTRIBUTES structure defines the security attributes
     for a wireless connection.
 
     typedef struct _WLAN_SECURITY_ATTRIBUTES {
@@ -534,17 +522,17 @@ class WLANAvailableNetworkList(Structure):
 
 
 class WLANRateSet(Structure):
-    """ The set of supported data rates.
-    
+    """The set of supported data rates.
+
     Minimum supported client: Windows Vista [desktop apps only]
     Header: wlanapi.h
-    
+
     class WLAN_RATE_SET(Structure):
         _fields_ = [
             ("RateSetLength", c_ulong),
             ("RateSet", c_ushort * DOT11_RATE_SET_MAX_LENGTH),
         ]
-        
+
     To calculate the data transfer rate in Mbps for an arbitrary array entry rateSet[i], use the following equation:
 
     rate_to_mbps = (rateSet[i] & 0x7FFF) * 0.5
@@ -557,11 +545,11 @@ class WLANRateSet(Structure):
 
 
 class WLANBSSEntry(Structure):
-    """ The WLAN_BSS_ENTRY structure contains information about a basic service set (BSS).
-    
+    """The WLAN_BSS_ENTRY structure contains information about a basic service set (BSS).
+
     Minimum supported client: Windows Vista [desktop apps only]
     Header: wlanapi.h
-    
+
     typedef struct _WLAN_BSS_ENTRY {
     DOT11_SSID        dot11Ssid;
     ULONG             uPhyId;
@@ -610,11 +598,11 @@ class WLANBSSEntry(Structure):
 
 
 class WLANBSSList(Structure):
-    """ The WLAN_BSS_LIST structure contains a list of basic service set (BSS) entries.
-    
-    Minimum supported client: 	Windows Vista, Windows XP with SP3 [desktop apps only]
+    """The WLAN_BSS_LIST structure contains a list of basic service set (BSS) entries.
+
+    Minimum supported client: Windows Vista, Windows XP with SP3 [desktop apps only]
     Header: wlanapi.h
-    
+
     typedef struct _WLAN_BSS_LIST {
     DWORD          dwTotalSize;
     DWORD          dwNumberOfItems;
@@ -631,7 +619,7 @@ class WLANBSSList(Structure):
 
 class WLANConnectionAttributes(Structure):
     """
-    The WLAN_CONNECTION_ATTRIBUTES structure defines the attributes of a 
+    The WLAN_CONNECTION_ATTRIBUTES structure defines the attributes of a
     wireless connection.
 
     typedef struct _WLAN_CONNECTION_ATTRIBUTES {
@@ -653,11 +641,11 @@ class WLANConnectionAttributes(Structure):
 
 
 class WLANInterfaceInfo(Structure):
-    """ The WLAN_INTERFACE_INFO structure contains information about a wireless LAN interface.
-    
+    """The WLAN_INTERFACE_INFO structure contains information about a wireless LAN interface.
+
     Minimum supported client: Windows Vista, Windows XP with SP3
     Header: wlanapi.h
-    
+
     typedef struct _WLAN_INTERFACE_INFO {
     GUID                 InterfaceGuid;
     WCHAR                strInterfaceDescription[WLAN_MAX_NAME_LENGTH];
@@ -673,11 +661,11 @@ class WLANInterfaceInfo(Structure):
 
 
 class WLANInterfaceInfoList(Structure):
-    """ The WLAN_INTERFACE_INFO_LIST structure contains an array of NIC interface information.
-    
+    """The WLAN_INTERFACE_INFO_LIST structure contains an array of NIC interface information.
+
     Minimum supported client: Windows Vista, Windows XP with SP3
     Header: wlanapi.h
-        
+
     typedef struct _WLAN_INTERFACE_INFO_LIST {
     DWORD               dwNumberOfItems;
     DWORD               dwIndex;
@@ -697,7 +685,7 @@ class WLANInterfaceInfoList(Structure):
 
 
 class WLANPHYRadioState(Structure):
-    """ The WLAN_PHY_RADIO_STATE structure specifies the radio state on a specific physical 
+    """The WLAN_PHY_RADIO_STATE structure specifies the radio state on a specific physical
     layer (PHY) type.
 
     typedef struct _WLAN_PHY_RADIO_STATE {
@@ -715,7 +703,7 @@ class WLANPHYRadioState(Structure):
 
 
 class WLANRadioState(Structure):
-    """ The WLAN_RADIO_STATE structure specifies the radio state on a list of physical 
+    """The WLAN_RADIO_STATE structure specifies the radio state on a list of physical
     layer (PHY) types.
 
     typedef struct _WLAN_RADIO_STATE {
@@ -807,12 +795,12 @@ WLAN_INTF_OPCODE_TYPE_DICT = {
     "wlan_intf_opcode_rssi": c_long,
     "wlan_intf_opcode_current_operation_mode": c_ulong,
     "wlan_intf_opcode_supported_safe_mode": c_bool,
-    "wlan_intf_opcode_certified_sasfe_mode": c_bool,
+    "wlan_intf_opcode_certified_safe_mode": c_bool,
 }
 
 
 class WLANRawDataList(Structure):
-    """ The WLAN_RAW_DATA_LIST structure contains raw data in the form of an array
+    """The WLAN_RAW_DATA_LIST structure contains raw data in the form of an array
      of data blobs that are used by some Native Wifi functions.
 
     typedef struct _WLAN_RAW_DATA_LIST {
@@ -830,7 +818,7 @@ class WLANRawDataList(Structure):
 
 
 class WLANRawData(Structure):
-    """ The WLAN_RAW_DATA structure contains raw data in the form of a blob that is
+    """The WLAN_RAW_DATA structure contains raw data in the form of a blob that is
     used by some Native Wifi functions.
 
     The WLAN_RAW_DATA structure is a raw data structure used to hold a data entry used by
@@ -961,7 +949,7 @@ WLAN_NOTIFICATION_SOURCE_ACM_DICT = {
 
 
 class WLANNotificationData(Structure):
-    """ The WLAN_NOTIFICATION_DATA structure contains information provided
+    """The WLAN_NOTIFICATION_DATA structure contains information provided
     when receiving notifications.
 
     typedef struct _WLAN_NOTIFICATION_DATA {
@@ -1017,7 +1005,7 @@ WLAN_NOTIFICATION_SOURCE_DICT = {
 
 
 class ONEX_NOTIFICATION_TYPE_ENUM(Enum):
-    """ The ONEX_NOTIFICATION_TYPE enumerated type specifies the possible values of the
+    """The ONEX_NOTIFICATION_TYPE enumerated type specifies the possible values of the
      NotificationCode member of the WLAN_NOTIFICATION_DATA structure for 802.1X module notifications.
 
     typedef enum _ONEX_NOTIFICATION_TYPE {
@@ -1037,7 +1025,7 @@ class ONEX_NOTIFICATION_TYPE_ENUM(Enum):
 
 
 class WLAN_NOTIFICATION_MSM_ENUM(Enum):
-    """ The WLAN_NOTIFICATION_MSM enumerated type specifies the possible values of the
+    """The WLAN_NOTIFICATION_MSM enumerated type specifies the possible values of the
     NotificationCode member of the WLAN_NOTIFICATION_DATA structure for Media Specific Module (MSM) notifications.
 
     typedef enum _WLAN_NOTIFICATION_MSM {
@@ -1114,7 +1102,7 @@ class WLAN_CONNECTION_NOTIFICATION_DATA(Structure):
 
 
 class WLAN_MSM_NOTIFICATION_DATA(Structure):
-    """ The WLAN_MSM_NOTIFICATION_DATA structure contains information about media specific
+    """The WLAN_MSM_NOTIFICATION_DATA structure contains information about media specific
     module (MSM) connection related notifications.
 
     typedef struct _WLAN_MSM_NOTIFICATION_DATA {
@@ -1273,186 +1261,6 @@ class WLANNotificationACM(Enum):
     end = 28
 
 
-class WLAN_NOTIFICATION_MSM_ENUM(Enum):
-    start = 0
-    associating = 1
-    associated = 2
-    authenticating = 3
-    connected = 4
-    roaming_start = 5
-    roaming_end = 6
-    radio_state_change = 7
-    signal_quality_change = 8
-    disassociating = 9
-    disconnected = 10
-    peer_join = 11
-    peer_leave = 12
-    adapter_removal = 13
-    adapter_operation_mode_change = 14
-    end = 15
-
-
-class zzWlanEvent(object):
-    """ but maybe don't delete ? what about an event watcher feature for lswifi """
-
-    ns_type_to_codes_dict = {
-        WLAN_NOTIFICATION_SOURCE_NONE: None,
-        WLAN_NOTIFICATION_SOURCE_ONEX: ONEX_NOTIFICATION_TYPE_ENUM,
-        WLAN_NOTIFICATION_SOURCE_ACM: WLANNotificationACM,
-        WLAN_NOTIFICATION_SOURCE_MSM: WLAN_NOTIFICATION_MSM_ENUM,
-        WLAN_NOTIFICATION_SOURCE_SECURITY: None,  # No notifications are currently defined for WLAN_NOTIFICATION_SOURCE_SECURITY.
-        WLAN_NOTIFICATION_SOURCE_IHV: None,
-        WLAN_NOTIFICATION_SOURCE_ALL: ONEX_NOTIFICATION_TYPE_ENUM,
-    }
-
-    def __init__(
-        self, original, notificationSource, notificationCode, interfaceGuid, data
-    ):
-        self.original = original
-        self.notificationSource = notificationSource
-        self.notificationCode = notificationCode
-        self.interfaceGuid = interfaceGuid
-        self.data = data
-
-    @staticmethod
-    def from_wlan_notification_data(wnd):
-        actual = wnd.contents
-        if actual.NotificationSource not in WLANNotificationSourceDict:
-            return None
-
-        codes = WlanEvent.ns_type_to_codes_dict[actual.NotificationSource]
-
-        if codes is not None:
-            try:
-                code = codes(actual.NotificationCode)
-                data = WlanEvent.parse_data(
-                    actual.pData, actual.dwDataSize, actual.NotificationSource, code
-                )
-
-                event = WlanEvent(
-                    actual,
-                    WLANNotificationSourceDict[actual.NotificationSource],
-                    code.name,
-                    actual.InterfaceGuid,
-                    data,
-                )
-                return event
-            except:
-                return None
-
-    @staticmethod
-    def parse_data(data_pointer, data_size, source, code):
-        if data_size == 0 or (
-            source is not WLAN_NOTIFICATION_SOURCE_MSM
-            and source is not WLAN_NOTIFICATION_SOURCE_ACM
-        ):
-            return None
-
-        else:
-            return None
-
-        if typ is None:
-            return None
-
-        return WlanEvent.deref(data_pointer, typ)
-
-    @staticmethod
-    def deref(addr, typ):
-        return typ.from_address(addr)
-
-    def __str__(self):
-        return self.notificationCode
-
-
-class zzNotificationObject(object):
-    def __init__(self, handle, callback):
-        self.handle = handle
-        self.callback = callback
-
-
-def zzregisterNotification(callback, loop):
-    handle = wlan_open_handle()
-
-    loop = loop
-
-    call_back = WlanRegisterNotification(
-        handle, functools.partial(OnWlanNotification, callback, loop)
-    )
-
-    global_callbacks.append(call_back)
-    global_handles.append(handle)
-
-    return NotificationObject(handle, call_back)
-
-
-def zzWlanRegisterNotification(client_handle, callback):
-    """The WlanRegisterNotification function is used to register and unregister
-     notifications on all wireless interfaces.
-
-    DWORD WlanRegisterNotification(
-      HANDLE                     hClientHandle,
-      DWORD                      dwNotifSource,
-      BOOL                       bIgnoreDuplicate,
-      WLAN_NOTIFICATION_CALLBACK funcCallback,
-      PVOID                      pCallbackContext,
-      PVOID                      pReserved,
-      PDWORD                     pdwPrevNotifSource
-    );
-
-    If the function succeeds, the return value is ERROR_SUCCESS.
-
-    If the function fails, the return value may be one of the following return codes.
-
-    Return code	- Description
-    ERROR_INVALID_PARAMETER - A parameter is incorrect. This error is returned if hClientHandle is NULL or not valid or if pReserved is not NULL.
-    ERROR_INVALID_HANDLE - The handle hClientHandle was not found in the handle table.
-    ERROR_NOT_ENOUGH_MEMORY - Failed to allocate memory for the query results.
-    RPC_STATUS - Various error codes.
-    """
-    WLAN_NOTIFICATION_CMPFUNC = CFUNCTYPE(
-        None,  # type for return value
-        POINTER(WLANNotificationData),
-        c_void_p,
-        use_last_error=True,
-    )
-
-    # This callback function will receive notifications that have been registered in the
-    # dwNotifSource parameter passed to the WlanRegisterNotification function.
-    func_ref = WLAN_API.WlanRegisterNotification
-    func_ref.argtypes = [
-        HANDLE,
-        DWORD,
-        BOOL,
-        WLAN_NOTIFICATION_CMPFUNC,
-        c_void_p,
-        c_void_p,
-        POINTER(DWORD),
-    ]
-    func_ref.restype = DWORD
-
-    notification_source = WLAN_NOTIFICATION_SOURCE_ALL
-    ignore_duplicate = True
-    func_callback = WLAN_NOTIFICATION_CMPFUNC(callback)
-    callback_context = None
-    prev_notif_source = None
-
-    result = func_ref(
-        client_handle,
-        notification_source,
-        ignore_duplicate,
-        func_callback,
-        callback_context,
-        None,
-        prev_notif_source,
-    )
-
-    if result is not SystemErrorCodes.ERROR_SUCCESS.value:
-        raise Exception(
-            f"WlanRegisterNotification failed: {SystemErrorCodes(result)}:{result}"
-        )
-    return func_callback
-
-
 class Error(Exception):
     pass
 
@@ -1491,138 +1299,6 @@ class WLANGetNetworkBSSListError(Error):
         self.message = message
 
 
-def zzwlan_scan(client_handle, interface_guid, ssid=None):
-    """ The WlanScan function requests a scan for available networks on the indicated interface.
-
-    DWORD WlanScan(
-      HANDLE               hClientHandle,
-      const GUID           *pInterfaceGuid,
-      const PDOT11_SSID    pDot11Ssid,
-      const PWLAN_RAW_DATA pIeData,
-      PVOID                pReserved
-    );
-
-    The WlanScan function returns immediately.
-
-    To be notified when the network scan is complete, a client on Windows Vista
-     and later must register for notifications by calling WlanRegisterNotification.
-
-    When the WlanScan function is called, the native 802.11 Wireless LAN driver may flush the current list
-      of available wireless networks before the scan is initiated.
-    Applications should not assume that calling the WlanScan function will add to the existing list
-      of available wireless networks returned by the WlanGetNetworkBssList or
-      WlanGetAvailableNetworkList functions from previous scans.
-
-    The current default behavior is that the Wireless LAN Service only asks
-     the wireless interface driver to scan for wireless networks every 60 seconds,
-      and in some cases (when already connected to wireless network) the
-       Wireless LAN Service does not ask for scans at all.
-    The WlanScan function can be used by an application to track wireless
-     network changes.
-     The application should first register for WLAN_NOTIFICATION_SOURCE_ACM
-      notifications.
-    The WlanScan function can then be called to initiate a scan.
-    The application should then wait to receive the wlan_notification_acm_scan_complete
-     notification or timeout after 4 seconds.
-
-    The WlanScan function requests that the native 802.11 Wireless LAN driver scan
-     for available wireless networks.
-    The driver may or may not send probe requests (an active scan)
-     depending on its implementation and the values passed in the
-      pDot11Ssid and pIeData parameters.
-
-    Since it becomes more difficult for a wireless interface to send and
-     receive data packets while a scan is occurring,
-      the WlanScan function may increase latency until the network scan is complete.
-
-    If the function succeeds, the return value is ERROR_SUCCESS.
-    """
-    func_ref = WLAN_API.WlanScan
-    func_ref.argtypes = [
-        HANDLE,
-        POINTER(GUID),
-        POINTER(DOT11SSID),
-        POINTER(WLANRawData),
-        c_void_p,
-    ]
-    func_ref.restype = DWORD
-
-    if ssid:
-        length = len(ssid)
-        if length > DOT11_SSID_MAX_LENGTH:
-            raise Exception("SSIDs have a maximum length of 32 characters.")
-        dot11_ssid = byref(DOT11SSID(length, ssid))
-    else:
-        dot11_ssid = None
-
-    result = func_ref(
-        client_handle, byref(interface_guid), dot11_ssid, WLANRawData(), None
-    )
-    if result is not SystemErrorCodes.ERROR_SUCCESS.value:
-        raise WLANScanError(
-            f"wlan_scan failed: {SystemErrorCodes(result)}:{result}\n{SYSTEM_ERROR_CODE_REASON.get(result, 0)}"
-        )
-    return result
-
-
-def zzwlan_free_memory(memory):
-    """ The WlanFreeMemory function frees memory. Any memory returned from Native Wifi functions must be freed.
-
-    void WlanFreeMemory(
-      PVOID pMemory
-    );
-    """
-    pass
-
-
-def zzwlan_open_handle():
-    """ The WlanOpenHandle function opens a connection to the server.
-    DWORD WlanOpenHandle(
-      DWORD   dwClientVersion, # 1 for XP 2 for Vista/Server 2008
-      PVOID   pReserved, # Reserved for future use. Must be set to NULL.
-      PDWORD  pdwNegotiatedVersion, # Version of WLAN API used in session
-      PHANDLE phClientHandle # Handle for client used by other func throughout sesion
-    );
-    """
-    pass
-
-
-def zzwlan_close_handle(client_handle):
-    """ The WlanCloseHandle function closes a connection to the server.
-
-    DWORD WlanCloseHandle(
-      HANDLE hClientHandle,
-      PVOID  pReserved
-    );
-    After a connection has been closed, any attempted use of the closed handle can cause unexpected errors.
-      Upon closing, all outstanding notifications are discarded.
-
-    Do not call WlanCloseHandle from a callback function. If the client is in the middle of a notification
-     callback when WlanCloseHandle is called, the function waits for the callback to finish before returning a value.
-
-    Calling this function inside a callback function will result in the call never completing.
-
-    If both the callback function and the thread that closes the handle try to acquire the same lock,
-     a deadlock may occur.
-
-    If the function succeeds, the return value is ERROR_SUCCESS.
-    """
-    pass
-
-
-def zzwireless_network_bss_wlan_open_handle():
-    """The WlanOpenHandle function opens a connection to the server.
-
-    DWORD WlanOpenHandle(
-      DWORD   dwClientVersion,
-      PVOID   pReserved,
-      PDWORD  pdwNegotiatedVersion,
-      PHANDLE phClientHandle
-    );
-    """
-    pass
-
-
 class WirelessNetwork(object):
     def __init__(self, wireless_network):
         self.ssid = wireless_network.dot11Ssid.SSID[:DOT11_SSID_MAX_LENGTH]
@@ -1658,7 +1334,7 @@ class WirelessNetwork(object):
 
 
 def zzWlanGetAvailableNetworkList(clientHandle, interfaceGuid):
-    """ The WlanGetAvailableNetworkList function retrieves the list of available networks on a wireless LAN interface.
+    """The WlanGetAvailableNetworkList function retrieves the list of available networks on a wireless LAN interface.
 
     DWORD WlanGetAvailableNetworkList(
       HANDLE                       hClientHandle,
@@ -1668,16 +1344,6 @@ def zzWlanGetAvailableNetworkList(clientHandle, interfaceGuid):
       PWLAN_AVAILABLE_NETWORK_LIST *ppAvailableNetworkList
     );
     """
-    pass
-
-
-class WLANNotificationSource(Enum):
-    ACM = 8
-    ALL = 65535  # 0x0000FFFF
-    IHV = 64  # 0x00000040
-    MSM = 16  # 0x00000010
-    NONE = None
-    SECURITY = 32  # 0x00000020
 
 
 class WLAN:
@@ -1710,7 +1376,7 @@ class WLAN:
 
     @staticmethod
     def open_handle() -> HANDLE:
-        """ The WlanOpenHandle function opens a connection to the server.
+        """The WlanOpenHandle function opens a connection to the server.
         DWORD WlanOpenHandle(
           DWORD   dwClientVersion, # 1 for XP 2 for Vista/Server 2008
           PVOID   pReserved, # Reserved for future use. Must be set to NULL.
@@ -1723,8 +1389,8 @@ class WLAN:
         func.restype = DWORD
 
         client_ver = (
-            2
-        )  # Client version for Windows Vista and Windows Server 2008 and above.
+            2  # Client version for Windows Vista and Windows Server 2008 and above.
+        )
         negotiated_version = DWORD()
         client_handle = HANDLE()
         result = func(client_ver, None, byref(negotiated_version), byref(client_handle))
@@ -1753,8 +1419,8 @@ class WLAN:
         func(memory)
 
     @staticmethod
-    def enumerate_interfaces(client_handle) -> pointer(WLANInterfaceInfoList()):
-        """ The enumerate_interfaces function enumerates all of the wireless LAN
+    def enumerate_interfaces(client_handle):
+        """The enumerate_interfaces function enumerates all of the wireless LAN
         interfaces currently enabled on the local computer.
 
         DWORD enumerate_interfaces(
@@ -1775,7 +1441,7 @@ class WLAN:
         return wlan_ifaces
 
     @staticmethod
-    def wlan_register_notification(client_handle: HANDLE, callback) -> CFUNCTYPE:
+    def wlan_register_notification(client_handle: HANDLE, callback):
         WLAN_NOTIFICATION_CALLBACK_M = CFUNCTYPE(
             None,  # type for return value
             POINTER(WLANNotificationData),
@@ -1827,7 +1493,7 @@ class WLAN:
         WLAN.close_handle(handle)
 
     @staticmethod
-    def wlan_scan(client_handle: HANDLE, interface_guid: GUID, ssid=None) -> int:
+    def wlan_scan(client_handle: HANDLE, interface_guid: GUID, ssid=None):
         func_ref = WLAN_API.WlanScan
         func_ref.argtypes = [
             HANDLE,
@@ -1907,9 +1573,7 @@ class WLAN:
         return networks
 
     @staticmethod
-    def get_network_bss_list(
-        clientHandle, interfaceGuid, ssid=None
-    ) -> pointer(WLANBSSList()):
+    def get_network_bss_list(clientHandle, interfaceGuid, ssid=None):
         """The WlanGetNetworkBssList function retrieves a list of the basic service set
         (BSS) entries of the wireless network or networks on a given wireless LAN interface.
         DWORD WlanGetNetworkBssList(
@@ -1960,7 +1624,7 @@ class WLAN:
 
     @staticmethod
     def wlan_query_interface_wrapper(client_handle, interface_guid, op_code):
-        """ The WlanQueryInterface function queries various parameters of a specified interface.
+        """The WlanQueryInterface function queries various parameters of a specified interface.
         DWORD WlanQueryInterface(
           HANDLE                  hClientHandle,
           const GUID              *pInterfaceGuid,
@@ -2007,8 +1671,7 @@ class WLAN:
 
     @staticmethod
     def query_interface(wireless_interface, opcode_item):
-        """ Query interface for connection/association attributes
-        """
+        """Query interface for connection/association attributes"""
         handle = WLAN.open_handle()
         opcode_item_ext = "".join(["wlan_intf_opcode_", opcode_item])
         # print(opcode_item_ext)

@@ -14,7 +14,7 @@ TODO
 
 ## PHX AIRPORT AP NAME CAUSED IN CONSISTENT COLUMN SIZING
 
-
+```
 -+~~+~+=~+=+++==+=+-  -+~+=~+=~+++=~~~~+=-  -~~~~~~+==~=~+-  -~+~-  -+-  -=+~~+-  --  -=~~==~+=~~=-  -=~++~=+~~=+-
                ESSID  BSSID                 AP NAME          RSSI   .11  CHANNEL  SS  AMENDMENTS     AP UPTIME
       [Network Name]  (*): connected                         [dBm]       [#@MHz]      [802.11]       [approx.]
@@ -81,11 +81,6 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 - [ ] determine if it has connected to a pwngrid
 - [ ] show stats for when they show up
 - [ ] suggest enabling 802.11w
-
-## Deployment 
-
-- [ ] Packaging. PyPi? Windows Store? Different method? Add to path. 
-
 ## Exception Handling
 
 - [ ] Review.
@@ -105,10 +100,6 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 ## Python 3.8
 
 - [X] Test to see if my code works in Python 3.8 (tested 3.8b1 week 7/1/2019)
-
-## Clean up
-
-- [ ] Investigate implementing data classes to reduce some boilerplate code.
 
 ## Writing to the screen w/ multiple adapters
 
@@ -167,17 +158,12 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 - [ ] My HR-DSSS test network seems to be classified as ERP. Why?
 - [ ] Parse and display the Capabilities based on bit value.
 
-## Export/Import (help them help me troubleshoot issues.)
+## Export/Import
 
-Basically i want to pack and unpack into the structure's I've defined in my wlanapi.
-
-There are ways to do this. I think I need to modify my ctypes wrappers.
-
-- [ ] Handle input and decode of Helge's `.BSS` files - may have to do this manually.
-    - [ ] Heldge suggests starting with the loading feature first.
-- [ ] Add ability to export to .IES and .BSS
+- [ ] Handle input and decode of WinFi's `.BSS` files - may have to do this manually.
+- [X] Add ability to export to .IES and .BSS
+- [X] Add ability to decode .IES and .BSS
 - [ ] Add ability to export to PCAP.
-- [ ] Add ability to import .IES and .BSS
 
 ## Optional/Enhancements
 
@@ -206,11 +192,6 @@ There are ways to do this. I think I need to modify my ctypes wrappers.
     - [ ] Add ability to export .IES
 - [ ] Export BSS and IES feature from all detected devices. A record sort of function. 
 - [ ] Export BSS and IES feature for a specific BSSID. A record sort of function.
-
-## important
-
-- [ ] Remove traces of copied code from GitHub (must do this before deploying). Give credit.
-- [ ] FLATTEN THE REPO AND REBUILD IT
 
 ## other types of networks
 

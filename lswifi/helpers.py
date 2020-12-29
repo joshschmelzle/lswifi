@@ -9,9 +9,8 @@ Provides helper functions that are consumed internally.
 
 import random
 from enum import Enum
+
 from .constants import _20MHZ_CHANNEL_LIST
-from ctypes import c_ubyte
-from typing import Union
 
 
 class OUT_TUPLE:
@@ -19,13 +18,12 @@ class OUT_TUPLE:
         self.value = value
         self.header = header
         self.subheader = subheader
-        self._len = len(value)
 
     def __len__(self):
-        return self._len
+        return len(self.value)
 
     def __str__(self):
-        return self.value
+        return str(self.value)
 
     def __repr__(self):
         print(f"OUT_TUPLE({self.value},{self.header},{self.subheader}")
@@ -43,7 +41,6 @@ class SubHeader:
     def __init__(self, description):
         self.description = description
         self.value = description
-        self._len = len(description)
 
     def __str__(self):
         return self.description
@@ -52,7 +49,7 @@ class SubHeader:
         return format("{}".format(self.description), format_spec)
 
     def __len__(self):
-        return self._len
+        return len(self.description)
 
     def __repr__(self):
         return self.description
@@ -62,7 +59,6 @@ class Header:
     def __init__(self, description, align=None):
         self.description = description
         self.value = description
-        self._len = len(description)
         if align:
             self.alignment = align
         else:
@@ -75,7 +71,7 @@ class Header:
         return format("{}".format(self.description), format_spec)
 
     def __len__(self):
-        return self._len
+        return len(self.description)
 
     def __repr__(self):
         return self.description
@@ -208,7 +204,7 @@ def trim_most_significant_bit(byteval: int) -> int:
     return byteval & 0x7F
 
 
-def convert_mac_address_to_string(mac: Union[list, c_ubyte]) -> str:
+def convert_mac_address_to_string(mac) -> str:
     """returns a MAC address in string format
     input can be a list or a c_ubyte from the wlanapi.h
     """
@@ -250,6 +246,6 @@ def get_channel_number_from_frequency(frequency):
     """gets the 802.11 channel for a corresponding frequency
     in units of kilohertz (kHz). does not support FHSS."""
     try:
-        return _20MHZ_CHANNEL_LIST.get(frequency)
+        return _20MHZ_CHANNEL_LIST.get(frequency, "Unknown")
     except KeyError:
         return "Unknown"

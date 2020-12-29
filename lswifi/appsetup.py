@@ -7,12 +7,12 @@ lswifi.appsetup
 Provides init functions that are used to help set up the app.
 """
 
-from .__version__ import __version__
-
 import argparse
-import textwrap
 import logging
 import logging.config
+import textwrap
+
+from .__version__ import __version__
 
 
 class ExportAction(argparse.Action):
@@ -43,7 +43,7 @@ def setup_logger(args) -> logging.Logger:
     return logging.getLogger(__name__)
 
 
-def setup_parser() -> argparse:
+def setup_parser() -> argparse.ArgumentParser:
     """Setup the parser for arguments passed into the module from the CLI.
 
     Returns:
@@ -87,7 +87,7 @@ def setup_parser() -> argparse:
     )
     parser.add_argument("-version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
-        "-iface", dest="iface", metavar="INTERFACE", help="what iface to use"
+        "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
     )
     parser.add_argument(
         "-ies",
@@ -122,7 +122,7 @@ def setup_parser() -> argparse:
         "-bssid",
         dest="bssid",
         metavar="BSSID",
-        help="Set a 802.11 access point to filter for.",
+        help="Filter on a specific 802.11 access point",
     )
     parser.add_argument(
         "--ap-names",
@@ -134,7 +134,7 @@ def setup_parser() -> argparse:
         "-uptime",
         dest="uptime",
         action="store_true",
-        help="sort by access point uptime based on beacon timestamp.",
+        help="sort by access point uptime based on beacon timestamp",
     )
     parser.add_argument(
         "--channel-width",
@@ -193,7 +193,9 @@ def setup_parser() -> argparse:
         action="store_true",
         help="print a list of available WLAN interfaces",
     )
-    parser.add_argument("--supported", dest="supported", action="store_true")
+    parser.add_argument(
+        "--supported", dest="supported", action="store_true", help=argparse.SUPPRESS
+    )
     parser.add_argument(
         "--json",
         dest="json",
@@ -212,7 +214,7 @@ def setup_parser() -> argparse:
         metavar="BSSID",
         dest="export",
         action=ExportAction,
-        help="export bss and ies bytefiles. by default exports all from scan. provide mac to export specific",
+        help="export bss and ies bytefiles. by default will export all from scan. provide mac address to export only one.",
     )
     parser.add_argument(
         "-decode",

@@ -6,15 +6,15 @@ Mobility Domain (MDIE)
 
 The AP uses the MDIE to advertise that it is included in a group of APs that constitute a mobility domain, to advertise it's support for the FT capability, and to advertise it's FT policy information.
 
+```
 IE #: 54
 Length: 3
-Fields: 
+Fields:
 
   - Mobility Domain Identifier (MDID)
   - FT Capability and Policy:
     + Fast BSS Transition over DS
     + Resource Request Protocol Capability
-    
 
 MDIE Format:
 
@@ -24,17 +24,18 @@ MDIE Format:
 FT Capability and Policy Field Format:
 
 |       | B0                          | B1                                   | B2    B7 |
-|       | Fast BSS Transition over DS | Resource Request Protocol Capability | Reserved | 
+|       | Fast BSS Transition over DS | Resource Request Protocol Capability | Reserved |
 | Bits: | 1                           | 1                                    | 6        |
 
 If B0 == 0:
     Over-the-Air Fast BSS Transition
-    
+
 If B0 == 1:
     Over-the-DS Fast BSS Transition
+```
 
 Client Capability Logic:
-=======================
+========================
 
 802.11 security
 ---------------
@@ -527,7 +528,7 @@ e.g.:
 - ECWmin/ECWmax: 4/10 (CWmin/max 15/1023)
 - ECWmin/ECWmax: 4/10 (CWmin/max 15/1023)
 - ECWmin/ECWmax: 3/4 (CWmin/max 7/15)
-- ECWmin/ECWmax: 2/3 (CWmin/max 3/7) 
+- ECWmin/ECWmax: 2/3 (CWmin/max 3/7)
 
 #### TXOP
 

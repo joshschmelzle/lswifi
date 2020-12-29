@@ -7,25 +7,24 @@ lswifi.client
 client side code for requesting a scan, waiting for scan complete, and getting the results.
 """
 
+import functools
 import traceback
 from datetime import datetime
+from typing import Union
+
 from . import wlanapi as WLAN_API
-import functools
-from .wlanapi import (
-    WLAN_NOTIFICATION_SOURCE_NONE,
-    WLAN_NOTIFICATION_SOURCE_ONEX,
-    WLAN_NOTIFICATION_SOURCE_ACM,
-    WLAN_NOTIFICATION_SOURCE_MSM,
-    WLAN_NOTIFICATION_SOURCE_SECURITY,
-    WLAN_NOTIFICATION_SOURCE_IHV,
-    WLAN_NOTIFICATION_SOURCE_HNWK,
-    WLAN_NOTIFICATION_SOURCE_ALL,
-    ONEX_NOTIFICATION_TYPE_ENUM,
-    WLAN_NOTIFICATION_ACM_ENUM,
-    WLAN_NOTIFICATION_MSM_ENUM,
-    WLAN_HOSTED_NETWORK_NOTIFICATION_CODE_ENUM,
-    WLAN_NOTIFICATION_SOURCE_DICT,
-)
+from .wlanapi import (ONEX_NOTIFICATION_TYPE_ENUM,
+                      WLAN_HOSTED_NETWORK_NOTIFICATION_CODE_ENUM,
+                      WLAN_NOTIFICATION_ACM_ENUM, WLAN_NOTIFICATION_MSM_ENUM,
+                      WLAN_NOTIFICATION_SOURCE_ACM,
+                      WLAN_NOTIFICATION_SOURCE_ALL,
+                      WLAN_NOTIFICATION_SOURCE_DICT,
+                      WLAN_NOTIFICATION_SOURCE_HNWK,
+                      WLAN_NOTIFICATION_SOURCE_IHV,
+                      WLAN_NOTIFICATION_SOURCE_MSM,
+                      WLAN_NOTIFICATION_SOURCE_NONE,
+                      WLAN_NOTIFICATION_SOURCE_ONEX,
+                      WLAN_NOTIFICATION_SOURCE_SECURITY)
 
 
 class Event(object):
@@ -88,7 +87,6 @@ class NotificationObject(object):
 
 
 import logging
-import asyncio
 
 
 class Client(object):
@@ -97,7 +95,7 @@ class Client(object):
     guid = ""
     log = logging.getLogger(__name__)
 
-    def get_bss_list(self, interface) -> list:
+    def get_bss_list(self, interface) -> Union[list, None]:
         if interface:
             wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
                 interface

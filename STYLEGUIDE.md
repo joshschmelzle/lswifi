@@ -39,14 +39,12 @@ All code should be linted and reviewed with [flake8](http://flake8.pycqa.org/en/
 
 The following flake8 extensions should be used:  
 
- - [flake8-comprehensions](https://github.com/adamchainz/flake8-comprehensions) plugin should be used to help write better list/set/dict copmrehensions.
-
-
+- [flake8-comprehensions](https://github.com/adamchainz/flake8-comprehensions) plugin should be used to help write better list/set/dict comprehensions.
 
 class design
 ------------
 
-Implement `__repr__` for any class you implement. TODO: is this needed? 
+Implement `__repr__` for any class you implement.
 
 Implement `__str__` if you think it would be useful to have a string version which errs on the side of readability.
 
@@ -56,6 +54,8 @@ IDE
 ---
 
 ### Python and VSCode
+
+If you use VSC, you should use Python and Pylance extensions.
 
 [Using Python environments in VS Code](https://code.visualstudio.com/docs/python/environments).
 [Linting Python in VS Code](https://code.visualstudio.com/docs/python/linting#_troubleshooting-linting).

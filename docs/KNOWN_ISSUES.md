@@ -9,7 +9,7 @@ The following message is displayed on the screen.
 
 `wlan_scan failed: SystemErrorCodes.ERROR_NOT_FOUND:1168`
 
-One way to reproduce is to use a USB WLAN NIC. Yank the NIC immediately after initiating a scan. 
+One way to reproduce is to use a USB WLAN NIC. Yank the NIC immediately after initiating a scan.
 
 # Intel 7260 does not report correct WLAN_RATE_SET rates. 
 
@@ -44,9 +44,9 @@ Compare the two columns:
  6* 9 12* 18 24* 36 48 54             24* 28* 39* 18 19.5 36 48 54
 ```
 
-We can see that some of the rates are different between the two columns. These should be identical. 
+We can see that some of the rates are different between the two columns. These should be identical.
 
-If I use a different NIC (tested with the Intel AX200), the results are identical, rather than different. 
+If I use a different NIC (tested with the Intel AX200), the results are identical, rather than different.
 
 This was discovered after I purchased a Lenovo Thinkpad T440p on eBay. It came with an Intel 7260 WLAN NIC.
 
@@ -75,7 +75,7 @@ System Specs:
 + System Model:              20AWS43Y00
 ```
 
-# Intel 7260 does not respect default Wireless LAN Service scan interval. 
+# Intel 7260 does not respect default Wireless LAN Service scan interval.
 
 Discovered on 2019/07/08. I noticed that the Intel 7260 on my test system seems to initiate a scan every 5 seconds if not connected, or every 10 seconds if connected.
 

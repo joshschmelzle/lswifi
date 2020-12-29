@@ -10,6 +10,7 @@ manager side code for managing clients, their data, and writing to screen?
 # python imports
 import asyncio
 import contextlib
+import datetime
 import logging
 import os
 import pprint
@@ -17,59 +18,13 @@ import sys
 
 # app imports
 from . import wlanapi as WLAN_API
+from .__version__ import __title__
 from .client import Client
-from .helpers import (
-    is_two_four_band,
-    is_five_band,
-    strip_mac_address_format,
-    generate_pretty_separator,
-    Header,
-    SubHeader,
-    Alignment,
-    format_bytes_as_hex,
-    get_attr_max_len,
-    OUT_TUPLE,
-)
-from .constants import APNAMEACKFILE, APNAMEJSONFILE
+from .constants import APNAMEJSONFILE
 from .elements import WirelessNetworkBss
-
-
-# def start(args):
-#     # TODO: do i still need all this extra asyncio stuff? i'm not supporting <3.7
-#     # TODO: and actually...
-#     # TODO: why the fuck is the async code here? and not spawning clients?
-#     # TODO: it doesn't make sense to be here. WTF am i doing?
-#
-#     loop = asyncio.new_event_loop()
-#     try:
-#         sys.exit(loop.run_until_complete(main(args)))
-#     except KeyboardInterrupt:
-#         # optional message for if the shutdown takes a while
-#         print(
-#            "caught KeyboardInterrupt... stopping...", flush=True
-#         )  # TODO: this needs to be a debug output. silent normally.
-#
-#         # don't print `asyncio.CancelledError` exceptions during shutdown
-#         def shutdown_exception_handler(loop, context):
-#            if "exception" not in context or not isinstance(
-#                context["exception"], asyncio.CancelledError
-#            ):
-#                loop.default_exception_handler(context)
-#
-#         loop.set_exception_handler(shutdown_exception_handler)
-#
-#         # attempt to shutdown gracefully and wait for tasks to be cancelled
-#         tasks = asyncio.gather(
-#            *asyncio.all_tasks(loop=loop), loop=loop, return_exceptions=True
-#         )
-#         tasks.add_done_callback(lambda t: loop.stop())
-#         tasks.cancel()
-#
-#         # keep event loop running until it's either destroyed or tasks have terminated
-#         while not tasks.done() and not loop.is_closed():
-#            loop.run_forever()
-#     finally:
-#         loop.close()
+from .helpers import (OUT_TUPLE, SubHeader, format_bytes_as_hex,
+                      generate_pretty_separator, get_attr_max_len,
+                      is_five_band, is_two_four_band, strip_mac_address_format)
 
 
 def list_interfaces(interfaces) -> None:
@@ -153,20 +108,14 @@ async def scan(args, **kwargs):
             pass
 
 
-from struct import *
-
-
-def appendEthers(data) -> None:
-    import __main__ as main
-
+def appendEthers(data) -> dict:
     log = logging.getLogger(__name__)
-    name = str(main.__file__).rsplit("\\", 1)[1].split(".")[0]
-    parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), name)
-    parentexportpathexists = os.path.isdir(parentexportpath)
-    if not parentexportpathexists:
-        os.makedirs(parentexportpath)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    is_path = os.path.isdir(appdata_path)
+    if not is_path:
+        os.makedirs(appdata_path)
 
-    file = os.path.join(parentexportpath, "ethers")
+    file = os.path.join(appdata_path, "ethers")
 
     ethers = {}
     newethers = {}
@@ -199,20 +148,18 @@ def appendEthers(data) -> None:
             log.debug(f"<newEthers>: {newethers}")
             return newethers
     except ValueError:
-        print(f"could not process data ({data}) to append to ethers")
+        log.error("could not process data (%s) to append to ethers", data)
         return newethers
 
 
-def loadEthers() -> []:
-    import __main__ as main
+def loadEthers() -> dict:
+    logging.getLogger(__name__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    is_path = os.path.isdir(appdata_path)
+    if not is_path:
+        os.makedirs(appdata_path)
 
-    name = str(main.__file__).rsplit("\\", 1)[1].split(".")[0]
-    parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), name)
-    parentexportpathexists = os.path.isdir(parentexportpath)
-    if not parentexportpathexists:
-        os.makedirs(parentexportpath)
-
-    file = os.path.join(parentexportpath, "ethers")
+    file = os.path.join(appdata_path, "ethers")
     ethers = {}
     if os.path.isfile(file):
         with open(file, "r") as infile:
@@ -226,28 +173,19 @@ def loadEthers() -> []:
 import json
 
 
-def loadAPNames() -> {}:
-    import __main__ as main
+def loadAPNames() -> dict:
+    log = logging.getLogger(__name__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    is_path = os.path.isdir(appdata_path)
+    if not is_path:
+        os.makedirs(appdata_path)
 
-    name = str(main.__file__).rsplit("\\", 1)[1].split(".")[0]
-    parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), name)
-    parentexportpathexists = os.path.isdir(parentexportpath)
-    if not parentexportpathexists:
-        os.makedirs(parentexportpath)
-
-    file = os.path.join(parentexportpath, APNAMEJSONFILE)
+    file = os.path.join(appdata_path, APNAMEJSONFILE)
     apnames = {}
     if os.path.isfile(file):
         with open(file, "r") as fp:
             with contextlib.suppress(json.decoder.JSONDecodeError):
                 apnames = json.load(fp)
-
-        #    for line in infile:
-        #        try:
-        #            mac, name = line.split(' ', 1)
-        #            apnames[mac] = name.strip()
-        #        except:
-        #            pass
 
     log = logging.getLogger(__name__)
     log.debug(f"<loadAPNames>: len(json_names) {len(apnames)}")
@@ -255,19 +193,18 @@ def loadAPNames() -> {}:
 
 
 def updateAPNames(json_names, scan_names) -> None:
-    import __main__ as main
-
     log = logging.getLogger(__name__)
-    name = str(main.__file__).rsplit("\\", 1)[1].split(".")[0]
-    parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), name)
-    parentexportpathexists = os.path.isdir(parentexportpath)
-    if not parentexportpathexists:
-        log.debug(os.makedirs(parentexportpath))
-    file = os.path.join(parentexportpath, "apnames.json")
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    is_path = os.path.isdir(appdata_path)
+    if not is_path:
+        os.makedirs(appdata_path)
+
+    file = os.path.join(appdata_path, "apnames.json")
 
     # if mac from updated is in current, check if ap name is different or the same.
     # if different, update it.
     # if the same. pass.
+
     newcount = 0
     for scan_bss, scan_name in scan_names.items():
         if scan_name != "":  # if not ""
@@ -287,7 +224,7 @@ def updateAPNames(json_names, scan_names) -> None:
         f"<updateAPNames> len(json_names) {len(json_names)} len(new_names) {len(scan_names)}"
     )
     if newcount > 0:
-        out = {**json_names, **scan_names}
+        {**json_names, **scan_names}
         with open(file, "w") as fp:
             json.dump(json_names, fp)
             log.debug(f"{len(scan_names.items())} new names written to {file}")
@@ -326,17 +263,12 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
     exportpath = None
 
     if args.export:
-        import __main__ as main
+        appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+        is_path = os.path.isdir(appdata_path)
+        if not is_path:
+            os.makedirs(appdata_path)
 
-        name = str(main.__file__).rsplit("\\", 1)[1].split(".")[0]
-        parentexportpath = os.path.join(os.getenv("LOCALAPPDATA"), name)
-        parentexportpathexists = os.path.isdir(parentexportpath)
-        if not parentexportpathexists:
-            os.makedirs(parentexportpath)
-
-        import datetime
-
-        datepath = os.path.join(parentexportpath, str(datetime.date.today()))
+        datepath = os.path.join(appdata_path, str(datetime.date.today()))
         datepathexists = os.path.isdir(datepath)
         if not datepathexists:
             os.makedirs(datepath)
@@ -357,7 +289,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
 
     json_out = []
 
-    bsslen = len(wireless_network_bss_list)
+    bss_len = len(wireless_network_bss_list)
     # WirelessNetworkBss object
     for index, bss in enumerate(wireless_network_bss_list):
         if args.ies or args.bytes or args.export:
@@ -371,12 +303,12 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             if args.export:
                 if args.export != 4:
                     user_bss = args.export
-                    # print(f"{bsslen} {index}")
+                    # print(f"{bss_len} {index}")
                     # print(f"{wlanapi_bss} {user_bss}")
 
                     if wlanapi_bss != user_bss:
                         # print("{} {}".format(wlanapi_bss, user_bss))
-                        if bsslen == index:
+                        if bss_len == index:
                             print(f"no match for {args.export} found in scan results")
                         continue
 
@@ -405,10 +337,10 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                 # print(f"{bsspath} {iespath}")
 
                 if args.export != 4:
-                    print(f"raw byte file for {args.export} exported to {exportpath}")
+                    print(f"raw byte files for {args.export} exported to {exportpath}")
                     break
-                elif bsslen == index:
-                    print(f"{bsslen} total raw byte files exported to {exportpath}")
+                elif bss_len == index:
+                    print(f"{bss_len} total raw byte files exported to {exportpath}")
 
                 continue
 
@@ -533,24 +465,32 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         connected = False
         if bss.bssid.connected:
             connected = True
-            bss.bssid.value += "(*)"
+            if not args.json:
+                bss.bssid.value += "(*)"
 
         json_out.append(
             {
-                "amendments": str(bss.amendments.out()),
-                "apname": str(bss.apname.out()),
-                "bssid": str(bss.bssid.out()),
-                "channel_number_marked": str(bss.channel_number_marked.out()).strip(),
-                "channel_width": str(bss.channel_width.out()),
+                "amendments": sorted(bss.amendments.elements),
+                "apname": str(bss.apname).strip(),
+                "bssid": str(bss.bssid).strip(),
+                "bss_type=": str(bss.bss_type).strip(),
+                "channel_frequency": str(bss.channel_frequency).strip(),
+                "channel_number": str(bss.channel_number).strip(),
+                "channel_width": str(bss.channel_width).strip(),
                 "connected": connected,
-                "ie_numbers": str(bss.ienumbers.out()),
-                "modes": str(bss.modes.out()),
-                "phy_type": str(bss.phy_type.out()),
-                "rssi": str(bss.rssi.out()),
-                "security": str(bss.security.out()),
-                "spatial_streams": str(bss.spatial_streams.out()),
-                "ssid": str(bss.ssid.out()),
-                "uptime": str(bss.uptime.out()),
+                "ies": sorted(bss.ie_numbers.elements),
+                "ies_extension": sorted(bss.exie_numbers.elements),
+                "modes": sorted(bss.modes.elements),
+                "phy_type": str(bss.phy_type).strip(),
+                "rates_basic": [x for x in bss.wlanrateset.basic.split(" ")],
+                "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
+                "rssi": str(bss.rssi),
+                "security": str(bss.security).strip(),
+                "spatial_streams": str(bss.spatial_streams),
+                "ssid": str(bss.ssid).strip(),
+                "stations": str(bss.stations),
+                "uptime": str(bss.uptime).strip(),
+                "utilization": str(bss.utilization).strip(),
             }
         )
 
@@ -563,7 +503,6 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.rssi.out(),
                     bss.phy_type.out(),
                     bss.channel_number_marked.out(),
-                    # bss.channel_width.out(),
                     bss.spatial_streams.out(),
                     # bss.security.out(),
                     bss.amendments.out(),
@@ -576,14 +515,16 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.ssid.out(),
                     bss.bssid.out(),
                     bss.rssi.out(),
+                    # bss.signal_quality.out(),
                     bss.phy_type.out(),
                     bss.channel_number_marked.out(),
-                    # bss.modes.out(),
                     bss.spatial_streams.out(),
                     bss.security.out(),
                     bss.amendments.out(),
                     bss.uptime.out(),
-                    # bss.ienumbers.out(),
+                    # bss.modes.out(),
+                    # bss.ie_rates.out()
+                    # bss.ie_numbers.out()
                 ]
             )
 
@@ -681,9 +622,9 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
     # TODO: needs a test to verify this actually does what it should. ALERT the user of dup MACs
     duplicates = set([x for x in bssid_list if bssid_list.count(x) > 1])
     if duplicates:
-        print("***DUPLICATE MACS***")
-        print(duplicates)
-        print("***DUPLICATE MACS***")
+        log.warning("***DUPLICATE MACS***")
+        log.warning(duplicates)
+        log.warning("***DUPLICATE MACS***")
 
     if args.apnames:
         if stored_ack:
@@ -820,10 +761,7 @@ def get_interface_info(args, iface):
                     outstr += "    Channel: {}\n".format(channel)
 
                     if args.get_current_ap and args.get_current_channel:
-                        if args.raw and args.json:
-                            print(f'{{"bssid":"{bssid}","channel":"{channel}"}}')
-                            return
-                        elif args.raw:
+                        if args.raw:
                             print(f"{bssid}, {channel}")
                             return
                         else:
@@ -852,7 +790,6 @@ def get_interface_info(args, iface):
 
 
 def decode_bytefile(args):
-    print(args.bytefile)
     if os.path.isfile(args.bytefile):
         if args.bytefile.lower().rsplit(".", 1)[1] == "ies":
             fh = open(args.bytefile, "rb")
@@ -875,7 +812,7 @@ def decode_bytefile(args):
             id_len = get_attr_max_len(ies, "eid")
             names_len = get_attr_max_len(ies, "name")
             decoded_len = get_attr_max_len(ies, "decoded")
-            pbody_len = get_attr_max_len(ies, "pbody")
+            get_attr_max_len(ies, "pbody")
 
             out += "{0:<{length_len}}  {1:<{id_len}}  {2:<{names_len}}  {3:<{decoded_len}}  {4:<1}\n".format(
                 "Length",
@@ -886,7 +823,6 @@ def decode_bytefile(args):
                 length_len=length_len,
                 id_len=id_len,
                 names_len=names_len,
-                pbody_len=pbody_len,
                 decoded_len=decoded_len,
             )
 
@@ -908,33 +844,30 @@ def decode_bytefile(args):
                     length_len=length_len,
                     id_len=id_len,
                     names_len=names_len,
-                    pbody_len=pbody_len,
                     decoded_len=decoded_len,
                 )
             print(out)
             return
 
         if args.bytefile.lower().rsplit(".", 1)[1] == "bss":
-            print("############################")
-            print("## TODO: not finished yet ##")
-            print("############################")
             fh = open(args.bytefile, "rb")
             ies = ""
             try:
                 _bytearray = bytearray(fh.read())
                 print(
-                    "Raw BSS ({len(_bytearray)} bytes):\n{format_bytes_as_hex(_bytearray)}"
+                    f"Raw BSS ({len(_bytearray)} bytes):\n{format_bytes_as_hex(_bytearray)}"
                 )
                 print("")
-
-                # TODO: incomplete...
-                bssEntry = WLAN_API.WLANBSSEntry()
-                fh.readinto(bssEntry)  # THIS DOES NOT WORK!!! LOL
-
+                print(
+                    "Decoded BSS Information (NOTE: this is missing information found in .ies file):"
+                )
+                bss_entry = WLAN_API.WLANBSSEntry.from_buffer(_bytearray)
+                data = WirelessNetworkBss(bss_entry, is_byte_file=True)
+                print(data)
             finally:
                 fh.close()
     else:
-        print(f"{args.winfi} file does not exist on file system... exiting...")
+        print(f"{args.bytefile} file does not exist on file system... exiting...")
 
 
 def parse_result(result, data_type, **kwargs):

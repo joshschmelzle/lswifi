@@ -7,23 +7,20 @@ lswifi.elements
 code used to parse the information elements provided by Native Wifi's wlanapi.h
 """
 
+import logging
 import math
-import collections
+from collections import namedtuple
+from collections.abc import MutableSequence
+from ctypes import addressof, c_char
 from dataclasses import dataclass
 from datetime import timedelta
-from ctypes import addressof
-from ctypes import c_char
 from struct import unpack_from
-import logging
+from typing import List
 
 from . import wlanapi as WLAN_API
 from .constants import *
-from .constants import (
-    _40MHZ_CHANNEL_LIST,
-    _20MHZ_CHANNEL_LIST,
-    _80MHZ_CHANNEL_LIST,
-    _160MHZ_CHANNEL_LIST,
-)
+from .constants import (_40MHZ_CHANNEL_LIST, _80MHZ_CHANNEL_LIST,
+                        _160MHZ_CHANNEL_LIST)
 from .helpers import *
 
 
@@ -44,15 +41,13 @@ class Rates:
         )
 
 
-class SSID:
-    """Base class for SSID"""
+class OutObject(object):
+    """Object for printing out"""
 
-    def __init__(self, bss_entry):
-        self.value = bytes.decode(
-            bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH]
-        )
-        self.header = Header("ESSID", Alignment.RIGHT)
-        self.subheader = SubHeader("[Network Name]")
+    def __init__(self, **kwargs):
+        self.value = kwargs.get("value", "")
+        self.header = Header(kwargs.get("header", ""), align=kwargs.get("align", None))
+        self.subheader = SubHeader(kwargs.get("subheader", ""))
 
     def out(self):
         return OUT_TUPLE(self.__str__(), self.header, self.subheader)
@@ -63,153 +58,32 @@ class SSID:
     def __repr__(self):
         return self.value
 
-
-class IERates:
-    """Base class for RSSI"""
-
-    def __init__(self):
-        self.value = ""
-        self.header = Header("SUPPORTED RATES", Alignment.CENTER)
-        self.subheader = SubHeader("(*): basic rates [Mbit/s]")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
+    def __len__(self):
+        return len(self.value)
 
 
-class BSSID:
+class BSSID(OutObject):
     """Base class for BSSID"""
 
-    def __init__(self, bss_entry, connected_bssid):
+    def __init__(self, bss_entry, connected_bssid, **kwargs):
         self.value = convert_mac_address_to_string(bss_entry.dot11Bssid)
         self.connected_bssid = connected_bssid
         self.connected = False
         if self.value == self.connected_bssid:
             self.connected = True
-        self.header = Header("BSSID")
-        self.subheader = SubHeader("")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
+        self.header = Header(kwargs.get("header", ""), align=kwargs.get("align", None))
+        self.subheader = SubHeader(kwargs.get("subheader", ""))
 
 
-class RSSI:
-    """Base class for RSSI"""
+class SignalQuality(OutObject):
+    """Base class for SIGNAL QUALITY"""
 
-    def __init__(self, rssi):
-        self.value = rssi
-        self.header = Header("RSSI")
-        self.subheader = SubHeader("[dBm]")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
-
-
-class APName:
-    """Base class for AP Name"""
-
-    def __init__(self):
-        self.value = ""
-        self.header = Header("AP NAME")
-        self.subheader = SubHeader("")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
-
-
-class DTIM:
-    """Base class for DTIM"""
-
-    def __init__(self):
-        self.value = ""
-        self.header = Header("DTIM")
-        self.subheader = SubHeader("")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
-
-
-class ACM:
-    """Base class for ACM"""
-
-    def __init__(self, ac):
-        self.value = ""
-        self.header = Header(f"AC_{ac}")
-        self.subheader = SubHeader("ACM")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
-
-
-class SignalQuality:
-    """Base class for SIGANL QUALITY"""
-
-    def __init__(self, link_quality):
-        self.value = link_quality
-        self.header = Header("SIG")
-        self.subheader = SubHeader("QUA")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
+    def __init__(self, *args, **kwargs):
+        self.value = kwargs.get("value")
+        super(SignalQuality, self).__init__(**kwargs)
 
     def __str__(self):
         return str(f"{self.value}%")
-
-    def __repr__(self):
-        return self.value
-
-
-class BSSType:
-    """Base class for BSS Type"""
-
-    def __init__(self, bss_entry):
-        self.value = WLAN_API.DOT11_BSS_TYPE_DICT[bss_entry.dot11BssType]
-        self.header = Header("TYPE")
-        self.subheader = SubHeader("")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
 
 
 class PHYType:
@@ -308,22 +182,7 @@ class Capabilities:
         self.immediate_block_ack = self.ci.bits.IMMEDIATE_BLOCK_ACK
 
 
-class ChannelFrequency:
-    """Base class for Channel Frequency"""
-
-    def __init__(self, bss_entry):
-        self.value = str(int(bss_entry.ChCenterFrequency / 1000))
-        self.header = Header("CENT CH")
-        self.subheader = SubHeader("FREQ.")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return self.value
-
-
-class ChannelNumber:
+class ChannelNumber(OutObject):
     """Base class for Channel Number"""
 
     def __init__(self, bss_entry):
@@ -334,119 +193,13 @@ class ChannelNumber:
         self.header = Header("CHANNEL")
         self.subheader = SubHeader("[#@MHz]")
 
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
 
-    def __len__(self):
-        return len(self.value)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        return self.value
-
-
-class ChannelWidth:
-    """Base class for Channel Width"""
-
-    def __init__(self):
-        self.value = "20"
-        self.header = Header("WIDTH")
-        self.subheader = SubHeader("[MHz]")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-
-class SpatialStreams:
-    """Base class for Spatial Streams"""
-
-    def __init__(self):
-        self.value = 1
-        self.header = Header("SS")
-        self.subheader = SubHeader("#")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-
-class Uptime:
-    """Base class for uptime"""
-
-    def __init__(self, value):
-        self.value = value
-        self.header = Header("AP UPTIME")
-        self.subheader = SubHeader("[approx.]")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-
-class QBSSStations:
-    """Base class for QBSS Station Count"""
-
-    def __init__(self):
-        self.value = ""
-        self.header = Header("STA")
-        self.subheader = SubHeader("CNT")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-
-class BSSColor:
-    """Base class for BSS Color"""
-
-    def __init__(self):
-        self.value = ""
-        self.header = Header("BSS")
-        self.subheader = SubHeader("COLOR")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-
-class Utilization:
-    """Base class for QBSS Utilization"""
-
-    def __init__(self):
-        self.value = ""
-        self.header = Header("CHNL")
-        self.subheader = SubHeader("UTIL")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
-
-class BeaconInterval:
+class BeaconInterval(OutObject):
     """Base class for Beacon Interval"""
 
-    def __init__(self, value):
-        self.value = self.get_beacon_interval(value)
-        self.header = Header("BEACON")
-        self.subheader = SubHeader("INTVL.")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
+    def __init__(self, *args, **kwargs):
+        self.value = self.get_beacon_interval(kwargs.get("value"))
+        super(BeaconInterval, self).__init__(**kwargs)
 
     def __str__(self):
         return f"{self.value}ms"
@@ -464,7 +217,7 @@ class BeaconInterval:
         return (1024 * beaconperiod) / 1000
 
 
-class Security:
+class Security(OutObject):
     """Base class for Security"""
 
     def __init__(self, capabilities):
@@ -475,17 +228,8 @@ class Security:
         self.header = Header("SECURITY", Alignment.LEFT)
         self.subheader = SubHeader("[auth/unicast/group]")
 
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __str__(self):
-        return str(self.value)
-
     def __format__(self, fmt):
         return f"{self.value:{fmt}}"
-
-    def __len__(self):
-        return len(self.value)
 
 
 class InformationElement:
@@ -508,8 +252,6 @@ class InformationElement:
 
 class CountryElement(InformationElement):
     """Base class for 802.11-2016 9.4.2.9 Country Element"""
-
-    pass
 
 
 class MobilityDomain(InformationElement):
@@ -572,12 +314,12 @@ class HEOperation(InformationElement):
         super().__init__(self)
 
 
-class Amendments(collections.abc.MutableSequence):
-    def __init__(self, *args):
-        self.list = list()
+class OutList(MutableSequence):
+    def __init__(self, *args, **kwargs):
+        self.elements = []
         self.extend(list(args))
-        self.header = Header("AMENDMENTS")
-        self.subheader = SubHeader("[802.11]")
+        self.header = Header(kwargs.get("header", ""))
+        self.subheader = SubHeader(kwargs.get("subheader", ""))
 
     def out(self):
         return OUT_TUPLE(self.__str__(), self.header, self.subheader)
@@ -588,28 +330,35 @@ class Amendments(collections.abc.MutableSequence):
     def __getitem__(self, index):
         return self.list[index]
 
-    def __len__(self):
-        return len("/".join(sorted(self.list)))
-
     def __setitem__(self, index, value):
-        self.list[index] = value
+        self.elements[index] = value
 
     def insert(self, index, value):
-        self.list.insert(index, value)
+        self.elements.insert(index, value)
+
+    def __len__(self):
+        return len(self.elements)
+
+    def __contains__(self, value):
+        return value in self.elements
+
+    def __iter__(self):
+        return iter(self.elements)
 
     def __str__(self):
-        return "/".join(sorted(self.list))
+        if all(isinstance(x, int) for x in self.elements):
+            self.elements.sort(key=int)
+        if all(isinstance(x, str) for x in self.elements):
+            self.elements.sort(key=str)
+        return "/".join([str(x) for x in self.elements])
 
-    def __format__(self, fmt):
-        return format("/".join(sorted(self.list)), fmt)
 
-
-class Modes(collections.abc.MutableSequence):
-    def __init__(self, *args):
-        self.list = list()
+class Modes(MutableSequence):
+    def __init__(self, *args, **kwargs):
+        self.elements = []
         self.extend(list(args))
-        self.header = Header("MODES")
-        self.subheader = SubHeader("")
+        self.header = Header(kwargs.get("header", ""))
+        self.subheader = SubHeader(kwargs.get("subheader", ""))
 
     def out(self):
         return OUT_TUPLE(self.__str__(), self.header, self.subheader)
@@ -620,56 +369,34 @@ class Modes(collections.abc.MutableSequence):
     def __getitem__(self, index):
         return self.list[index]
 
-    def __len__(self):
-        return len("/".join(sorted(self.list)))
-
     def __setitem__(self, index, value):
-        self.list[index] = value
+        self.elements[index] = value
 
     def insert(self, index, value):
-        self.list.insert(index, value)
-
-    def __str__(self):
-        return "/".join(sorted(self.list))
-
-    def __format__(self, fmt):
-        return format("/".join(sorted(self.list)), fmt)
-
-
-class IENumbers(collections.abc.MutableSequence):
-    def __init__(self, *args):
-        self.list = list()
-        self.extend(list(args))
-        self.header = Header("IEs")
-        self.subheader = SubHeader("")
-
-    def out(self):
-        return OUT_TUPLE(self.__str__(), self.header, self.subheader)
-
-    def __delitem__(self, index):
-        del self.list[index]
-
-    def __getitem__(self, index):
-        return self.list[index]
+        self.elements.insert(index, value)
 
     def __len__(self):
-        return len("/".join(sorted(self.list)))
+        return len(self.elements)
 
-    def __setitem__(self, index, value):
-        self.list[index] = value
+    def __contains__(self, value):
+        return value in self.elements
 
-    def insert(self, index, value):
-        self.list.insert(index, value)
+    def __iter__(self):
+        return iter(self.elements)
 
     def __str__(self):
-        return "/".join(sorted(self.list))
-
-    def __format__(self, fmt):
-        return format("/".join(sorted(self.list)), fmt)
+        order = {1: "a", 2: "b", 3: "g", 4: "n", 5: "ac", 6: "ax"}
+        actual = {}
+        for mode in self.elements:
+            for num, phy in order.items():
+                if mode == phy:
+                    actual[num] = phy
+        sorted(actual)
+        return "/".join(list(actual.values()))
 
 
 class WirelessNetworkBss:
-    def __init__(self, bss_entry, connected_bssid=None):
+    def __init__(self, bss_entry, connected_bssid=None, is_byte_file=False):
         """
         bss_entry:
         ("dot11Ssid", Dot11SSID),
@@ -691,71 +418,99 @@ class WirelessNetworkBss:
         :param bss_entry:
         """
         # init values before parsing IEs
-        self.ssid = SSID(bss_entry)
-        self.bssid = BSSID(bss_entry, connected_bssid)
+        self.is_byte_file = is_byte_file
+        self.ssid = OutObject(
+            value=bytes.decode(
+                bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH]
+            ),
+            header="SSID",
+            align=Alignment.RIGHT,
+            subheader="[Network Name]",
+        )
+        self.bssid = BSSID(bss_entry, connected_bssid, header="BSSID")
         self.phy_id = bss_entry.PhyId
-        self.bss_type = BSSType(bss_entry)
+        self.bss_type = OutObject(
+            value=WLAN_API.DOT11_BSS_TYPE_DICT[bss_entry.dot11BssType], header="TYPE"
+        )
         self.phy_type = PHYType(bss_entry)
-        self.rssi = RSSI(bss_entry.Rssi)
-        self.signal_quality = SignalQuality(bss_entry.LinkQuality)
+        self.rssi = OutObject(value=bss_entry.Rssi, header="RSSI", subheader="[dBm]")
+        self.signal_quality = SignalQuality(value=bss_entry.LinkQuality, header="QUAL")
         self.has_country_code = bss_entry.InRegDomain
         self.timestamp = bss_entry.Timestamp
         self.host_timestamp = bss_entry.HostTimestamp
-        self.uptime = Uptime(self.convert_timestamp_to_uptime(self.timestamp))
-        self.beacon_interval = BeaconInterval(bss_entry.BeaconPeriod)
+        self.uptime = OutObject(
+            value=self.convert_timestamp_to_uptime(self.timestamp),
+            header="AP UPTIME",
+            subheader="[approx.]",
+        )
+        self.beacon_interval = BeaconInterval(
+            value=bss_entry.BeaconPeriod, header="BEACON", subheader="INTVL."
+        )
         self.channel_number = ChannelNumber(bss_entry)
-        self.channel_frequency = ChannelFrequency(bss_entry)
+        self.channel_number_marked = ChannelNumber(bss_entry)
+        self.channel_frequency = OutObject(
+            value=int(bss_entry.ChCenterFrequency / 1000),
+            header="CENT CH",
+            subheader="FREQ.",
+        )
         self.is_2ghz = is_two_four_band(int(self.channel_frequency.value))
         self.is_5ghz = is_five_band(int(self.channel_frequency.value))
-        self.channel_width = ChannelWidth()
-        self.channel_number_marked = self.channel_number
+        self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
         self.wlanrateset = Rates(bss_entry)
-        self.ie_rates = IERates()
+        self.ie_rates = OutObject(
+            header="SUPPORTED RATES",
+            align=Alignment.CENTER,
+            subheader="(*): basic rates [Mbit/s]",
+        )
         self.capabilities = Capabilities(bss_entry)
         self.ie_size = bss_entry.IeSize
         self.country_code = "--"
-        self.apname = APName()
+        self.apname = OutObject(header="AP NAME")
         self.security = Security(self.capabilities)
-        self.spatial_streams = SpatialStreams()
-        self.stations = QBSSStations()
-        self.utilization = Utilization()
-        self.ienumbers = IENumbers()
-        self.amendments = Amendments()
-        self.modes = Modes()
+        self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
+        self.stations = OutObject(header="STA", subheader="CNT")
+        self.utilization = OutObject(header="CHNL", subheader="UTIL")
+        self.ie_numbers = OutList(header="IEs")
+        self.exie_numbers = OutList(header="EXT IEs")
+        self.amendments = OutList(header="AMENDMENTS", subheader="[802.11]")
+        self.modes = Modes(header="MODES")
         self.bssbytes = bss_entry
-        self.bsscolor = BSSColor()
+        self.bsscolor = OutList(header="BSS", subheader="COLOR")
         self.channel_marking = ""
         self.channel_list = self.channel_number.value
-        self.dtim = DTIM()
-        self.voice_acm = ACM("VO")
-        self.video_acm = ACM("VI")
-        self.besteffort_acm = ACM("BE")
-        self.background_acm = ACM("BK")
+        self.dtim = OutObject(header="DTIM")
+        self.voice_acm = OutObject(header="AC_VO")
+        self.video_acm = OutObject(header="AC_VI")
+        self.besteffort_acm = OutObject(header="AC_BE")
+        self.background_acm = OutObject(header="AC_BK")
 
-        # parse IEs
-        self.raw_information_elements = self._get_information_elements_buffer(bss_entry)
-        self.iesbytes = bytearray(self.raw_information_elements)
-        # self.iesbytes = [c for c in self.raw_information_elements]
-        self.information_elements = WirelessNetworkBss._process_information_elements(
-            self, bss_entry
-        )
+        if not is_byte_file:
+            # parse IEs
+            self.raw_information_elements = self._get_information_elements_buffer(
+                bss_entry
+            )
+            self.iesbytes = bytearray(self.raw_information_elements)
+            # self.iesbytes = [c for c in self.raw_information_elements]
+            self.information_elements = WirelessNetworkBss.process_information_elements(
+                self, bss_entry
+            )
 
-        # do stuff now that IEs have been parsed
+            # do stuff now that IEs have been parsed
 
-        # if self.dtim.value:
-        #    print(f"dtim {self.dtim.value} present for {self.bssid}")
-        # else:
-        #    print(f"dtim not present for {self.bssid}")
-        self.ie_rates.value = self.parse_rates(self.ie_rates)
-        if len(self.channel_number) == 1:
-            self.channel_number = f"  {self.channel_number}"
-        if len(self.channel_number) == 2:
-            self.channel_number = f" {self.channel_number}"
-        # if len(self.channel_number) == 3:
-        #    pass
-        self.channel_number_marked.value = (
-            f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
-        )
+            # if self.dtim.value:
+            #    print(f"dtim {self.dtim.value} present for {self.bssid}")
+            # else:
+            #    print(f"dtim not present for {self.bssid}")
+            self.ie_rates.value = self.parse_rates(self.ie_rates)
+            if len(self.channel_number_marked) == 1:
+                self.channel_number_marked.value = f"  {self.channel_number_marked}"
+            if len(self.channel_number_marked) == 2:
+                self.channel_number_marked.value = f" {self.channel_number_marked}"
+            # if len(self.channel_number) == 3:
+            #    pass
+            self.channel_number_marked.value = (
+                f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
+            )
 
     @staticmethod
     def convert_timestamp_to_uptime(timestamp) -> str:
@@ -774,7 +529,7 @@ class WirelessNetworkBss:
         )
 
     @staticmethod
-    def parse_rates(ie_rates) -> str:
+    def parse_rates(ie_rates) -> List:
         """
         takes a list of rates including basic rates, and orders them.
 
@@ -815,6 +570,21 @@ class WirelessNetworkBss:
         for i in outlist:
             print(outstring.format(*tuple(i)))
 
+    def __repr__(self):
+        stuff = [
+            f"ssid=({self.ssid.value})",
+            self.bssid.value,
+            f"{self.rssi} dBm",
+            self.bss_type.value,
+            self.phy_type.amendment,
+            self.phy_type.name,
+            self.security.value,
+            self.country_code,
+            f"{self.beacon_interval.value}ms",
+            self.uptime.value,
+        ]
+        return ", ".join(x for x in stuff)
+
     def __str__(self):
         outlist = []
         outlist.append(
@@ -826,7 +596,7 @@ class WirelessNetworkBss:
                 "AMEND.",
                 "PHY",
                 "SECURITY",
-                "CTRY.",
+                "COUNTRY",
                 "BEACON",
                 "UPTIME",
             ]
@@ -961,58 +731,58 @@ class WirelessNetworkBss:
         )
         # out += "Raw: {}".format(self.raw_information_elements)
         out += "<hr>\n"
-        # out += f"{len(self.ienumbers.list)} INFORMATION ELEMENTS ({self.ie_size} bytes):\n"
-        eid_len = get_attr_max_len(self.information_elements, "eid")
-        length_len = get_attr_max_len(self.information_elements, "length")
-        names_len = get_attr_max_len(self.information_elements, "name")
-        decoded_len = get_attr_max_len(self.information_elements, "decoded")
-        if decoded_len < len("DECODED"):
-            decoded_len = len("DECODED")
-        if length_len < len("SIZE"):
-            length_len = len("SIZE")
-        # pbody_len = get_attr_max_len(self.information_elements, "pbody")
-        out += "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3:<{decoded_len}}\n".format(
-            "SIZE",
-            "ID",
-            f"{len(self.ienumbers.list)} ELEMENTS ({self.ie_size} bytes)",
-            "DECODED",
-            length_len=length_len,
-            eid_len=eid_len,
-            names_len=names_len,
-            decoded_len=decoded_len,
-        )
-        for ie in self.information_elements:
+        # out += f"{len(self.ie_numbers.list)} INFORMATION ELEMENTS ({self.ie_size} bytes):\n"
+        if not self.is_byte_file:
+            eid_len = get_attr_max_len(self.information_elements, "eid")
+            length_len = get_attr_max_len(self.information_elements, "length")
+            names_len = get_attr_max_len(self.information_elements, "name")
+            decoded_len = get_attr_max_len(self.information_elements, "decoded")
+            if decoded_len < len("DECODED"):
+                decoded_len = len("DECODED")
+            if length_len < len("SIZE"):
+                length_len = len("SIZE")
+            # pbody_len = get_attr_max_len(self.information_elements, "pbody")
             out += "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3:<{decoded_len}}\n".format(
-                ie.length,
-                ie.eid,
-                ie.name,
-                ie.decoded,  # ie.pbody and ie.body
+                "SIZE",
+                "ID",
+                f"{len(self.ie_numbers)} ELEMENTS ({self.ie_size} bytes)",
+                "DECODED",
                 length_len=length_len,
                 eid_len=eid_len,
                 names_len=names_len,
                 decoded_len=decoded_len,
             )
-        # out += "{0:<{names_len}}  {1:<{decoded_len}}\n".format(
-        #    "INFORMATION ELEMENT",
-        #    "DECODED",
-        #    names_len=names_len,
-        #    decoded_len=decoded_len,
-        # )
+            for ie in self.information_elements:
+                out += "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3:<{decoded_len}}\n".format(
+                    ie.length,
+                    ie.eid,
+                    ie.name,
+                    ie.decoded,  # ie.pbody and ie.body
+                    length_len=length_len,
+                    eid_len=eid_len,
+                    names_len=names_len,
+                    decoded_len=decoded_len,
+                )
+            # out += "{0:<{names_len}}  {1:<{decoded_len}}\n".format(
+            #    "INFORMATION ELEMENT",
+            #    "DECODED",
+            #    names_len=names_len,
+            #    decoded_len=decoded_len,
+            # )
 
-        # for ie in self.information_elements:
-        #    out += "{0:<{names_len}}  {1:<{decoded_len}}\n".format(
-        #        ie.name,
-        #        ie.decoded,
-        #        names_len=names_len,
-        #        decoded_len=decoded_len,
-        #    )
+            # for ie in self.information_elements:
+            #    out += "{0:<{names_len}}  {1:<{decoded_len}}\n".format(
+            #        ie.name,
+            #        ie.decoded,
+            #        names_len=names_len,
+            #        decoded_len=decoded_len,
+            #    )
         return out
 
     def _get_information_elements_buffer(self, bss_entry):
         """
         gets the buffer containing the information elements bytes
         """
-        out = ""
         bss_entry_pointer = addressof(bss_entry)
         ie_offset = bss_entry.IeOffset
         data_type = c_char * bss_entry.IeSize
@@ -1067,7 +837,7 @@ class WirelessNetworkBss:
                     )
                 )
 
-    def _process_information_elements(self, bss_entry):
+    def process_information_elements(self, bss_entry):
         # ctypes
         bss_entry_pointer = addressof(bss_entry)
         ie_offset = bss_entry.IeOffset
@@ -1218,10 +988,8 @@ class WirelessNetworkBss:
     @staticmethod
     def _parse_information_element(self, element_id, element_length, element_data):
         if self is not None:
-            if element_id == 5:
-                self.ienumbers.append(f"{element_id}*")
-            else:
-                self.ienumbers.append(str(element_id))
+            self.ie_numbers.append(element_id)
+
         # 802.11-2016 9.4.2.2 SSID element
         if element_id == 0:
             decoded = WirelessNetworkBss.__parse_ssid_element(element_data)
@@ -1238,6 +1006,9 @@ class WirelessNetworkBss:
         if element_id == 1:
             decoded = WirelessNetworkBss.__parse_rates(element_data)
             if self:
+                b_rates = ["1", "1*", "2", "2*", "5.5", "5.5*", "11", "11*"]
+                if any(any(b == rate for b in b_rates) for rate in decoded.split(" ")):
+                    self.modes.append("b")
                 self.ie_rates.value = decoded
             return WLAN_API.InformationElement(
                 element_id,
@@ -1640,6 +1411,13 @@ class WirelessNetworkBss:
             self.apname.value = apname
         return f"AP Name: {apname}, Clients: {clients}"
 
+    @dataclass
+    class WPS_Data_Element:
+        description: str
+        id: str
+        length: int
+        data: str
+
     @staticmethod
     def _parse_vendor_specific_element(self, element_data):
         """
@@ -1697,7 +1475,7 @@ class WirelessNetworkBss:
             if oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
                 if oui_subtype == 3:  # AP Name
-                    offset = element_body[5]
+                    element_body[5]
                     apname = "".join([chr(i) for i in memoryview_body[6:]])
                     # EID 221 (len=20): OUI: 00:0b:86 Subtype: 1 Data b'\x00\x0b\x86\x01\x03\x00Josh_Schmelzle'
                     out = "OUI: {} (Aruba), Subtype: {}, AP Name: {}".format(
@@ -1710,7 +1488,7 @@ class WirelessNetworkBss:
             # EID 221 (len=18): OUI: 00:a0:f8 Subtype: 1 Data b'\x00\xa0\xf8\x01\x03\x01\x0f\xc0\x00\x00\x00\x06ap8533'
             if oui_type == 1:  # AP name
                 # offset = element_body[4, 5, 6, 7, 8, 9, 10] #offset is 7 then + 1 for ap length
-                length = element_body[11]
+                element_body[11]
                 apname = "".join([chr(i) for i in memoryview_body[12:]])
                 out = "OUI: {} (Extreme (Zebra)), Subtype: {}, AP Name: {}".format(
                     oui, oui_type, apname
@@ -1791,8 +1569,6 @@ class WirelessNetworkBss:
             | Serial Number              | 0x1042    | <= 32B     |
             """
 
-            from collections import namedtuple
-
             WPS_Attribute_Tuple = namedtuple(
                 "WPS_Attribute_Tuple", ["desc", "lenbytes"]
             )
@@ -1825,17 +1601,8 @@ class WirelessNetworkBss:
                 ),
             }
 
-            @dataclass
-            class WPS_Data_Element:
-                description: str
-                id: str
-                length: int
-                data: str
-
             ln = len(memoryview(element_data[4:]))
             element_data_iterator = iter(element_data[4:])
-
-            wps_elements = []
 
             idx = 0
 
@@ -1851,7 +1618,9 @@ class WirelessNetworkBss:
 
                 if wps_attribute is None:
                     out = f"couldn't decode WPS attribute {attribute_id}"
-                    print(f"{self.bssid}: couldn't decode WPS attribute {attribute_id}")
+                    log.warning(
+                        f"{self.bssid}: couldn't decode WPS attribute {attribute_id}"
+                    )
                     break
 
                 attribute_length = ""
@@ -2071,8 +1840,8 @@ class WirelessNetworkBss:
                             if ACI == 3:
                                 self.voice_acm.value = int(ACM)
 
-                        RESERVED = get_bit(memview_body[0], 7)
-                        ACI_AIFSN = element_body[0]
+                        get_bit(memview_body[0], 7)
+                        element_body[0]
 
                         ECWmin0 = get_bit(memview_body[1], 0)
                         ECWmin1 = get_bit(memview_body[1], 1)
@@ -2102,7 +1871,7 @@ class WirelessNetworkBss:
 
                         CWmax = 2 ** ECWmax - 1
 
-                        ECWmin_ECWmax = element_body[1]
+                        element_body[1]
                         TXOP_LIMIT = int.from_bytes(
                             element_body[2] + element_body[3], "little"
                         )
@@ -2152,6 +1921,9 @@ class WirelessNetworkBss:
         ext_tag_name = ""
 
         ext_tag_name = EXTENSION_IE_DICT.get(eid_ext, None)
+
+        if self is not None:
+            self.exie_numbers.append(str(eid_ext))
 
         # based on Aruba AP515 802.11ax pcap.
         if eid_ext == 35:  # HE Capabilities
@@ -2272,7 +2044,7 @@ class WirelessNetworkBss:
         obss_scan_active_total_per_channel = edata[8] + edata[9]
         bss_width_channel_transition_delay_factor = edata[10] + edata[11]
         obss_scan_activity_threshold = edata[12] + edata[13]
-        return "Scan Passive Dwell: {}\nScan Active Dwell: {}\nChannel Width Triggger Scan Interval: {}\nScan Passive Total Per Channel: {}\nScan Active Total Per Channel: {}\nWidth Channel Transition Delay Factor: {}\nScan Activity Threshold: {}".format(
+        return "Scan Passive Dwell: {}\nScan Active Dwell: {}\nChannel Width Trigger Scan Interval: {}\nScan Passive Total Per Channel: {}\nScan Active Total Per Channel: {}\nWidth Channel Transition Delay Factor: {}\nScan Activity Threshold: {}".format(
             obss_scan_passive_dwell,
             obss_scan_active_dwell,
             bss_channel_width_trigger_scan_interval,
@@ -2297,10 +2069,10 @@ class WirelessNetworkBss:
                 get_bit(body[0], 3),
             ]
         )
-        internet = get_bit(body[0], 4)
-        asra = get_bit(body[0], 5)
-        esc = get_bit(body[0], 6)
-        uesa = get_bit(body[0], 7)
+        get_bit(body[0], 4)
+        get_bit(body[0], 5)
+        get_bit(body[0], 6)
+        get_bit(body[0], 7)
         network_type = INTERWORKING_NETWORK_TYPE.get(network_type, None)
         if self is not None:
             self.amendments.append("u")
@@ -2541,13 +2313,13 @@ class WirelessNetworkBss:
                 if "w" not in self.amendments:
                     self.amendments.append("w")
         out += "RSN Capabilities 0x{:02x}{:02x}\n".format(
-            int(RSN_CAP1), int(RSN_CAP0), body[index + 1], body[index]
+            int(RSN_CAP1), int(RSN_CAP0)  # , body[index + 1], body[index]
         )
         return out
 
     def _parse_quiet_element(self, edata):
         """
-        The Quiet element defines an interavl during which no transmission occurs in the current channel.
+        The Quiet element defines an interval during which no transmission occurs in the current channel.
         This interval might be used to assist in making channel measurements without interference from
         other STAs in the BSS.
         """
@@ -2585,7 +2357,8 @@ class WirelessNetworkBss:
         use_protection = get_bit(body[0], 1)
         barker_preamble_mode = get_bit(body[0], 2)
         if self is not None:
-            pass
+            if "ax" not in self.modes:
+                self.modes.append("g")
 
         return (
             f"Non-ERP Present: {int(nonERP_present)}, "

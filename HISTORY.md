@@ -1,6 +1,12 @@
 Release History
 ===============
 
+0.1.3 (2020-12-28)
+------------------
+
+- expand json support
+- refactor
+
 0.1.2 (2020-12-27)
 ------------------
 
@@ -14,4 +20,4 @@ Release History
 0.1 (2020-09-09)
 ------------------
 
-- conception of public beta 
+- conception of public beta

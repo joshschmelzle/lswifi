@@ -2,8 +2,9 @@ import sys
 
 # wlanapi is actually in a different directory. by default when python runs this script it doesn't know about the other one.
 sys.path.insert(0, "C:\\Users\\josh\\dev\\python\\lswifi\\lswifi")
-import wlanapi
 import ast
+
+import wlanapi
 
 
 def func_a(bool):

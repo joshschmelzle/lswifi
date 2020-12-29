@@ -3,7 +3,7 @@ lswifi is written and maintained by Josh Schmelzle:
 Wizards
 -------
 
-- Josh Schmelzle (@joshschmelzle) 
+- Josh Schmelzle (@joshschmelzle)
 
 Contributors
 ------------
