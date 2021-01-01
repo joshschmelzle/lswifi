@@ -11,6 +11,7 @@ import functools
 import logging
 import pprint
 import traceback
+from subprocess import check_output
 from types import SimpleNamespace
 from typing import Union
 
@@ -26,7 +27,8 @@ from .wlanapi import (ONEX_NOTIFICATION_TYPE_ENUM,
                       WLAN_NOTIFICATION_SOURCE_MSM,
                       WLAN_NOTIFICATION_SOURCE_NONE,
                       WLAN_NOTIFICATION_SOURCE_ONEX,
-                      WLAN_NOTIFICATION_SOURCE_SECURITY)
+                      WLAN_NOTIFICATION_SOURCE_SECURITY,
+                      WLANConnectionAttributes)
 
 
 class Event(object):
@@ -107,6 +109,7 @@ def get_interface_info(args, iface) -> str:
     interface_info = {}
     connected = True
 
+    log = logging.getLogger(__name__)
     if "disconnected" in iface.state_string:
         connected = False
 
@@ -127,100 +130,102 @@ def get_interface_info(args, iface) -> str:
                 outstr += f"    {p}: {pprint.pformat(result, indent=4)}\n"
             else:
                 outstr += f"    {p}: {result}\n"
+            return outstr
 
     if connected and not args.supported:
         # print(interface_info.items())
         bssid = ""
         for key, result in interface_info.items():
             if key == "current_connection":
-                connected_ssid = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11Ssid",
-                )
-                bssid = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11Bssid",
-                )
-                dot11PhyType = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11PhyType",
-                )
-                wlanSignalQuality = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="wlanSignalQuality",
-                )
-                ulRxRate = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="ulRxRate",
-                )
-                ulTxRate = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="ulTxRate",
-                )
-                dot11BssType = parse_result(
-                    result=result[1],
-                    data_type="wlanAssociationAttributes",
-                    data="dot11BssType",
-                )
-                state = parse_result(result=result[1], data_type="isState")
-                wlanConnectionMode = parse_result(
-                    result=result[1], data_type="wlanConnectionMode"
-                )
-                strProfileName = parse_result(
-                    result=result[1], data_type="strProfileName"
-                )
-                SecurityEnabled = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="bSecurityEnabled",
-                )
-                oneXEnabled = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="bOneXEnabled",
-                )
-                dot11AuthAlgorithm = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="dot11AuthAlgorithm",
-                )
-                dot11CipherAlgorithm = parse_result(
-                    result=result[1],
-                    data_type="wlanSecurityAttributes",
-                    data="dot11CipherAlgorithm",
-                )
+                if isinstance(result[0], WLANConnectionAttributes):
+                    connected_ssid = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="dot11Ssid",
+                    )
+                    bssid = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="dot11Bssid",
+                    )
+                    if args.event_watcher:
+                        return bssid
+                    dot11PhyType = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="dot11PhyType",
+                    )
+                    wlanSignalQuality = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="wlanSignalQuality",
+                    )
+                    ulRxRate = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="ulRxRate",
+                    )
+                    ulTxRate = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="ulTxRate",
+                    )
+                    dot11BssType = parse_result(
+                        result=result[1],
+                        data_type="wlanAssociationAttributes",
+                        data="dot11BssType",
+                    )
+                    state = parse_result(result=result[1], data_type="isState")
+                    wlanConnectionMode = parse_result(
+                        result=result[1], data_type="wlanConnectionMode"
+                    )
+                    strProfileName = parse_result(
+                        result=result[1], data_type="strProfileName"
+                    )
+                    SecurityEnabled = parse_result(
+                        result=result[1],
+                        data_type="wlanSecurityAttributes",
+                        data="bSecurityEnabled",
+                    )
+                    oneXEnabled = parse_result(
+                        result=result[1],
+                        data_type="wlanSecurityAttributes",
+                        data="bOneXEnabled",
+                    )
+                    dot11AuthAlgorithm = parse_result(
+                        result=result[1],
+                        data_type="wlanSecurityAttributes",
+                        data="dot11AuthAlgorithm",
+                    )
+                    dot11CipherAlgorithm = parse_result(
+                        result=result[1],
+                        data_type="wlanSecurityAttributes",
+                        data="dot11CipherAlgorithm",
+                    )
 
-                outstr += f"    Description: {iface.description}\n"
-                outstr += (
-                    f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
-                )
-                outstr += f"    State: {state}\n"
-                if "wlan_connection_mode_" in wlanConnectionMode:
-                    wlanConnectionMode = wlanConnectionMode[21:]
-                outstr += (
-                    f"    Connection Mode: {wlanConnectionMode}\n"
-                    f"    Profile Name: {strProfileName}\n"
-                )
-                outstr += f"    SSID: {bytes.decode(connected_ssid)}\n"
-                outstr += f"    BSSID: {bssid}\n"
-                outstr += f"    BSS Type: {dot11BssType}\n"
-                outstr += f"    PHY: {dot11PhyType}\n"
-                # out += "PH    Y Index: {}\n".format(uDot11PhyIndex)
-                outstr += f"    Signal Quality: {wlanSignalQuality}%\n"
-                outstr += f"    Rx Rate: {ulRxRate/1000} Mbps\n"
-                outstr += f"    Tx Rate: {ulTxRate/1000} Mbps\n"
-                outstr += (
-                    f"    Security: {'Enabled' if SecurityEnabled else 'Disabled'}\n"
-                )
-                outstr += f"    .1X: {'Enabled' if oneXEnabled else 'Disabled'}\n"
-                outstr += f"    Authentication: {dot11AuthAlgorithm}\n"
-                outstr += f"    Cipher: {dot11CipherAlgorithm}\n"
+                    outstr += f"    Description: {iface.description}\n"
+                    outstr += (
+                        f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
+                    )
+                    outstr += f"    State: {state}\n"
+                    if "wlan_connection_mode_" in wlanConnectionMode:
+                        wlanConnectionMode = wlanConnectionMode[21:]
+                    outstr += (
+                        f"    Connection Mode: {wlanConnectionMode}\n"
+                        f"    Profile Name: {strProfileName}\n"
+                    )
+                    outstr += f"    SSID: {bytes.decode(connected_ssid)}\n"
+                    outstr += f"    BSSID: {bssid}\n"
+                    outstr += f"    BSS Type: {dot11BssType}\n"
+                    outstr += f"    PHY: {dot11PhyType}\n"
+                    # out += "PH    Y Index: {}\n".format(uDot11PhyIndex)
+                    outstr += f"    Signal Quality: {wlanSignalQuality}%\n"
+                    outstr += f"    Rx Rate: {ulRxRate/1000} Mbps\n"
+                    outstr += f"    Tx Rate: {ulTxRate/1000} Mbps\n"
+                    outstr += f"    Security: {'Enabled' if SecurityEnabled else 'Disabled'}\n"
+                    outstr += f"    .1X: {'Enabled' if oneXEnabled else 'Disabled'}\n"
+                    outstr += f"    Authentication: {dot11AuthAlgorithm}\n"
+                    outstr += f"    Cipher: {dot11CipherAlgorithm}\n"
 
             if "ERROR_NOT_SUPPORTED" in result:
                 pass
@@ -248,17 +253,23 @@ def get_interface_info(args, iface) -> str:
                             return channel
                         else:
                             return f"Interface: {iface.description}, Channel: {channel}"
-
-    return outstr
+        return outstr
+    else:
+        return ""
 
 
 class Client(object):
     scan_finished = False
     data = None
     guid = ""
+    mac = ""
     log = logging.getLogger(__name__)
     get_bssid_args = SimpleNamespace(
-        get_current_ap=True, raw=True, get_current_channel=False, supported=False
+        get_current_ap=True,
+        raw=True,
+        event_watcher=True,
+        get_current_channel=False,
+        supported=False,
     )
 
     def get_bss_list(self, interface) -> Union[list, None]:
@@ -277,11 +288,16 @@ class Client(object):
     def on_event_notification(self, wlan_event):
         if wlan_event is not None:
             if self.args.event_watcher:
-                if str(wlan_event).strip() == "associated":
-                    bssid = get_interface_info(self.get_bssid_args, self.iface)
-                    self.log.info(f"{self.iface.guid}: {wlan_event} to {bssid}")
-                else:
-                    self.log.info(f"{self.iface.guid}: {wlan_event}")
+                # if str(wlan_event).strip() in [
+                #    "associating" "associated",
+                #    "roaming_start",
+                #    "authenticating",
+                #    "roaming_end",
+                # ]:
+                bssid = get_interface_info(self.get_bssid_args, self.iface)
+                #    self.log.info(f"{self.iface.guid}: {wlan_event} to {bssid}")
+                # else:
+                self.log.info(f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})")
             else:
                 self.log.debug(f"{self.iface.guid}: <wlanapi.h> {wlan_event}...")
 
@@ -327,10 +343,26 @@ class Client(object):
         except WLAN_API.WLANScanError as scan_error:
             self.log.critical(scan_error)
 
+    def lookup_mac_on_guid(self, guid) -> str:
+        guid = str(guid)[1:-1]  # remove { } around guid
+        exe = "getmac.exe"  # use getmac.exe to map interface guid to mac
+        cmd = f"{exe}"
+        output = check_output(cmd)
+        mac = ""
+        self.log.debug("checking output from '%s' for mac lookup on guid", exe)
+        for line in output.decode().splitlines():
+            if guid in line:
+                mac = line
+                break
+        result = mac[:17].lower().replace("-", ":")  # format mac address
+        self.log.debug(f"guid {guid} maps to {result}")
+        return result
+
     def __init__(self, args, iface, ssid=None):
         try:
             self.args = args
             self.iface = iface
+            self.mac = self.lookup_mac_on_guid(iface.guid)
             self.client_handle = WLAN_API.WLAN.open_handle()
             callback = self.register_notification(
                 self.on_event_notification, self.client_handle
