@@ -1,4 +1,4 @@
-![coverage-badge](coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
+![coverage-badge](https://github.com/joshschmelzle/lswifi/blob/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
 
 lswifi: a CLI Wi-Fi scanner tool for Windows
 ===============================================
@@ -15,7 +15,7 @@ Installation
 > python -m pip install lswifi
 ```
 
-![alt](/docs/31Pu7mCVFR.gif "animation showing install of lswifi")
+![alt](https://github.com/joshschmelzle/lswifi/blob/main/docs/31Pu7mCVFR.gif "animation showing install of lswifi")
 
 Usage
 -----
@@ -44,7 +44,7 @@ Output verbose information (including Information Elements) for BSSID `00:00:00:
 > lswifi -ies 00:00:00:00:00:00
 ```
 
-![alt](/docs/Wtj6xTEisE.gif "animation showing printing verbose information for a particular BSSID")
+![alt](https://github.com/joshschmelzle/lswifi/blob/main/docs/Wtj6xTEisE.gif "animation showing printing verbose information for a particular BSSID")
 
 Print help information:
 
@@ -52,7 +52,7 @@ Print help information:
 > lswifi -h
 ```
 
-![alt](/docs/BCKaCek52E.gif "animation showing printing help for lswifi")
+![alt](https://github.com/joshschmelzle/lswifi/blob/main/docs/BCKaCek52E.gif "animation showing printing help for lswifi")
 
 Upgrading
 ---------
@@ -60,22 +60,16 @@ Upgrading
 Here is how to upgrade `lswifi` when there is a new version available:
 
 ```bash
-PS C:\Users\josh> pip install --upgrade lswifi
-Collecting lswifi
-  Using cached lswifi-0.1.1-py2.py3-none-any.whl (57 kB)
-Installing collected packages: lswifi
-  Attempting uninstall: lswifi
-    Found existing installation: lswifi 0.1
-    Uninstalling lswifi-0.1:
-      Successfully uninstalled lswifi-0.1
-Successfully installed lswifi-0.1.1
+PS C:\Users\joshu\GitHub\lswifi> where.exe pip3
+C:\Users\joshu\AppData\Local\Programs\Python\Python39\Scripts\pip3.exe
+
+PS C:\Users\joshu\GitHub\lswifi> pip3 install --upgrade lswifi
 ```
 
 Check the version installed:
 
 ```bash
 PS C:\Users\josh> lswifi -v
-lswifi 0.1.1
 ```
 
 FAQs
@@ -89,4 +83,4 @@ FAQs
 Contributing
 ------------
 
-Want to contribute? Thanks! Please take a few moments to [read this](CONTRIBUTING.md).
+Want to contribute? Thanks! Please take a few moments to [read this](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md).
