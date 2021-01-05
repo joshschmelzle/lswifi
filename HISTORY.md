@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.6 (2020-01-04)
+------------------
+
+- fix issue with client mac and bssid not displaying when bouncing interface during `--watchevents`
+
 0.1.5 (2020-01-04)
 ------------------
 

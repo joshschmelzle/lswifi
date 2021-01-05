@@ -105,19 +105,9 @@ def parse_result(result, data_type, **kwargs):
 
 
 def get_interface_info(args, iface) -> str:
+    log = logging.getLogger(__name__)
     outstr = ""
     interface_info = {}
-    connected = True
-
-    log = logging.getLogger(__name__)
-    if "disconnected" in iface.state_string:
-        connected = False
-
-    if not args.get_current_channel and not args.get_current_ap:
-        if connected:
-            outstr += f"Interface: {iface.description} is connected\n"
-        else:
-            outstr += f"Interface: {iface.description} is disconnected\n"
 
     # query interface for supported info
     params = ["current_connection", "channel_number", "statistics", "rssi"]
@@ -132,7 +122,22 @@ def get_interface_info(args, iface) -> str:
                 outstr += f"    {p}: {result}\n"
             return outstr
 
-    if connected and not args.supported:
+    isState = None
+    connected = False
+    if "current_connection" in interface_info.keys():
+        if "isState" in interface_info["current_connection"][1]:
+            isState = interface_info["current_connection"][1]["isState"]
+
+    if isState == "connected":
+        connected = True
+
+    if not args.get_current_channel and not args.get_current_ap:
+        if connected:
+            outstr += f"Interface: {iface.description} is connected\n"
+        else:
+            outstr += f"Interface: {iface.description} is disconnected\n"
+
+    if not args.supported:
         # print(interface_info.items())
         bssid = ""
         for key, result in interface_info.items():
@@ -288,36 +293,36 @@ class Client(object):
     def on_event_notification(self, wlan_event):
         if wlan_event is not None:
             if self.args.event_watcher:
-                # if str(wlan_event).strip() in [
-                #    "associating" "associated",
-                #    "roaming_start",
-                #    "authenticating",
-                #    "roaming_end",
-                # ]:
+                # if self.first_event:
+                #    self.mac = self.lookup_mac_on_guid(self.iface.guid)
+                #    self.log.debug("first_event mac: '%s'", self.mac)
+                #    self.first_event = False
+                # if str(wlan_event).strip() in ["associating", "associated","roaming_start","roaming_end"]:
+
                 bssid = get_interface_info(self.get_bssid_args, self.iface)
                 #    self.log.info(f"{self.iface.guid}: {wlan_event} to {bssid}")
                 # else:
                 self.log.info(f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})")
             else:
-                self.log.debug(f"{self.iface.guid}: <wlanapi.h> {wlan_event}...")
+                self.log.debug(f"({self.mac}), event: ({wlan_event})")
 
             if self.args.debug:
                 if str(wlan_event).strip() == "scan_complete":
                     self.data = self.get_bss_list(self.iface)
                     if self.data is not None:
                         self.log.debug(
-                            f"{self.iface.guid}: {len(self.data)} scan results..."
+                            f"({self.mac}), {len(self.data)} scan results..."
                         )
                     else:
-                        self.log.debug(f"{self.iface.guid}: no scan results...")
+                        self.log.debug(f"({self.mac}), no scan results...")
 
             if not self.args.event_watcher:
                 if str(wlan_event).strip() == "scan_complete":
                     pass
                 if str(wlan_event).strip() == "scan_list_refresh":
-                    self.log.debug(f"{self.iface.guid}: start get_bss_list...")
+                    self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(self.iface)
-                    self.log.debug(f"{self.iface.guid}: finish get_bss_list...")
+                    self.log.debug(f"({self.mac}), finish get_bss_list...")
                 if str(wlan_event).strip() == "network_available":
                     pass
 
@@ -343,19 +348,22 @@ class Client(object):
         except WLAN_API.WLANScanError as scan_error:
             self.log.critical(scan_error)
 
-    def lookup_mac_on_guid(self, guid) -> str:
-        guid = str(guid)[1:-1]  # remove { } around guid
-        result = guid # store guid in result
-        exe = "getmac.exe"  # use getmac.exe to map interface guid to mac
+    def lookup_mac_on_guid(self, iface) -> str:
+        guid = str(iface.guid)[1:-1]  # remove { } around guid
+        result = guid  # store guid in result
+        exe = 'getmac.exe /FO "CSV" /V'  # use getmac.exe to map interface guid to mac
         cmd = f"{exe}"
         try:
             output = check_output(cmd)
             mac = ""
-            self.log.debug("checking output from '%s' for mac lookup on guid", exe)
+            self.log.debug(
+                "checking output from '%s' for client mac lookup on guid", exe
+            )
             for line in output.decode().splitlines():
-                if guid in line:
-                    mac = line
-                    result = mac[:17].lower().replace("-", ":")
+                if guid in line or iface.description in line:
+                    conn = line.split(",")
+                    mac = conn[2].replace('"', "")
+                    result = mac.lower().replace("-", ":")
                     self.log.debug(f"guid {guid} maps to {result}")
                     break
         except FileNotFoundError:
@@ -367,7 +375,8 @@ class Client(object):
         try:
             self.args = args
             self.iface = iface
-            self.mac = self.lookup_mac_on_guid(iface.guid)
+            self.mac = self.lookup_mac_on_guid(iface)
+            # self.first_event = True
             self.client_handle = WLAN_API.WLAN.open_handle()
             callback = self.register_notification(
                 self.on_event_notification, self.client_handle
