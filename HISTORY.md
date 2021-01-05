@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.5 (2020-01-04)
+------------------
+
+- display client MAC instead of GUID and add BSSID when available to all events when using `--watchevents`
+
 0.1.4 (2020-12-29)
 ------------------
 

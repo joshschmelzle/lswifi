@@ -345,18 +345,23 @@ class Client(object):
 
     def lookup_mac_on_guid(self, guid) -> str:
         guid = str(guid)[1:-1]  # remove { } around guid
+        result = guid # store guid in result
         exe = "getmac.exe"  # use getmac.exe to map interface guid to mac
         cmd = f"{exe}"
-        output = check_output(cmd)
-        mac = ""
-        self.log.debug("checking output from '%s' for mac lookup on guid", exe)
-        for line in output.decode().splitlines():
-            if guid in line:
-                mac = line
-                break
-        result = mac[:17].lower().replace("-", ":")  # format mac address
-        self.log.debug(f"guid {guid} maps to {result}")
-        return result
+        try:
+            output = check_output(cmd)
+            mac = ""
+            self.log.debug("checking output from '%s' for mac lookup on guid", exe)
+            for line in output.decode().splitlines():
+                if guid in line:
+                    mac = line
+                    result = mac[:17].lower().replace("-", ":")
+                    self.log.debug(f"guid {guid} maps to {result}")
+                    break
+        except FileNotFoundError:
+            pass
+        finally:
+            return result
 
     def __init__(self, args, iface, ssid=None):
         try:
