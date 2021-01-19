@@ -98,9 +98,9 @@ async def scan(args, **kwargs):
 
         for client in clients:
             if client.data is not None:
-                log.debug(f"start parsing bss ies")
+                log.debug(f"start parsing bss ies for {client.mac}")
                 parse_bss_list_and_print(client.data, args, **kwargs)
-                log.debug(f"finish parsing bss ies")
+                log.debug(f"finish parsing bss ies for {client.mac}")
         sys.exit(0)
     except asyncio.CancelledError:
         pass
@@ -544,7 +544,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
     # outlist to screen
     log.info(
         f"display filter sensitivity {DISPLAY_SENSITIVITY}; "
-        f"output is {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results."
+        f"output includes {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results."
     )
 
     if len(out_results) > 0:

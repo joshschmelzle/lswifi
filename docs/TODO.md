@@ -63,14 +63,6 @@ Free PHX Boingo WiFi  c4:f7:d5:ea:b0:5f     PHX-T4-C2-T05  -81    ac   140@40+  
 
 TODO
 
-## Consider using subprocess and getmac.exe to retrieve the MAC address using the GUID
-
-i'm not sure if this is still needed?
-
-https://github.com/GhostofGoes/getmac/blob/master/getmac/getmac.py
-
-i want to get the MAC address for an interface in an easy way. perhaps using getmac.exe would work
-
 ## Make sure memoryview and bytearray is being used for interactions with bytes
 
 https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactions
@@ -97,6 +89,9 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 
 - [X] Python 3.7 and above only at this point.
 
+## Python 3.9
+
+- [X] Test to ese if code works with Python 3.9 (tested January 2021)
 ## Python 3.8
 
 - [X] Test to see if my code works in Python 3.8 (tested 3.8b1 week 7/1/2019)
@@ -117,20 +112,21 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 
 ## sorting, filtering and counters
 
-- [X] Sort output by RSSI 
+- [X] Sort output by RSSI
 - [ ] Add ability to sort by different columns
 - [ ] Options to filter by PHY
 - [ ] Write unit tests for these
 
 ## Export or silent mode that can be a feed into another program
 
+- [X] --json support has been added
 ## Verbose
 
 - [ ] Use WlanScan pDot11Ssid to specify a SSID to be scanned. This is for a directed scan on a particular a SSID.
     - [ ] I don't think this is supported by most adapters.
 - [ ] Display guard interval in verbose output
 - [ ] Move most display items to the verbose output.
-- [ ] Move the Security [auth/unicast/group] stuff into verbose. 
+- [ ] Move the Security [auth/unicast/group] stuff into verbose.
 
 ## Passpoint
 
@@ -140,7 +136,7 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 ## Profiles
 
 - [ ] Default output should be simple and consistent (i.e. displaying QBSS, not all networks have QBSS frame enabled) and display fine on 1080p scaled at 150% screens. 
-- [ ] Security should follow None, OWE, WEP, WPA1, WPA2, WPA3, WPA2-Enterprise, WPA3-Enterprise. 
+- [ ] Security should follow None, OWE, WEP, WPA1, WPA2, WPA3, WPA2-Enterprise, WPA3-Enterprise.
 
 ## Detecting Windows Terminal vs cmd.exe and features like unicode support
 
@@ -153,7 +149,7 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 
 ## 802.11b
 
-- [ ] HR-DSSS for 5.5 and 11 Mbps, and DSSS for 1 and 2 Mbps - is there a way to display this easily? These both appear to be labeled as ERP on my app. 
+- [ ] HR-DSSS for 5.5 and 11 Mbps, and DSSS for 1 and 2 Mbps - is there a way to display this easily? These both appear to be labeled as ERP on my app.
 - [ ] DSSS data encoding uses 22 MHz wide channels. This is because the chips (bits) need 2 MHz of space and there are 11 bits. B only networks should have the channel width listed as 22 MHz.
 - [ ] My HR-DSSS test network seems to be classified as ERP. Why?
 - [ ] Parse and display the Capabilities based on bit value.
@@ -171,12 +167,11 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 - [ ] BSSID grouping by AP Base MAC (Cisco:XX:XX:X0-F in 2.4 and XF-0 in 5).
 - [ ] Graph view for # of radio on a given channel. Like the MM Dashboard overview on Aruba OS 8.x, but in ASCII!
 - [ ] `may have found a way to enable some kind of monitor mode on windows :slightly_smiling_face: including packet injection and stuff` -Helge; WDI (WLAN Device Driver Interface) is the new Universal Windows driver model for Windows 10. WLAN device manufacturers can write a single WDI miniport driver that runs on all device platforms, and requires less code than the previous native WLAN driver model. All new WLAN features introduced in Windows 10 require WDI-based drivers. https://docs.microsoft.com/en-us/windows-hardware/drivers/network/wifi-universal-driver-model 
-- [ ] Explore use of WDI (WLAN Device Driver Interface) filter drivers - for certain Radio Tap Headers. 
+- [ ] Explore use of WDI (WLAN Device Driver Interface) filter drivers - for certain Radio Tap Headers.
 
 ## Current connection
 
 - [X] Add flag that only displays current connection info to screen (like `airport -i` on macOS)
-    - [ ] Improve this to use the source list that contains the RSSI value.
 
 ## Unit Testing (pytest)
 
@@ -190,7 +185,7 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
     - [ ] test 2.4 ghz networks with 20 and 40 mhz networks
     - [ ] Add ability to export .BSS
     - [ ] Add ability to export .IES
-- [ ] Export BSS and IES feature from all detected devices. A record sort of function. 
+- [ ] Export BSS and IES feature from all detected devices. A record sort of function.
 - [ ] Export BSS and IES feature for a specific BSSID. A record sort of function.
 
 ## other types of networks
@@ -254,7 +249,7 @@ https://effectivepython.com/2019/10/22/memoryview-bytearray-zero-copy-interactio
 ## documentation
 
 - [ ] Add contribution guidelines and what we need from users to help troubleshoot when there is an issue.
-    - Like export of the IES and BSS so that I can analyze them. Or export of the PCAP? 
+    - Like export of the IES and BSS so that I can analyze them. Or export of the PCAP?
     - Logs? Watchevents? Debug?
 - [ ] Review class design and organizing code.
 

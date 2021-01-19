@@ -29,6 +29,8 @@ When using abbreviations in `CamelCase`, capitalize all the letters of the abbre
 Formatting and Linting
 ----------------------
 
+You should be linting the code with `tox -e lint` and running `tox -e format` prior to submitting a PR.
+
 ### black
 
 All code should be formatted with [black](https://github.com/ambv/black/).
@@ -36,10 +38,6 @@ All code should be formatted with [black](https://github.com/ambv/black/).
 ### flake8
 
 All code should be linted and reviewed with [flake8](http://flake8.pycqa.org/en/latest/)
-
-The following flake8 extensions should be used:  
-
-- [flake8-comprehensions](https://github.com/adamchainz/flake8-comprehensions) plugin should be used to help write better list/set/dict comprehensions.
 
 class design
 ------------
@@ -53,6 +51,7 @@ Rule of thumb:  `__repr__` is for developers, `__str__` is for customers.
 IDE
 ---
 
+If you need an IDE recommendation, use Visual Studio Code (VSC). Otherwise, use what makes you happy.
 ### Python and VSCode
 
 If you use VSC, you should use Python and Pylance extensions.

@@ -52,7 +52,7 @@ def main():
     log.debug(f"{sys.version}")
     if args.data_location:
         app_path()
-        sys.exit(0)
+        sys.exit()
     if args.apnames:
         is_apname_ack_stored = user_ack_apnames_disclaimer()
         log.debug(
@@ -60,12 +60,10 @@ def main():
         )
 
     loop = asyncio.get_event_loop()
-    # pass in args and kwargs?
+
     main_task = asyncio.ensure_future(core.scan(args, storedack=is_apname_ack_stored))
-    # loop.add_signal_handler(SIGINT, main_task.cancel)
-    # loop.add_signal_handler(SIGTERM, main_task.cancel)
+
     try:
-        # asyncio.run(core.scan(args, storedack=is_apname_ack_stored))
         loop.run_until_complete(main_task)
     except KeyboardInterrupt:
         log.warning("caught KeyboardInterrupt... stopping...")

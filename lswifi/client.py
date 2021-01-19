@@ -10,8 +10,10 @@ client side code for requesting a scan, waiting for scan complete, and getting t
 import functools
 import logging
 import pprint
+import sys
 import traceback
 from subprocess import check_output
+from threading import Timer
 from types import SimpleNamespace
 from typing import Union
 
@@ -105,7 +107,7 @@ def parse_result(result, data_type, **kwargs):
 
 
 def get_interface_info(args, iface) -> str:
-    log = logging.getLogger(__name__)
+    logging.getLogger(__name__)
     outstr = ""
     interface_info = {}
 
@@ -282,7 +284,6 @@ class Client(object):
             wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
                 interface
             )
-            self.scan_finished = True
             if len(wireless_network_bss_list) == 0:
                 return None
 
@@ -290,41 +291,51 @@ class Client(object):
         else:
             return None
 
-    def on_event_notification(self, wlan_event):
+    def on_event_notification(self, wlan_event) -> None:
         if wlan_event is not None:
+            # attempt to get connected bssid
+            bssid = get_interface_info(self.get_bssid_args, self.iface)
+
+            # if we want to watch wlan events on the terminal
             if self.args.event_watcher:
-                # if self.first_event:
-                #    self.mac = self.lookup_mac_on_guid(self.iface.guid)
-                #    self.log.debug("first_event mac: '%s'", self.mac)
-                #    self.first_event = False
-                # if str(wlan_event).strip() in ["associating", "associated","roaming_start","roaming_end"]:
-
-                bssid = get_interface_info(self.get_bssid_args, self.iface)
-                #    self.log.info(f"{self.iface.guid}: {wlan_event} to {bssid}")
-                # else:
-                self.log.info(f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})")
-            else:
-                self.log.debug(f"({self.mac}), event: ({wlan_event})")
-
-            if self.args.debug:
-                if str(wlan_event).strip() == "scan_complete":
-                    self.data = self.get_bss_list(self.iface)
-                    if self.data is not None:
-                        self.log.debug(
-                            f"({self.mac}), {len(self.data)} scan results..."
-                        )
+                # if we want verbose info printed to the terminal
+                if self.args.debug:
+                    if str(wlan_event).strip() in [
+                        "scan_list_refresh",
+                        "scan_complete",
+                    ]:
+                        self.data = self.get_bss_list(self.iface)
+                        if self.data is not None:
+                            self.log.info(
+                                f"({self.mac}), bssid: ({bssid}), event: ({wlan_event}), get_bss_list: ({len(self.data)} BSSIDs)"
+                            )
                     else:
-                        self.log.debug(f"({self.mac}), no scan results...")
+                        self.log.info(
+                            f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
+                        )
+                else:
+                    self.log.info(
+                        f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
+                    )
 
+            # if we're not watching for events and we want to return scan results
             if not self.args.event_watcher:
+                self.log.debug(f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})")
+
                 if str(wlan_event).strip() == "scan_complete":
-                    pass
+                    self.scan_timer.cancel()
+
+                # if the list is updated, grab the results
                 if str(wlan_event).strip() == "scan_list_refresh":
+
                     self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(self.iface)
                     self.log.debug(f"({self.mac}), finish get_bss_list...")
-                if str(wlan_event).strip() == "network_available":
-                    pass
+                    self.scan_finished = True
+
+                # if str(wlan_event).strip() == "network_available":
+                #    pass
+                #
 
     def register_notification(self, callback, handle):
         c_back = WLAN_API.WLAN.wlan_register_notification(
@@ -345,8 +356,10 @@ class Client(object):
         try:
             self.log.debug(f"{self.iface.guid}: scan requested...")
             WLAN_API.WLAN.scan(self.iface.guid)
+            self.scan_timer.start()
         except WLAN_API.WLANScanError as scan_error:
             self.log.critical(scan_error)
+            sys.exit(-1)
 
     def lookup_mac_on_guid(self, iface) -> str:
         guid = str(iface.guid)[1:-1]  # remove { } around guid
@@ -371,8 +384,23 @@ class Client(object):
         finally:
             return result
 
+    def scan_timeout(self) -> None:
+        """
+        The application should then wait to receive the
+          wlan_notification_acm_scan_complete notification or timeout after 4 seconds.
+        Then the application can call the WlanGetNetworkBssList or WlanGetAvailableNetworkList
+          function to retrieve a list of available wireless networks.
+        """
+        self.log.info(f"timeout interval ({self.timeout_interval} seconds) exceeded...")
+        self.log.debug(f"({self.mac}), start get_bss_list...")
+        self.data = self.get_bss_list(self.iface)
+        self.log.debug(f"({self.mac}), finish get_bss_list...")
+        self.scan_finished = True
+
     def __init__(self, args, iface, ssid=None):
         try:
+            self.timeout_interval = 4.0
+            self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
             self.args = args
             self.iface = iface
             self.mac = self.lookup_mac_on_guid(iface)
