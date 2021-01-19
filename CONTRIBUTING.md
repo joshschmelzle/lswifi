@@ -14,7 +14,7 @@ instead be directed to through other channels.
 1. Check for open issues or open a fresh issue to start a discussion around a feature idea or bug.
 2. Fork the repository on GitHub to start making your changes.
 3. Please write a test which shows that the bug was fixed or that the feature works as expected.
-4. Check that your code follows the Style Guide.
+4. Check that your code follows the [Style Guide](https://github.com/joshschmelzle/lswifi/blob/main/STYLEGUIDE.md).
 5. Send a pull request.
 
 ## Good Bug Reports
