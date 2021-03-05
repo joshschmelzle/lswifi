@@ -133,6 +133,11 @@ EXTENSION_IE_DICT = {
     45: "ESS Report",
     46: "OPS",
     47: "HE BSS Load",
+    55: "Multiple BSSID Configuration",
+    57: "Known BSSID",
+    58: "Short SSID List",
+    59: "HE 6 GHz Band Capabilities",
+    60: "UL MU Power Capabilities",
 }
 
 
