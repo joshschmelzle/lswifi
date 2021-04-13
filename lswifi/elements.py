@@ -455,6 +455,7 @@ class WirelessNetworkBss:
         )
         self.is_2ghz = is_two_four_band(int(self.channel_frequency.value))
         self.is_5ghz = is_five_band(int(self.channel_frequency.value))
+        self.is_6ghz = is_six_band(int(self.channel_frequency.value))
         self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
         self.wlanrateset = Rates(bss_entry)
         self.ie_rates = OutObject(
@@ -1927,27 +1928,88 @@ class WirelessNetworkBss:
 
         # based on Aruba AP515 802.11ax pcap.
         if eid_ext == 35:  # HE Capabilities
+            he_mac_cap_oct1 = 1
+            he_mac_cap_oct3 = 3
+            he_mac_cap_oct5 = 5
+            he_mac_cap_oct6 = 6
+
+            twt_responder = get_bit(body[he_mac_cap_oct1], 2)
+            if twt_responder:
+                out = f"TWT Responder"
+            trs_support = get_bit(body[he_mac_cap_oct3], 0)
+            if trs_support:
+                out = f", TRS Support"
+            bsr_support = get_bit(body[he_mac_cap_oct3], 1)
+            if bsr_support:
+                out = f", BSR Support"
+            broadcast_twt_support = get_bit(body[he_mac_cap_oct3], 2)
+            if broadcast_twt_support:
+                out = f", Broadcast TWT Support"
+            bqr_support = get_bit(body[he_mac_cap_oct5], 3)
+            if bqr_support:
+                out = f", BQR Support"
+            punctured_sounding_support = get_bit(body[he_mac_cap_oct6], 6)
+            if punctured_sounding_support:
+                out = f", Punctured Sounding Support"
+
             if self is not None:
                 self.phy_type.name = "HE"
                 if "ax" not in self.modes:
                     self.modes.append("ax")
 
         if eid_ext == 36:  # HE Operation
-            bit0 = get_bit(body[4], 0)
-            bit1 = get_bit(body[4], 1)
-            bit2 = get_bit(body[4], 2)
-            bit3 = get_bit(body[4], 3)
-            bit4 = get_bit(body[4], 4)
-            bit5 = get_bit(body[4], 5)
-            bits = bools_to_binary_string([bit5, bit4, bit3, bit2, bit1, bit0])
-            bss_color = binary_string_to_int(bits)
+            vht_operation_ie_present = get_bit(body[2], 6)
+            co_hosted_bss = get_bit(body[2], 7)
+            six_ghz_operation_ie_present = get_bit(body[3], 1)
+
+            # BSS Color Information is 1 octet
+            octet4bit0 = get_bit(body[4], 0)
+            octet4bit1 = get_bit(body[4], 1)
+            octet4bit2 = get_bit(body[4], 2)
+            octet4bit3 = get_bit(body[4], 3)
+            octet4bit4 = get_bit(body[4], 4)
+            octet4bit5 = get_bit(body[4], 5)
+            octet4bits = bools_to_binary_string(
+                [octet4bit5, octet4bit4, octet4bit3, octet4bit2, octet4bit1, octet4bit0]
+            )
+            bss_color = binary_string_to_int(octet4bits)
             if bss_color != 0:
                 out = f"BSS Color: {bss_color}"
+
+            # 6 GHz Operation Information is 0 or 5 octets
+
+            six_ghz_ops_ie_position = 7
+            if vht_operation_ie_present:
+                six_ghz_ops_ie_position += 3
+            if co_hosted_bss:
+                six_ghz_ops_ie_position += 1
+            if six_ghz_operation_ie_present:
+                # primary channel in the 6 ghz band
+                primary_channel_pos = six_ghz_ops_ie_position
+                primary_channel = body[primary_channel_pos]
+                six_ghz_channel = primary_channel
+                out += f", 6 GHz Channel: {six_ghz_channel}"
+                six_ghz_frequency = primary_channel * 5 + 5950
+                out += f", Frequency: {six_ghz_frequency}"
+
+                # control field
+                six_ghz_ops_ie_position + 1
+
+                six_ghz_ops_ie_position + 2
+                six_ghz_ops_ie_position + 3
+
+                # minimum rate in units of 1 MB/s that non-AP STA is allowed to use
+                minimum_rate_pos = six_ghz_ops_ie_position + 4
+                body[minimum_rate_pos]
+
             if self is not None:
                 if not out:
                     self.bsscolor.value = bss_color
                 if "ax" not in self.modes:
                     self.modes.append("ax")
+
+        if eid_ext == 59:  # HE 6 GHz Band Capabilities
+            pass
 
         return ext_tag_name, out
 

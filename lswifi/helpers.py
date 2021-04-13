@@ -226,7 +226,7 @@ def __num_digits(num: int):
     return len(str(num))
 
 
-def is_two_four_band(frequency: int):  # TODO: would a hash lookup table be faster?
+def is_two_four_band(frequency: int) -> bool:
     """determines if a channel frequency is in the 2.4 GHz ISM band"""
     if __get_digit(frequency, __num_digits(frequency) - 1) == 2:
         return True
@@ -234,9 +234,17 @@ def is_two_four_band(frequency: int):  # TODO: would a hash lookup table be fast
         return False
 
 
-def is_five_band(frequency: int):  # TODO: would a hash lookup table be faster?
+def is_five_band(frequency: int) -> bool:
     """determines if a channel frequency is in the 5.0 GHz ISM band"""
     if __get_digit(frequency, __num_digits(frequency) - 1) == 5:
+        return True
+    else:
+        return False
+
+
+def is_six_band(frequency: int) -> bool:
+    """determines if a channel frequency is in the 6.0-7.125 GHz ISM band"""
+    if __get_digit(frequency, __num_digits(frequency) - 1) == 6:
         return True
     else:
         return False
