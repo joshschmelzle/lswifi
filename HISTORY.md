@@ -1,9 +1,10 @@
 Release History
 ===============
 
-0.1.7 (2020-01-18)
+0.1.7 (2020-04-18)
 ------------------
 
+- basic Wi-Fi 6E detection
 - add timeout scan complete takes longer than 4 seconds
 - minor changes
 

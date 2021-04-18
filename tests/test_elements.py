@@ -23,15 +23,15 @@ class TestElements:
 
         assert (
             lswifi.elements.WirelessNetworkBss.parse_rates(test1)
-            == "1* 2* 5.5* 6* 9 11* 12* 18 24* 36 48 54"
+            == "1(B) 2(B) 5.5(B) 6(B) 9 11(B) 12(B) 18 24(B) 36 48 54"
         )
         assert (
             lswifi.elements.WirelessNetworkBss.parse_rates(test2)
-            == "1* 2* 5.5* 6 9 11* 12 18 24 36 48 54"
+            == "1(B) 2(B) 5.5(B) 6 9 11(B) 12 18 24 36 48 54"
         )
         assert (
             lswifi.elements.WirelessNetworkBss.parse_rates(test3)
-            == "6* 9 12* 18 24* 36 48 54"
+            == "6(B) 9 12(B) 18 24(B) 36 48 54"
         )
 
     def test_convert_timestamp_to_uptime(self):
