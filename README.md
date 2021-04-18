@@ -60,10 +60,10 @@ Upgrading
 Here is how to upgrade `lswifi` when there is a new version available:
 
 ```bash
-PS C:\Users\joshu\GitHub\lswifi> where.exe pip3
-C:\Users\joshu\AppData\Local\Programs\Python\Python39\Scripts\pip3.exe
+PS C:\Users\josh\GitHub\lswifi> where.exe pip3
+C:\Users\josh\AppData\Local\Programs\Python\Python39\Scripts\pip3.exe
 
-PS C:\Users\joshu\GitHub\lswifi> pip3 install --upgrade lswifi
+PS C:\Users\josh\GitHub\lswifi> pip3 install --upgrade lswifi
 ```
 
 Check the version installed:

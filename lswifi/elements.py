@@ -59,7 +59,7 @@ class OutObject(object):
         return self.value
 
     def __len__(self):
-        return len(self.value)
+        return len(str(self.value))
 
 
 class BSSID(OutObject):
@@ -192,6 +192,24 @@ class ChannelNumber(OutObject):
         )
         self.header = Header("CHANNEL")
         self.subheader = SubHeader("[#@MHz]")
+
+
+class Band(OutObject):
+    """Base class for Band Designation"""
+
+    def __init__(self, frequency):
+        self.is_2ghz = is_two_four_band(int(frequency))
+        self.is_5ghz = is_five_band(int(frequency))
+        self.is_6ghz = is_six_band(int(frequency))
+        if self.is_2ghz:
+            band = "2GHz"
+        if self.is_5ghz:
+            band = "5GHz"
+        if self.is_6ghz:
+            band = "6GHz"
+        self.value = band
+        self.header = Header("BAND")
+        self.subheader = SubHeader("")
 
 
 class BeaconInterval(OutObject):
@@ -450,10 +468,10 @@ class WirelessNetworkBss:
         self.channel_number_marked = ChannelNumber(bss_entry)
         self.channel_frequency = OutObject(
             value=int(bss_entry.ChCenterFrequency / 1000),
-            header="CENT CH",
-            subheader="FREQ.",
+            header="FREQ.",
+            subheader="",
         )
-        self.is_2ghz = is_two_four_band(int(self.channel_frequency.value))
+        # self.is_5ghz is used because sometime 2.4 GHz networks include VHT IEs
         self.is_5ghz = is_five_band(int(self.channel_frequency.value))
         self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
         self.wlanrateset = Rates(bss_entry)
@@ -512,6 +530,8 @@ class WirelessNetworkBss:
                 f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
             )
 
+        self.band = Band(self.channel_frequency.value)
+
     @staticmethod
     def convert_timestamp_to_uptime(timestamp) -> str:
         """
@@ -542,8 +562,9 @@ class WirelessNetworkBss:
             supported = []
             list = ie_rates.value.strip().split(" ")
             for rate in list:
-                if "*" in rate:
-                    rate = rate.replace("*", "")
+                rate = rate.lower()
+                if "*" in rate or "(b)" in rate:
+                    rate = rate.replace("*", "").replace("(b)", "")
                     basics.append(float(rate) if "." in rate else int(rate))
                 else:
                     supported.append(float(rate) if "." in rate else int(rate))
@@ -553,7 +574,7 @@ class WirelessNetworkBss:
             basics = [str(s) for s in basics]
             for index, value in enumerate(rates):
                 if value in basics:
-                    rates[index] = f"{value}*"
+                    rates[index] = f"{value}(B)"
             return " ".join(rates)
         else:
             return []
@@ -1322,6 +1343,19 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        if element_id == 201:
+            decoded = WirelessNetworkBss._parse_reduced_neighbor_report(
+                self, element_data
+            )
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
         # 802.11-2016 9.4.2.26 Vendor Specific element (221)
         if element_id == 221:
             decoded = WirelessNetworkBss._parse_vendor_specific_element(
@@ -1410,6 +1444,26 @@ class WirelessNetworkBss:
         if self is not None:
             self.apname.value = apname
         return f"AP Name: {apname}, Clients: {clients}"
+
+    def _parse_reduced_neighbor_report(self, element_data):
+        body = list(memoryview(element_data))
+
+        get_bit(body[0], 0)
+        get_bit(body[0], 1)
+        # tbtt_info_field_type  =
+        get_bit(body[0], 2)
+        get_bit(body[0], 3)
+        get_bit(body[0], 4)
+        get_bit(body[0], 5)
+        get_bit(body[0], 6)
+        get_bit(body[0], 7)
+        # tbbt_information_count =
+        body[1]
+        operating_class = body[2]
+        channel_number = body[3]
+        if self is not None:
+            pass
+        return f"Operating Class: {operating_class}, Channel number: {channel_number}"
 
     @dataclass
     class WPS_Data_Element:
@@ -1530,32 +1584,32 @@ class WirelessNetworkBss:
             """
             Access Points must provide the Wi-Fi Protected Setup IE in all beacon and probe-response frames.
             Stations may provide the Wi-Fi Protected Setup IE in all probe-request frames
-           
+
             Page 50 of spec:
             ----------------
-            
+
             Wi-fi Protected Setup encodes information as attributes in a binary type identifier,
             length and value (TLV) format.
-           
+
             The TLV format uses fields as defined in the TLV Format Table.
             TLVs are transmitted and/or saved in big endian byte order.
-            
-            The overall size occupied by each attribute will include an additional 4 bytes. 
-            
+
+            The overall size occupied by each attribute will include an additional 4 bytes.
+
             - 2 bytes for the ID
             - 2 bytes for the length
-             
+
             | Byte Offset | Field Length   | Field Name    | Description                    |
             | ----------- | -------------  | ------------- | ------------------------------ |
             | 0           | 2 Bytes        | AttributeType | Type identifier for attribute  |
             | 2           | 2 Bytes        | DataLength    | Length in bytes of data field  |
             | 4           | 0-0xFFFF bytes | Data          | Attribute data                 |
-            
-            Most Wi-Fi Protected Setup attributes are simple data structures. Some are nested data structures that 
+
+            Most Wi-Fi Protected Setup attributes are simple data structures. Some are nested data structures that
             contain other TLV attributes.
-            
+
             here are a few:
-            
+
             | Description                | ID (Type) | DataLength |
             | -------------------------- | --------- | ---------- |
             | Version                    | 0x104a    | 2B         |
@@ -1922,32 +1976,217 @@ class WirelessNetworkBss:
 
         ext_tag_name = EXTENSION_IE_DICT.get(eid_ext, None)
 
+        six_ghz_channel = ""
+        six_ghz_frequency = ""
+        bss_color = ""
+
         if self is not None:
             self.exie_numbers.append(str(eid_ext))
 
         # based on Aruba AP515 802.11ax pcap.
         if eid_ext == 35:  # HE Capabilities
+            he_mac_cap_oct1 = 1
+            he_mac_cap_oct3 = 3
+            he_mac_cap_oct5 = 5
+            he_mac_cap_oct6 = 6
+
+            htc_he_support = get_bit(body[he_mac_cap_oct1], 0)
+            if htc_he_support:
+                out += f"+HTC HE Supported"
+            twt_responder = get_bit(body[he_mac_cap_oct1], 2)
+            if twt_responder:
+                out += f", TWT Responder"
+            trs_support = get_bit(body[he_mac_cap_oct3], 2)
+            if trs_support:
+                out += f", TRS Supported"
+            bsr_support = get_bit(body[he_mac_cap_oct3], 3)
+            if bsr_support:
+                out += f", BSR Supported"
+            broadcast_twt_support = get_bit(body[he_mac_cap_oct3], 4)
+            if broadcast_twt_support:
+                out += f", Broadcast TWT Support"
+            bqr_support = get_bit(body[he_mac_cap_oct5], 3)
+            if bqr_support:
+                out += f", BQR Support"
+            punctured_sounding_support = get_bit(body[he_mac_cap_oct6], 6)
+            if punctured_sounding_support:
+                out += f", Punctured Sounding Support"
+
+            he_phy_cap_oct1 = 7
+
+            get_bit(body[he_phy_cap_oct1], 0)
+            # reserved = octet7bit0
+
+            get_bit(body[he_phy_cap_oct1], 1)
+
+            octet7bit2 = get_bit(body[he_phy_cap_oct1], 2)
+            forty_and_eighty_in_5g_and_6g = octet7bit2
+
+            octet7bit3 = get_bit(body[he_phy_cap_oct1], 3)
+            onesixty_in_5g_and_6g = octet7bit3
+
+            get_bit(body[he_phy_cap_oct1], 4)
+            onesixty_or_eighty_plus_eighty_in_5g_and_6g = octet7bit3
+
+            get_bit(body[he_phy_cap_oct1], 5)
+            # reserved = octet7bit5
+
+            octet7bit6 = get_bit(body[he_phy_cap_oct1], 6)
+            twofourtwo_tone_in_5g_and_6g = octet7bit6
+            if twofourtwo_tone_in_5g_and_6g:
+                out += f", 242 tone RU supported"
+
+            he_mcs_oct1 = 18
+            he_mcs_oct2 = 19
+            eighty_mhz_ss = 0
+
+            def binary_to_int(a: bool, b: bool) -> int:
+                """ Converts binary octet to integer value to help determin NSS """
+                return int(f"000000{int(b)}{int(a)}", 2)
+
+            def nss_map(octet_number: int, a: int, b: int) -> int:
+                """
+                The Max HE-MCS For n SS subfield (where n = 1, …, 8) is encoded as follows:
+                    — 0 indicates support for HE-MCS 0-7 for n spatial streams
+                    — 1 indicates support for HE-MCS 0-9 for n spatial streams
+                    — 2 indicates support for HE-MCS 0-11 for n spatial streams
+                    — 3 indicates that n spatial streams is not supported for HE PPDUs
+                """
+                bit_a = get_bit(body[octet_number], a)
+                bit_b = get_bit(body[octet_number], b)
+                return binary_to_int(bit_a, bit_b)
+
+            if forty_and_eighty_in_5g_and_6g:
+                max_mcs = nss_map(he_mcs_oct1, 0, 1)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct1, 2, 3)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct1, 4, 5)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct1, 6, 7)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct2, 0, 1)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct2, 2, 3)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct2, 4, 5)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct2, 6, 7)
+                if max_mcs < 3:
+                    eighty_mhz_ss += 1
+
+            he_mcs_oct3 = 20
+            he_mcs_oct4 = 21
+            one_sixty_mhz_ss = 0
+
+            if onesixty_in_5g_and_6g:
+
+                max_mcs = nss_map(he_mcs_oct3, 0, 1)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct3, 2, 3)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct3, 4, 5)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct3, 6, 7)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct4, 0, 1)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct4, 2, 3)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct4, 4, 5)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+                max_mcs = nss_map(he_mcs_oct4, 6, 7)
+                if max_mcs < 3:
+                    one_sixty_mhz_ss += 1
+
+            if eighty_mhz_ss > 0:
+                self.spatial_streams.value = eighty_mhz_ss
+            if one_sixty_mhz_ss > 0:
+                self.spatial_streams.value = one_sixty_mhz_ss
+
             if self is not None:
+                if forty_and_eighty_in_5g_and_6g:
+                    self.channel_width.value = "80"
+                if onesixty_in_5g_and_6g or onesixty_or_eighty_plus_eighty_in_5g_and_6g:
+                    self.channel_width.value = "160"
                 self.phy_type.name = "HE"
                 if "ax" not in self.modes:
                     self.modes.append("ax")
 
         if eid_ext == 36:  # HE Operation
-            bit0 = get_bit(body[4], 0)
-            bit1 = get_bit(body[4], 1)
-            bit2 = get_bit(body[4], 2)
-            bit3 = get_bit(body[4], 3)
-            bit4 = get_bit(body[4], 4)
-            bit5 = get_bit(body[4], 5)
-            bits = bools_to_binary_string([bit5, bit4, bit3, bit2, bit1, bit0])
-            bss_color = binary_string_to_int(bits)
+            vht_operation_ie_present = get_bit(body[2], 6)
+            co_hosted_bss = get_bit(body[2], 7)
+            six_ghz_operation_ie_present = get_bit(body[3], 1)
+
+            # BSS Color Information is 1 octet
+            octet4bit0 = get_bit(body[4], 0)
+            octet4bit1 = get_bit(body[4], 1)
+            octet4bit2 = get_bit(body[4], 2)
+            octet4bit3 = get_bit(body[4], 3)
+            octet4bit4 = get_bit(body[4], 4)
+            octet4bit5 = get_bit(body[4], 5)
+            octet4bits = bools_to_binary_string(
+                [octet4bit5, octet4bit4, octet4bit3, octet4bit2, octet4bit1, octet4bit0]
+            )
+            bss_color = binary_string_to_int(octet4bits)
             if bss_color != 0:
                 out = f"BSS Color: {bss_color}"
+
+            # 6 GHz Operation Information is 0 or 5 octets
+
+            six_ghz_ops_ie_position = 7
+            if vht_operation_ie_present:
+                six_ghz_ops_ie_position += 3
+            if co_hosted_bss:
+                six_ghz_ops_ie_position += 1
+            if six_ghz_operation_ie_present:
+                # primary channel in the 6 ghz band
+                primary_channel_pos = six_ghz_ops_ie_position
+                primary_channel = body[primary_channel_pos]
+                six_ghz_channel = primary_channel
+                out += f", 6G Channel: {six_ghz_channel}"
+                six_ghz_frequency = primary_channel * 5 + 5950
+                out += f", Freq.: {six_ghz_frequency}"
+
+                # control field
+                six_ghz_ops_ie_position + 1
+
+                six_ghz_ops_ie_position + 2
+                six_ghz_ops_ie_position + 3
+
+                # minimum rate in units of 1 MB/s that non-AP STA is allowed to use
+                minimum_rate = six_ghz_ops_ie_position + 4
+                out += f", Min STA Rate: {minimum_rate} Mbps"
+
             if self is not None:
-                if not out:
+                if six_ghz_channel:
+                    self.channel_number.value = six_ghz_channel
+                    self.channel_number_marked.value = six_ghz_channel
+                if six_ghz_frequency:
+                    self.channel_number.frequency = six_ghz_frequency
+                    self.channel_number_marked.frequency = six_ghz_frequency
+                    self.channel_frequency.value = six_ghz_frequency
+                    self.channel_list = six_ghz_channel
                     self.bsscolor.value = bss_color
                 if "ax" not in self.modes:
                     self.modes.append("ax")
+
+        if eid_ext == 59:  # HE 6 GHz Band Capabilities
+            pass
 
         return ext_tag_name, out
 
@@ -2424,7 +2663,7 @@ class WirelessNetworkBss:
         for _byte in list(memoryview(edata)):
             # if MSB, rate is basic.
             if get_bit(_byte, 7):
-                supported_rates += " {}*".format(
+                supported_rates += " {}(B)".format(
                     format_rate(rate_to_mbps(trim_most_significant_bit(_byte)))
                 )
             else:
