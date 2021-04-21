@@ -207,7 +207,10 @@ class Band(OutObject):
             band = "5GHz"
         if self.is_6ghz:
             band = "6GHz"
-        self.value = band
+        if band:
+            self.value = band
+        else:
+            self.value = ""
         self.header = Header("BAND")
         self.subheader = SubHeader("")
 
