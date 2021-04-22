@@ -132,6 +132,7 @@ IE_DICT = {
     202: "TVHT Operation",
     216: "TWT",
     221: "Vendor Specific",
+    244: "RSN eXtension",
     255: "Extension",
 }
 

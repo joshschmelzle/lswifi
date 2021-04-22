@@ -1373,6 +1373,20 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        # 802.11-2020 9.4.2.241 RSN eXtension element (244)
+        if element_id == 244:
+            decoded = WirelessNetworkBss._parse_rsn_extension(
+                self, element_data
+            )
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
         # 802.11-2016 Element ID Extension field (255)
         if element_id == 255:
             ext_name, decoded = WirelessNetworkBss._parse_extension_tag_element(
@@ -1467,6 +1481,32 @@ class WirelessNetworkBss:
         if self is not None:
             pass
         return f"Operating Class: {operating_class}, Channel number: {channel_number}"
+
+    def _parse_rsn_extension(element_data):
+        body = list(memoryview(element_data))
+
+        out = ""
+
+        # field length
+        # get_bit(body[0], 0)
+        # get_bit(body[0], 1)
+        # get_bit(body[0], 2)
+        # get_bit(body[0], 3)
+
+        # protected TWT operations support
+        protected_twt = get_bit(body[0], 4)
+        if protected_twt:
+            out += f"Protected TWT Operations Support"
+        # sae hash-to-element
+        sae_hash_to_element = get_bit(body[0], 5)
+        if sae_hash_to_element:
+            out += f", SAE hash-to-element supported"
+
+        # reserved
+        # get_bit(body[0], 6)
+        # get_bit(body[0], 7)
+        
+        return out
 
     @dataclass
     class WPS_Data_Element:
