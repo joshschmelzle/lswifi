@@ -1,4 +1,12 @@
-# lswifi
+# -*- coding: utf-8 -*-
+
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
+
+""" version information for lswifi """
 
 __title__ = "lswifi"
 __description__ = "a CLI Wi-Fi scanner tool for Windows"

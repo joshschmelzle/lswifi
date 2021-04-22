@@ -2,7 +2,7 @@
 
 """
 lswifi.helpers
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 Provides helper functions that are consumed internally.
 """

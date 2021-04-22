@@ -2,7 +2,7 @@
 
 """
 lswifi.constants
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 define app constant values
 """

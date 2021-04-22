@@ -2,7 +2,7 @@
 
 """
 lswifi.appsetup
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
 
 Provides init functions that are used to help set up the app.
 """

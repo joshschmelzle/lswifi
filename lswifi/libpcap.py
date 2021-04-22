@@ -2,7 +2,7 @@
 
 """
 lswifi.libpcap
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~
 
 define libpcap class to help export to pcap
 """

@@ -2,9 +2,9 @@
 
 """
 lswifi.core
-~~~~~~~~~~~~~
+~~~~~~~~~~~
 
-manager side code for managing clients, their data, and writing to screen?
+core code to manage clients (interfaces), their data, and writing out results.
 """
 
 # python imports
