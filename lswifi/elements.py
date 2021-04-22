@@ -2678,4 +2678,9 @@ class WirelessNetworkBss:
         The SSID element indicates the identity of an ESS or IBSS.
         The SSID field is between 0 and 32 octets.
         """
-        return f"{edata.decode()}"
+        ssid_name = ""
+        try:
+            ssid_name = edata.decode()
+        except:
+            pass
+        return f"{ssid_name}"
