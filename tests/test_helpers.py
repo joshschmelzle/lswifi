@@ -57,10 +57,10 @@ class TestHelpers(object):
             helpers.get_rateset(
                 [32770, 32772, 32779, 32790, 32780, 18, 32792, 36, 32816, 72, 96, 108]
             )
-            == "1* 2* 5.5* 6* 11* 12* 24* 9 18 36 48 54"
+            == "1(B) 2(B) 5.5(B) 6(B) 11(B) 12(B) 24(B) 9 18 36 48 54"
         )
 
-        assert helpers.get_rateset([32816, 72, 96, 108]) == "24* 36 48 54"
+        assert helpers.get_rateset([32816, 72, 96, 108]) == "24(B) 36 48 54"
 
     def test_rate_in_mbps(self):
         assert helpers.rate_to_mbps(36) == 18.0

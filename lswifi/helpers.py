@@ -166,7 +166,7 @@ def get_rateset(WlanRateSet):
             supported.append(format_rate(rate_to_mbps(rate)))
     basics.sort(key=float)
     supported.sort(key=float)
-    basics = [basic + "*" for basic in basics]
+    basics = [basic + "(B)" for basic in basics]
     out = " ".join(basics) + " " + " ".join(supported)
     return out.strip()
 

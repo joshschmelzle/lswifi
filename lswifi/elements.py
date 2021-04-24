@@ -481,7 +481,7 @@ class WirelessNetworkBss:
         self.ie_rates = OutObject(
             header="SUPPORTED RATES",
             align=Alignment.CENTER,
-            subheader="(*): basic rates [Mbit/s]",
+            subheader="(B): basic rates [Mbit/s]",
         )
         self.capabilities = Capabilities(bss_entry)
         self.ie_size = bss_entry.IeSize
@@ -1030,7 +1030,7 @@ class WirelessNetworkBss:
         if element_id == 1:
             decoded = WirelessNetworkBss.__parse_rates(element_data)
             if self:
-                b_rates = ["1", "1*", "2", "2*", "5.5", "5.5*", "11", "11*"]
+                b_rates = ["1", "1(B)", "2", "2(B)", "5.5", "5.5(B)", "11", "11(B)"]
                 if any(any(b == rate for b in b_rates) for rate in decoded.split(" ")):
                     self.modes.append("b")
                 self.ie_rates.value = decoded

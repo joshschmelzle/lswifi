@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.10 (2020-04-24)
+-------------------
+
+- interworking, tx power envelope, MBO, minor cosmetic stuff
+
 0.1.9 (2020-04-21)
 ------------------
 
