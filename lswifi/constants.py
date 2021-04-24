@@ -53,7 +53,7 @@ INTERWORKING_NETWORK_TYPE = {
     2: "Chargeable public network",
     3: "Free public network",
     4: "Personal device network",
-    5: "Reserved",
+    5: "Emergency services only network",
     6: "Reserved",
     7: "Reserved",
     8: "Reserved",

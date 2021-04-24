@@ -1171,7 +1171,7 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
-        # 802.11-2016 9.4.2.13 Extended Supported Rates
+        # 802.11-2016 9.4.2.13 Extended Supported Rates (50)
         if element_id == 50:
             decoded = WirelessNetworkBss.__parse_rates(element_data)
             if self:
@@ -1199,10 +1199,24 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
-        # 802.11-2016 9.4.2.47 Mobility Domain element (MDE)
+        # 802.11-2016 9.4.2.47 Mobility Domain element (MDE) (54)
         if element_id == 54:
             decoded = WirelessNetworkBss._parse_mobility_domain_element(
                 self, element_data
+            )
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
+        # 802.11-2020 9.4.2.53 Supported Operating Classes element (59)
+        if element_id == 59:
+            decoded = WirelessNetworkBss._parse_supported_operating_classes_element(
+                element_data
             )
             return WLAN_API.InformationElement(
                 element_id,
@@ -1239,6 +1253,18 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        # 802.11-2020 9.4.2.45 Multiple BSSID element (71)
+        if element_id == 71:
+            decoded = WirelessNetworkBss._parse_multiple_bssid_element(element_data)
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
         # 802.11-2016 9.4.2.59 Overlapping BSS Scan Parameters (74)
         if element_id == 74:
             decoded = WirelessNetworkBss._parse_overlapping_bss_scan_parameters_element(
@@ -1253,11 +1279,9 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
-        # interworking (Hotspot 2.0) TODO
+        # 802.11-2020 9.4.2.91 Interworking (107)
         if element_id == 107:
-            decoded = WirelessNetworkBss._parse_interworking_hotspot_two_point_zero(
-                self, element_data
-            )
+            decoded = WirelessNetworkBss._parse_interworking_element(self, element_data)
             return WLAN_API.InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
@@ -1426,10 +1450,18 @@ class WirelessNetworkBss:
             self.amendments.append("r")
         return ""
 
+    def _parse_supported_operating_classes_element(element_data):
+        body = list(memoryview(element_data))
+        return f"Current Operating Class: {body[0]}"
+
     def _parse_rm_enabled_capabilities_element(self, element_data):
         if self is not None:
             self.amendments.append("k")
         return ""
+
+    def _parse_multiple_bssid_element(element_data):
+        body = list(memoryview(element_data))
+        return f"Max BSSID Indicator: {body[0]}"
 
     def _parse_extended_capabilities(self, element_data):
         out = ""
@@ -1579,6 +1611,8 @@ class WirelessNetworkBss:
             out = "Wi-Fi Alliance"
         if "50:6f:9a:09" in oui:  # Wi-Fi Alliance P2P
             out = "Wi-Fi Alliance P2P"
+        if "50:6f:9a:16" in oui:  # Wi-Fi Alliance MBO
+            out = "Wi-Fi Alliance Multi Band Operation (MBO)"
         if "00:0b:86" in oui:  # Aruba
             if oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
@@ -2429,25 +2463,31 @@ class WirelessNetworkBss:
             obss_scan_activity_threshold,
         )
 
-    def _parse_interworking_hotspot_two_point_zero(self, edata):
+    def _parse_interworking_element(self, edata):
         """
-        TODO: interworking information element (802.11u)
+        9.4.2.91 Interworking element (802.11u)
         """
         body = list(memoryview(edata))
-        network_type = None
-        network_type = bools_to_binary_string(
+        network_type_bi_string = bools_to_binary_string(
             [
-                get_bit(body[0], 0),
-                get_bit(body[0], 1),
-                get_bit(body[0], 2),
                 get_bit(body[0], 3),
+                get_bit(body[0], 2),
+                get_bit(body[0], 1),
+                get_bit(body[0], 0),
             ]
         )
+        network_type_val = int(network_type_bi_string, 2)
 
-        # network_type = INTERWORKING_NETWORK_TYPE.get(network_type, None)
+        network_type = INTERWORKING_NETWORK_TYPE.get(network_type_val, "Unknown")
+
+        internet = get_bit(body[0], 4)
+        ASRA = get_bit(body[0], 5)
+        ESR = get_bit(body[0], 6)
+        UESA = get_bit(body[0], 7)
+
         if self is not None:
             self.amendments.append("u")
-        return ""
+        return f"Access Network Type: {network_type}, Internet: {internet}, ASRA: {ASRA}, ESR: {ESR}, UESA: {UESA}"
 
     def _parse_mesh_configuration(self, edata):
         """
