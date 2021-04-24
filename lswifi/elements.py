@@ -1466,7 +1466,7 @@ class WirelessNetworkBss:
     def _parse_extended_capabilities(self, element_data):
         out = ""
         body = list(memoryview(element_data))
-        out = f"0x{element_data.hex()}"
+        out = f"Octets: {len(body)}, 0x{element_data.hex()}"
         if len(body) > 1:
             if get_bit(body[2], 3):  # octet 3, bit 4 ... (or bit 19 for BSS Transition)
                 if self is not None:
@@ -1508,15 +1508,15 @@ class WirelessNetworkBss:
     def _parse_reduced_neighbor_report(self, element_data):
         body = list(memoryview(element_data))
 
-        get_bit(body[0], 0)
-        get_bit(body[0], 1)
-        # tbtt_info_field_type  =
-        get_bit(body[0], 2)
-        get_bit(body[0], 3)
-        get_bit(body[0], 4)
-        get_bit(body[0], 5)
-        get_bit(body[0], 6)
-        get_bit(body[0], 7)
+        # get_bit(body[0], 0)
+        # get_bit(body[0], 1)
+        # # tbtt_info_field_type  =
+        # get_bit(body[0], 2)
+        # get_bit(body[0], 3)
+        # get_bit(body[0], 4)
+        # get_bit(body[0], 5)
+        # get_bit(body[0], 6)
+        # get_bit(body[0], 7)
         # tbbt_information_count =
         body[1]
         operating_class = body[2]
@@ -2290,28 +2290,24 @@ class WirelessNetworkBss:
                 if "ac" not in self.modes:
                     self.modes.append("ac")
 
-        out = "Info: 0x{:02x}".format(edata[3])
+        out = "VHT Operation Info: 0x{:02x}".format(edata[3])
         out += "{:02x}".format(edata[2])
         out += "{:02x}".format(edata[1])
         out += "{:02x}\n".format(edata[0])
-        out += " {0:08b}".format(edata[3])
-        out += "{0:08b}".format(edata[2])
-        out += "{0:08b}".format(edata[1])
-        out += "{0:08b}\n".format(edata[0])
         out += "MCS Set\n"
-        out += " Rx MCS Map: 0x{:02x}".format(edata[11])
+        out += "  Rx MCS Map: 0x{:02x}".format(edata[11])
         out += "{:02x}".format(edata[10])
         out += "{:02x}".format(edata[9])
         out += "{:02x}\n".format(edata[8])
-        out += " {0:0b}".format(edata[11])
+        out += "    0x{0:0b}".format(edata[11])
         out += "{0:0b}".format(edata[10])
         out += "{0:0b}".format(edata[9])
         out += "{0:0b}\n".format(edata[8])
-        out += " Tx MCS Map: 0x{:02x}".format(edata[7])
+        out += "  Tx MCS Map: 0x{:02x}".format(edata[7])
         out += "{:02x}".format(edata[6])
         out += "{:02x}".format(edata[5])
         out += "{:02x}\n".format(edata[4])
-        out += " {0:0b}".format(edata[7])
+        out += "    0x{0:0b}".format(edata[7])
         out += "{0:0b}".format(edata[6])
         out += "{0:0b}".format(edata[5])
         out += "{0:0b}\n".format(edata[4])
