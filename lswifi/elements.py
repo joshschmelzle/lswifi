@@ -655,7 +655,7 @@ class WirelessNetworkBss:
         self.printoutlist(outlist)
 
         out = ""
-        out += "<hr>\n"
+        out += "\n"
         out += "Capabilities: {}\n".format(self.capabilities.hex)
         out += (
             ".... .... .... ...{} ESS capabilities\n".format(self.capabilities.ess)
@@ -754,7 +754,7 @@ class WirelessNetworkBss:
             else ""
         )
         # out += "Raw: {}".format(self.raw_information_elements)
-        out += "<hr>\n"
+        out += "\n"
         # out += f"{len(self.ie_numbers.list)} INFORMATION ELEMENTS ({self.ie_size} bytes):\n"
         if not self.is_byte_file:
             eid_len = get_attr_max_len(self.information_elements, "eid")
