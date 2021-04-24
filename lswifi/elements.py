@@ -1293,6 +1293,20 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        # Cisco Vendor IE
+        if element_id == 133:
+            decoded = WirelessNetworkBss._parse_cisco_ccx1_ckip_device_name(
+                self, element_data
+            )
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
         # 802.11-2016 9.4.2.26 Vendor Specific element - Symbol Proprietary (173)
         if element_id == 173:
             decoded = WirelessNetworkBss._parse_symbol_proprietary(element_data)
@@ -1333,10 +1347,9 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
-        if element_id == 133:
-            decoded = WirelessNetworkBss._parse_cisco_ccx1_ckip_device_name(
-                self, element_data
-            )
+        # 802.11-2020 Tx Power Envelope (195)
+        if element_id == 195:
+            decoded = WirelessNetworkBss._parse_tx_power_envelope(element_data)
             return WLAN_API.InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
@@ -2312,6 +2325,88 @@ class WirelessNetworkBss:
         return out
         # return "VHT Channel Width: {}".format(vht_channel_width)
 
+    def _parse_tx_power_envelope(edata):
+        """
+        802.11-2020 Tx Power Envelope (9.4.2.161)
+        """
+        body = list(memoryview(edata))
+
+        is_40 = False
+        is_80 = False
+        is_160_or_80p80 = False
+
+        # local max tx power count
+        local_max_tx_power_count_bi_string = bools_to_binary_string(
+            [
+                get_bit(body[0], 2),
+                get_bit(body[0], 1),
+                get_bit(body[0], 0),
+            ]
+        )
+        local_max_tx_power_count = int(local_max_tx_power_count_bi_string, 2)
+
+        # local max tx power unit interpretation
+        local_max_tx_power_unit_interpretation_bi_string = bools_to_binary_string(
+            [
+                get_bit(body[0], 5),
+                get_bit(body[0], 4),
+                get_bit(body[0], 3),
+            ]
+        )
+
+        local_max_tx_power_unit_interpretation = int(
+            local_max_tx_power_unit_interpretation_bi_string, 2
+        )
+
+        if local_max_tx_power_count == 4:
+            is_160_or_80p80 = True
+
+        if local_max_tx_power_count == 3:
+            is_80 = True
+
+        if local_max_tx_power_count == 2:
+            is_40 = True
+
+        tx_power_160_or_80p80_pos = 4
+        tx_power_for_80_mhz_pos = 3
+        tx_power_for_40_mhz_pos = 2
+        tx_power_for_20_mhz_pos = 1
+
+        def byte_to_signed(byte):
+            if byte > 127:
+                return (256 - byte) * (-1) / 2
+            else:
+                return byte / 2
+
+        if is_160_or_80p80:
+            return (
+                f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
+                f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm\n"
+                f"  Local Max. Tx Pwr For 40 MHz: {byte_to_signed(body[tx_power_for_40_mhz_pos])} dBm\n"
+                f"  Local Max. Tx Pwr For 80 MHz: {byte_to_signed(body[tx_power_for_80_mhz_pos])} dBm\n"
+                f"  Local Max. Tx Pwr For 160/80+80 MHz: {byte_to_signed(body[tx_power_160_or_80p80_pos])} dBm"
+            )
+
+        if is_80:
+            return (
+                f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
+                f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm\n"
+                f"  Local Max. Tx Pwr For 40 MHz: {byte_to_signed(body[tx_power_for_40_mhz_pos])} dBm\n"
+                f"  Local Max. Tx Pwr For 80 MHz: {byte_to_signed(body[tx_power_for_80_mhz_pos])} dBm"
+            )
+
+        if is_40:
+            return (
+                f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
+                f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm\n"
+                f"  Local Max. Tx Pwr For 40 MHz: {byte_to_signed(body[tx_power_for_40_mhz_pos])} dBm"
+            )
+
+        return (
+            f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
+            f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm"
+        )
+
     def _parse_overlapping_bss_scan_parameters_element(edata):
         """
         the Overlapping BSS Scan Parameters element is used by an AP to indicate the values to be used by BSS
@@ -2336,8 +2431,7 @@ class WirelessNetworkBss:
 
     def _parse_interworking_hotspot_two_point_zero(self, edata):
         """
-        interworking information element (802.11u)
-        todo
+        TODO: interworking information element (802.11u)
         """
         body = list(memoryview(edata))
         network_type = None
@@ -2349,11 +2443,8 @@ class WirelessNetworkBss:
                 get_bit(body[0], 3),
             ]
         )
-        get_bit(body[0], 4)
-        get_bit(body[0], 5)
-        get_bit(body[0], 6)
-        get_bit(body[0], 7)
-        network_type = INTERWORKING_NETWORK_TYPE.get(network_type, None)
+
+        # network_type = INTERWORKING_NETWORK_TYPE.get(network_type, None)
         if self is not None:
             self.amendments.append("u")
         return ""
