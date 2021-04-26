@@ -23,9 +23,10 @@ from .__version__ import __title__
 from .client import Client, get_interface_info
 from .constants import APNAMEJSONFILE
 from .elements import WirelessNetworkBss
-from .helpers import (format_bytes_as_hex, generate_pretty_separator,
-                      get_attr_max_len, is_five_band, is_six_band,
-                      is_two_four_band, strip_mac_address_format)
+from .helpers import (Base64Encoder, format_bytes_as_hex,
+                      generate_pretty_separator, get_attr_max_len,
+                      is_five_band, is_six_band, is_two_four_band,
+                      strip_mac_address_format)
 from .schemas.out import *
 
 
@@ -377,18 +378,15 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             if args.ies:
                 print(bss)
             if args.bytes:
-                # print(f"bss bytes:\n{bss.bssbytes.send()}\n")
-                print(f"type(bss.bssbytes.send(): {type(bss.bssbytes.send())}")
-                print(f"{bss.bssbytes.send()}")
+                print("bss.bssbytes.send():")
+                print(f"{bss.bssbytes.send()}\n")
+                print("base64 encoded (bss.bssbytes.send()):")
+                print(f"{json.dumps(bss.bssbytes.send(), cls=Base64Encoder)}\n")
                 print(
-                    f"unicode_escape: \n {(bss.bssbytes.send()).decode(encoding='unicode_escape')}\n"
+                    f"decoded as ISO-8859-1: \n {(bss.bssbytes.send()).decode(encoding='ISO-8859-1')}\n"
                 )
-                print(f"bss bytes:\n{format_bytes_as_hex(bss.bssbytes.send())}\n")
-                # print(f"bss bytes:\n{type(bss.bssbytes.send())}\n")
-                # print(f"ies bytes:\n{bss.iesbytes}\n")
-                print(f"ies bytes:\n{format_bytes_as_hex(bss.iesbytes)}\n")
-                # print(f"ies bytes:\n{type(bss.iesbytes)}\n")
-
+                print(f"bss octets:\n{format_bytes_as_hex(bss.bssbytes.send())}\n")
+                print(f"ies octets:\n{format_bytes_as_hex(bss.iesbytes)}\n")
             break
 
         # handle weakest rssi value we want to see displayed to the screen

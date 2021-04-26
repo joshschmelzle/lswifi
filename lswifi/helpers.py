@@ -7,7 +7,9 @@ lswifi.helpers
 Provides helper functions that are consumed internally.
 """
 
+import json
 import random
+from base64 import b64encode
 
 from .constants import _20MHZ_CHANNEL_LIST
 
@@ -135,3 +137,16 @@ def get_channel_number_from_frequency(frequency):
         return _20MHZ_CHANNEL_LIST.get(frequency, "Unknown")
     except KeyError:
         return "Unknown"
+
+
+class Base64Encoder(json.JSONEncoder):
+    """ A Base64 encoder for JSON """
+
+    # example usage: json.dumps(bytes(frame), cls=Base64Encoder)
+
+    # pylint: disable=method-hidden
+    def default(self, obj):
+        """ Perform default Base64 encode """
+        if isinstance(obj, bytes):
+            return b64encode(obj).decode()
+        return json.JSONEncoder.default(self, obj)
