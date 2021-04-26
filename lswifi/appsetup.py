@@ -95,50 +95,59 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         metavar="BSSID",
         nargs="?",
-        help="print information elements for given BSSID(s)",
-    )
-    parser.add_argument(
-        "-a", action="store_true", help="filter results by the 5 GHz band only"
-    )
-    parser.add_argument(
-        "-g", action="store_true", help="filter results by the 2.4 GHz band only"
-    )
-    parser.add_argument(
-        "-six", action="store_true", help="filter results by the 6 GHz band only"
+        help="verbose print of information elements for a provided BSSID",
     )
     parser.add_argument(
         "-threshold",
         "-t",
         metavar="dBm",
         dest="sensitivity",
-        help="threshold used to filter out weak Wi-Fi signals",
+        help="display filter threshold used to exclude networks with weak signal strength",
+    )
+    parser.add_argument(
+        "-g",
+        action="store_true",
+        help="display filter to limit results by the 2.4 GHz band",
+    )
+    parser.add_argument(
+        "-a",
+        action="store_true",
+        help="display filter to limit results by the 5 GHz band",
+    )
+    parser.add_argument(
+        "-six",
+        action="store_true",
+        help="display filter to limit results by the 6 GHz band",
     )
     parser.add_argument(
         "-include",
         dest="include",
         metavar="SSID",
-        help="print results from a directed scan for a specific SSID",
+        help="display filter to include results matching on input (partial matching supported)",
     )
     parser.add_argument(
-        "-exclude", dest="exclude", metavar="SSID", help="SSID exclude filter"
+        "-exclude",
+        dest="exclude",
+        metavar="SSID",
+        help="display filter to exclude results matching on input (partial matching supported)",
     )
     parser.add_argument(
         "-bssid",
         dest="bssid",
         metavar="BSSID",
-        help="Filter on a specific 802.11 access point",
+        help="display filter to include only a specific 802.11 access point",
     )
     parser.add_argument(
         "--ap-names",
         dest="apnames",
         action="store_true",
-        help="use locally cached apnames files for the AP names",
+        help="display ap name column and use local cached names in output",
     )
     parser.add_argument(
         "-uptime",
         dest="uptime",
         action="store_true",
-        help="sort by access point uptime based on beacon timestamp",
+        help="sort output by access point uptime based on beacon timestamp",
     )
     parser.add_argument(
         "--channel-width",
@@ -146,20 +155,23 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="20|40|80|160",
         help="performs a directed scan for BSSIDs that have a specific channel width",
     )
-    # parser.add_argument(
-    #    "-acm", dest="acm", action="store_true", help="print WMM AC ACM values"
-    # )
     parser.add_argument(
         "-ethers",
         dest="ethers",
         action="store_true",
-        help="use ethers files for the AP names",
+        help="display ap name column and use ethers files for the names",
     )
     parser.add_argument(
         "--append-ethers",
         metavar="BSSID,APNAME",
         dest="append",
         help="append BSSID and AP name to ethers file for AP names",
+    )
+    parser.add_argument(
+        "--display-ethers",
+        dest="display_ethers",
+        action="store_true",
+        help="display the list of saved ethers; (BSSID,APNAME) mapping",
     )
     parser.add_argument(
         "--data-location",

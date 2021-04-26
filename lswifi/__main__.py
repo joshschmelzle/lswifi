@@ -97,8 +97,8 @@ def user_ack_apnames_disclaimer() -> bool:
             "  - Caching this information helps to more consistently provide AP names in output.\n"
             "Why?\n"
             "  - AP names are typically identified in beacon frames.\n"
+            "  - Dwell time varies per channel meaning it could be less than the beacon interval.\n"
             "  - Retrieved scan results are a combination of beacons, probe responses, or sometimes a merged frame.\n"
-            "  - Dwell time varies per channel and if it hears a probe response, it may move on before the beacon interval.\n"
             "Where?\n"
             "  - Data is stored and read from a JSON file on your local device here:\n\n"
             f"{apnames}\n"
@@ -107,7 +107,7 @@ def user_ack_apnames_disclaimer() -> bool:
         text = input("Do you want to enable this feature? yes/no: ")
         if "y" in text.lower()[:1]:
             with open(ack, "w") as file:
-                pass # we only need a placeholder file
+                pass  # we only need a placeholder file
             print(
                 "---\n"
                 "This feature has been enabled and your response stored here: \n\n"

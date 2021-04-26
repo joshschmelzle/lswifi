@@ -26,7 +26,7 @@ from .elements import WirelessNetworkBss
 from .helpers import (format_bytes_as_hex, generate_pretty_separator,
                       get_attr_max_len, is_five_band, is_six_band,
                       is_two_four_band, strip_mac_address_format)
-from .schemas.out import OUT_TUPLE
+from .schemas.out import *
 
 
 def list_interfaces(interfaces) -> None:
@@ -74,6 +74,14 @@ async def scan(args, **kwargs):
             watch_events(args, interfaces)
             sys.exit(0)
 
+        if args.append:
+            appendEthers(args.append)
+            sys.exit(0)
+
+        if args.display_ethers:
+            displayEthers()
+            sys.exit(0)
+
         for interface in interfaces:
             if (
                 args.get_interface_info
@@ -112,7 +120,27 @@ async def scan(args, **kwargs):
             pass
 
 
-def appendEthers(data) -> dict:
+def displayEthers():
+    log = logging.getLogger(__name__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    is_path = os.path.isdir(appdata_path)
+    if not is_path:
+        log.info("nothing here")
+
+    file = os.path.join(appdata_path, "ethers")
+
+    try:
+        if os.path.isfile(file):
+            content = ""
+            with open(file, "r") as file_reader:
+                content = file_reader.readlines()
+            content = [x.strip() for x in content]
+            print("\n".join(content))
+    except:
+        pass
+
+
+def appendEthers(data):
     log = logging.getLogger(__name__)
     appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
     is_path = os.path.isdir(appdata_path)
@@ -251,9 +279,6 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                 else:
                     stored_ack = value
 
-    if args.append:
-        ethers = appendEthers(args.append)
-        sys.exit(0)
     if args.ethers:
         ethers = loadEthers()
 
