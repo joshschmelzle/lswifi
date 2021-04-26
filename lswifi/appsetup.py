@@ -80,7 +80,7 @@ def setup_parser() -> argparse.ArgumentParser:
               >lswifi -bssid 06:6D:15:88:81:59
 
             Print additional details (inc. information elements) for a particular BSSID <mac>:
-              >lswifi 06:6D:15:88:81:59
+              >lswifi -ies 06:6D:15:88:81:59
              """
         ),
         epilog=f"Made with Python by Josh Schmelzle",
