@@ -551,7 +551,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
 
     if args.uptime:  # sort by uptime
         out_results = sorted(
-            out_results, key=lambda x: int(x[8].value.split("d")[0]), reverse=False
+            out_results, key=lambda x: int(x[9].value.split("d")[0]), reverse=False
         )
     elif args.apnames or args.ethers:  # sort by RSSI
         out_results = sorted(out_results, key=lambda x: x[3].value, reverse=False)
