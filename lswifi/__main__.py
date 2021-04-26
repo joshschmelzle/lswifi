@@ -90,29 +90,30 @@ def user_ack_apnames_disclaimer() -> bool:
         return True
     else:
         print(
-            "--\n"
-            "Access Point (AP) names are not in every scan result.\n\n"
-            "Why?\n"
-            "  - AP names are inside beacons.\n"
-            "  - Retrieved scan results are based on beacons, probe responses, or sometimes both.\n"
+            "---\n"
+            "AP (Access Point) names are not contained in every scan result.\n\n"
             "What?\n"
-            "  - This feature locally caches BSSIDs and their detected corresponding AP names.\n"
-            "  - Doing this helps more consistently provide AP names in output.\n"
+            "  - This feature locally caches BSSIDs and any detected corresponding AP names.\n"
+            "  - Caching this information helps to more consistently provide AP names in output.\n"
+            "Why?\n"
+            "  - AP names are typically identified in beacon frames.\n"
+            "  - Retrieved scan results are a combination of beacons, probe responses, or sometimes a merged frame.\n"
+            "  - Dwell time varies per channel and if it hears a probe response, it may move on before the beacon interval.\n"
             "Where?\n"
-            "  - They are stored and read from a JSON file on your device here:\n\n"
+            "  - Data is stored and read from a JSON file on your local device here:\n\n"
             f"{apnames}\n"
-            "--\n"
+            "---\n"
         )
         text = input("Do you want to enable this feature? yes/no: ")
         if "y" in text.lower()[:1]:
             with open(ack, "w") as file:
-                pass
+                pass # we only need a placeholder file
             print(
-                "--\n"
+                "---\n"
                 "This feature has been enabled and your response stored here: \n\n"
                 f"{ack}\n\n"
                 "Want to disable this feature? Delete the file above\n"
-                "--"
+                "---"
             )
             return True
         else:
