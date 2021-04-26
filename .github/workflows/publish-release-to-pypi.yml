@@ -1,7 +1,11 @@
 name: Publish lswifi Python 🐍 distributions 📦 to PyPI
 on:
-  release:
-    types: [created]
+  push:
+    paths:
+      - 'lswifi/__version__.py'
+  pull_request:
+    paths:
+      - 'lswifi/__version__.py'
 jobs:
   build-n-publish:
     name: Build and publish lswifi Python 🐍 distributions 📦 to PyPI
