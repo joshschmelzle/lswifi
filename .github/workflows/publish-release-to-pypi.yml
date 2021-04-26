@@ -2,10 +2,10 @@ name: Publish lswifi Python 🐍 distributions 📦 to PyPI
 on:
   push:
     paths:
-      - 'lswifi/__version__.py'
+      - 'lswifi/revisit_later/__version__.py'
   pull_request:
     paths:
-      - 'lswifi/__version__.py'
+      - 'lswifi/revisit_later/__version__.py'
 jobs:
   build-n-publish:
     name: Build and publish lswifi Python 🐍 distributions 📦 to PyPI
