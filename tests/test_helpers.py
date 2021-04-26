@@ -32,40 +32,6 @@ class TestHelpers(object):
             == "82 84 8B 96 0C 12 18 24"
         )
 
-    def test_format_rate_(self):
-        assert helpers.format_rate(1.0) == "1"
-        assert helpers.format_rate(5.5) == "5.5"
-        assert helpers.format_rate(24.0) == "24"
-        assert helpers.format_rate(24) == "24"
-
-    def test_get_basic_rates(self):
-        assert (
-            helpers.get_basic_rates(
-                [32770, 32772, 32779, 32790, 32780, 18, 32792, 36, 32816, 72, 96, 108]
-            )
-            == "1 2 5.5 11 6 12 24"
-        )
-
-    def test_get_data_rates(self):
-        assert (
-            helpers.get_data_rates([32780, 18, 32792, 36, 32816, 72, 96, 108])
-            == "9 18 36 48 54"
-        )
-
-    def test_get_rateset(self):
-        assert (
-            helpers.get_rateset(
-                [32770, 32772, 32779, 32790, 32780, 18, 32792, 36, 32816, 72, 96, 108]
-            )
-            == "1(B) 2(B) 5.5(B) 6(B) 11(B) 12(B) 24(B) 9 18 36 48 54"
-        )
-
-        assert helpers.get_rateset([32816, 72, 96, 108]) == "24(B) 36 48 54"
-
-    def test_rate_in_mbps(self):
-        assert helpers.rate_to_mbps(36) == 18.0
-        assert helpers.rate_to_mbps(11) == 5.5
-
     def test_get_bit(self):
         assert helpers.get_bit(239, 1) == True
         assert helpers.get_bit(96, 7) == False

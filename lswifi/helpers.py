@@ -8,73 +8,8 @@ Provides helper functions that are consumed internally.
 """
 
 import random
-from enum import Enum
 
 from .constants import _20MHZ_CHANNEL_LIST
-
-
-class OUT_TUPLE:
-    def __init__(self, value, header=None, subheader=None):
-        self.value = value
-        self.header = header
-        self.subheader = subheader
-
-    def __len__(self):
-        return len(self.value)
-
-    def __str__(self):
-        return str(self.value)
-
-    def __repr__(self):
-        print(f"OUT_TUPLE({self.value},{self.header},{self.subheader}")
-
-
-class Alignment(Enum):
-    NONE = ""
-    LEFT = "<"
-    CENTER = "^"
-    RIGHT = ">"
-    LEFTMOST = "="
-
-
-class SubHeader:
-    def __init__(self, description):
-        self.description = description
-        self.value = description
-
-    def __str__(self):
-        return self.description
-
-    def __format__(self, format_spec):
-        return format("{}".format(self.description), format_spec)
-
-    def __len__(self):
-        return len(self.description)
-
-    def __repr__(self):
-        return self.description
-
-
-class Header:
-    def __init__(self, description, align=None):
-        self.description = description
-        self.value = description
-        if align:
-            self.alignment = align
-        else:
-            self.alignment = Alignment.NONE
-
-    def __str__(self):
-        return self.description
-
-    def __format__(self, format_spec):
-        return format("{}".format(self.description), format_spec)
-
-    def __len__(self):
-        return len(self.description)
-
-    def __repr__(self):
-        return self.description
 
 
 def generate_pretty_separator(_len, separators, begin, end):
@@ -119,58 +54,6 @@ def format_bytes_as_hex(_bytes):
     return out.upper().strip()
 
 
-def format_rate(rate):
-    """
-    Removes trailing .0 from a <class 'float'>:
-    1.0 to 1
-    5.5 to 5.5
-    """
-    out = ""
-    if isinstance(rate, int):  # 1, 2, 6, etc
-        out = f"{out + str(rate)}"
-    elif rate.is_integer():  # 1.0, 2.0, 6.0, 9.0 etc
-        out = f"{out + str(int(rate))}"
-    else:  # 5.5, etc.
-        out = f"{out + str(rate)}"
-    return out
-
-
-def get_basic_rates(WlanRateSet):
-    out = ""
-    for rate in WlanRateSet:
-        if rate.bit_length() == 16:  # basic rate
-            rate_bytes = int_to_bytes(rate)
-            out += f"{format_rate(rate_to_mbps(rate_bytes[1]))} "
-    return out.strip()
-
-
-def get_data_rates(WlanRateSet):
-    out = ""
-    for rate in WlanRateSet:
-        if rate.bit_length() == 16:  # basic rate
-            pass
-        else:
-            out += f"{format_rate(rate_to_mbps(rate))} "
-    return out.strip()
-
-
-def get_rateset(WlanRateSet):
-    out = ""
-    basics = []
-    supported = []
-    for rate in WlanRateSet:
-        if rate.bit_length() == 16:  # basic rate
-            rate_bytes = int_to_bytes(rate)
-            basics.append(format_rate(rate_to_mbps(rate_bytes[1])))
-        else:
-            supported.append(format_rate(rate_to_mbps(rate)))
-    basics.sort(key=float)
-    supported.sort(key=float)
-    basics = [basic + "(B)" for basic in basics]
-    out = " ".join(basics) + " " + " ".join(supported)
-    return out.strip()
-
-
 def flag_last_object(seq):
     """ treat the last object in an iterable differently """
     seq = iter(seq)  # ensure this is an iterator
@@ -179,11 +62,6 @@ def flag_last_object(seq):
         yield a, False
         a = b
     yield a, True
-
-
-def rate_to_mbps(rate):
-    """ convert raw 802.11 rate to mbps """
-    return (rate & 0x7FFF) * 0.5
 
 
 def get_bit(byteval, index) -> bool:

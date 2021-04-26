@@ -4,7 +4,7 @@
 lswifi.core
 ~~~~~~~~~~~
 
-core code to manage clients (interfaces), their data, and writing out results.
+code to manage clients (interfaces), their data, and writing out results.
 """
 
 # python imports
@@ -23,9 +23,10 @@ from .__version__ import __title__
 from .client import Client, get_interface_info
 from .constants import APNAMEJSONFILE
 from .elements import WirelessNetworkBss
-from .helpers import (OUT_TUPLE, SubHeader, format_bytes_as_hex,
-                      generate_pretty_separator, get_attr_max_len,
-                      is_five_band, is_two_four_band, strip_mac_address_format)
+from .helpers import (format_bytes_as_hex, generate_pretty_separator,
+                      get_attr_max_len, is_five_band, is_six_band,
+                      is_two_four_band, strip_mac_address_format)
+from .schemas.out import OUT_TUPLE
 
 
 def list_interfaces(interfaces) -> None:
@@ -379,19 +380,37 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             continue
 
         # handle band filters
-        if args.a and args.g:
+        if args.a and args.g and args.six:
             pass
         else:
-            if args.g:
+            if args.a and args.g and not args.six:
                 if is_two_four_band(int(bss.channel_frequency.value)):
                     pass
-                else:
-                    continue
-            if args.a:
                 if is_five_band(int(bss.channel_frequency.value)):
                     pass
-                else:
+                if is_six_band(int(bss.channel_frequency.value)):
                     continue
+            if args.a and args.six and not args.g:
+                if is_two_four_band(int(bss.channel_frequency.value)):
+                    continue
+                if is_five_band(int(bss.channel_frequency.value)):
+                    pass
+                if is_six_band(int(bss.channel_frequency.value)):
+                    pass
+            if args.g and args.six and not args.six:
+                if is_two_four_band(int(bss.channel_frequency.value)):
+                    pass
+                if is_five_band(int(bss.channel_frequency.value)):
+                    continue
+                if is_six_band(int(bss.channel_frequency.value)):
+                    pass
+            if args.six and not args.a and not args.g:
+                if is_two_four_band(int(bss.channel_frequency.value)):
+                    continue
+                if is_five_band(int(bss.channel_frequency.value)):
+                    continue
+                if is_six_band(int(bss.channel_frequency.value)):
+                    pass
 
         # handle width filter
         valid_channels = ["20", "40", "80", "160"]

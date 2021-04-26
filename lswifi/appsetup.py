@@ -65,9 +65,10 @@ def setup_parser() -> argparse.ArgumentParser:
             Print Wi-Fi networks based on SSID filter (supports partial match):
               >lswifi -include my_ssid
 
-            Print only 2.4 GHz or 5.0 GHz Wi-Fi Networks:
+            Print only 2.4 GHz, 5 GHz, or 6 GHz Wi-Fi Networks:
               >lswifi -g
               >lswifi -a
+              >lswifi -six
 
             Print the BSSID of the connected AP:
               >lswifi -ap
@@ -101,6 +102,9 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-g", action="store_true", help="filter results by the 2.4 GHz band only"
+    )
+    parser.add_argument(
+        "-six", action="store_true", help="filter results by the 6 GHz band only"
     )
     parser.add_argument(
         "-threshold",
