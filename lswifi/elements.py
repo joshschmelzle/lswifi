@@ -1037,7 +1037,7 @@ class WirelessNetworkBss:
 
         # 802.11-2020 9.4.2.241 RSN eXtension element (244)
         if element_id == 244:
-            decoded = WirelessNetworkBss.__parse_rsn_extension(self, element_data)
+            decoded = WirelessNetworkBss.__parse_rsn_extension(element_data)
             return WLAN_API.InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
