@@ -1,3 +1,9 @@
+Publishing and Distribution
+===========================
+
+Building and uploading to PyPi
+------------------------------
+
 To create a source archive and a wheel for your package, you can run the following command:
 
 ```
@@ -21,3 +27,45 @@ python -m twine upload dist/*
 ```
 
 Enter your username and password when requested.
+
+Versioning and Git Tagging
+--------------------------
+
+Suggest to use semantic versioning like so:
+
+```
+v<major>.<minor>.<patch>
+```
+
+Where:
+
+- *major* is version number where there are breaking modifications (new version not compatible with previous)
+- *minor* is version number compatible with previous versions
+- *patch* is an increment for bug fix / hot fix / patch fix on your software
+
+To create a Git tag (on the latest commit (aka HEAD) of current branch) with a message use the following:
+
+```
+git tag -a <tag_name> -m "message"
+```
+
+So if you want a tag on your `main` branch with a message `"new hotfix release for v0.1.42"`:
+
+Confirm branch with `git status | findstr branch` on Windows or `git status | grep branch` *nix.
+
+```
+git tag -a v0.1.42 -m "new hotfix release for v0.1.42"
+```
+
+Verify your Git tag was successfully created:
+
+```
+git tag
+git tag -n
+```
+
+Push your tags:
+
+```
+git push --tags
+```
