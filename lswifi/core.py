@@ -403,9 +403,10 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             continue
 
         # handle band filters
-        if args.a and args.g and args.six:
+        if not args.a and not args.g and not args.six:
             pass
         else:
+            # handle a band filter
             if args.a and args.g and not args.six:
                 if is_two_four_band(int(bss.channel_frequency.value)):
                     pass
@@ -420,13 +421,29 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     pass
                 if is_six_band(int(bss.channel_frequency.value)):
                     pass
-            if args.g and args.six and not args.six:
+            if args.a and not args.six and not args.g:
+                if is_two_four_band(int(bss.channel_frequency.value)):
+                    continue
+                if is_five_band(int(bss.channel_frequency.value)):
+                    pass
+                if is_six_band(int(bss.channel_frequency.value)):
+                    continue
+            # handle g band filter
+            if args.g and args.six and not args.a:
                 if is_two_four_band(int(bss.channel_frequency.value)):
                     pass
                 if is_five_band(int(bss.channel_frequency.value)):
                     continue
                 if is_six_band(int(bss.channel_frequency.value)):
                     pass
+            if args.g and not args.six and not args.a:
+                if is_two_four_band(int(bss.channel_frequency.value)):
+                    pass
+                if is_five_band(int(bss.channel_frequency.value)):
+                    continue
+                if is_six_band(int(bss.channel_frequency.value)):
+                    continue
+            # handl six band filter
             if args.six and not args.a and not args.g:
                 if is_two_four_band(int(bss.channel_frequency.value)):
                     continue
