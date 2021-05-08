@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.14 (2021-XX-XX)
+-------------------
+
+- Handle client interfaces better
+
 0.1.13 (2021-05-08)
 -------------------
 

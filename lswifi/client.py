@@ -10,7 +10,6 @@ client side code for requesting a scan, waiting for scan complete, and getting t
 import functools
 import logging
 import pprint
-import sys
 import traceback
 from subprocess import check_output
 from threading import Timer
@@ -355,11 +354,15 @@ class Client(object):
     async def scan(self):
         try:
             self.log.debug(f"{self.iface.guid}: scan requested...")
-            WLAN_API.WLAN.scan(self.iface.guid)
             self.scan_timer.start()
+            WLAN_API.WLAN.scan(self.iface.guid)
         except WLAN_API.WLANScanError as scan_error:
-            self.log.critical(scan_error)
-            sys.exit(-1)
+            self.log.critical(
+                "Interface (%s) with GUID (%s): %s",
+                self.iface.description,
+                self.iface.guid_string[1:-1],
+                scan_error,
+            )
 
     def lookup_mac_on_guid(self, iface) -> str:
         guid = str(iface.guid)[1:-1]  # remove { } around guid
