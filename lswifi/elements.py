@@ -18,8 +18,7 @@ from typing import List
 
 from . import wlanapi as WLAN_API
 from .constants import *
-from .constants import (_40MHZ_CHANNEL_LIST, _80MHZ_CHANNEL_LIST,
-                        _160MHZ_CHANNEL_LIST)
+from .constants import _40MHZ_CHANNEL_LIST, _80MHZ_CHANNEL_LIST, _160MHZ_CHANNEL_LIST
 from .helpers import *
 from .schemas.band import *
 from .schemas.beacon import *
@@ -1754,7 +1753,7 @@ class WirelessNetworkBss:
             eighty_mhz_ss = 0
 
             def binary_to_int(a: bool, b: bool) -> int:
-                """ Converts binary octet to integer value to help determin NSS """
+                """Converts binary octet to integer value to help determin NSS"""
                 return int(f"000000{int(b)}{int(a)}", 2)
 
             def nss_map(octet_number: int, a: int, b: int) -> int:

@@ -42,7 +42,7 @@ def format_rate(rate):
 
 
 def rate_to_mbps(rate):
-    """ convert raw 802.11 rate to mbps """
+    """convert raw 802.11 rate to mbps"""
     return (rate & 0x7FFF) * 0.5
 
 

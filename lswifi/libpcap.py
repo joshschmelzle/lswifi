@@ -9,6 +9,7 @@ define libpcap class to help export to pcap
 
 
 import logging
+
 # python imports
 import struct
 import time

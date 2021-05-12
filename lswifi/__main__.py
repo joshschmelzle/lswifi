@@ -74,7 +74,7 @@ def main():
 
 
 def user_ack_apnames_disclaimer() -> bool:
-    """ retrieve ack from user that BSSIDs and discovered apnames will be cached in appdata """
+    """retrieve ack from user that BSSIDs and discovered apnames will be cached in appdata"""
     logger = logging.getLogger(__name__)
     if os.getenv("LOCALAPPDATA"):
         appdata_folder = os.path.join(os.getenv("LOCALAPPDATA"), __title__)

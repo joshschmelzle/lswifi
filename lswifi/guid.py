@@ -1,7 +1,15 @@
 # extracted from from comtypes.py
 
-from ctypes import (Structure, byref, c_byte, c_ulong, c_ushort, c_wchar_p,
-                    oledll, windll)
+from ctypes import (
+    Structure,
+    byref,
+    c_byte,
+    c_ulong,
+    c_ushort,
+    c_wchar_p,
+    oledll,
+    windll,
+)
 
 BYTE = c_byte
 WORD = c_ushort

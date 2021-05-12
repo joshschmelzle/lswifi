@@ -9,8 +9,19 @@ mostly wrapper code around Native Wifi wlanapi.h
 
 import contextlib
 import sys
-from ctypes import (c_bool, c_byte, c_char, c_long, c_ubyte, c_uint, c_ulong,
-                    c_ulonglong, c_ushort, c_void_p, c_wchar)
+from ctypes import (
+    c_bool,
+    c_byte,
+    c_char,
+    c_long,
+    c_ubyte,
+    c_uint,
+    c_ulong,
+    c_ulonglong,
+    c_ushort,
+    c_void_p,
+    c_wchar,
+)
 from enum import Enum
 
 from .guid import GUID
@@ -21,8 +32,7 @@ else:
     print("ERROR: win32 support only")
     sys.exit(-1)
 
-from ctypes import (CFUNCTYPE, POINTER, Structure, Union, addressof, byref,
-                    pointer)
+from ctypes import CFUNCTYPE, POINTER, Structure, Union, addressof, byref, pointer
 from ctypes.wintypes import BOOL, DWORD, HANDLE
 
 from .elements import WirelessNetworkBss
@@ -852,7 +862,7 @@ class WLANRawData(Structure):
 class InformationElement(
     object
 ):  # TODO: MOVE THIS TO ELEMENTS.PY DOES NOT BELONG IN WLANAPI
-    """ Data class for an 802.11 Information Element """
+    """Data class for an 802.11 Information Element"""
 
     def __init__(self, eid, name, length, decoded, body, pbody):
         self.eid = eid
@@ -869,7 +879,7 @@ class InformationElement(
 
 
 class WirelessInterface(object):
-    """ Data class for the wireless interface """
+    """Data class for the wireless interface"""
 
     def __init__(self, wlan_iface_info):
         self.description = wlan_iface_info.strInterfaceDescription
@@ -1485,7 +1495,7 @@ class WLAN:
 
     @staticmethod
     def scan(guid) -> None:
-        """ Tell driver to scan for Wi-Fi networks """
+        """Tell driver to scan for Wi-Fi networks"""
         handle = WLAN.open_handle()
         result = WLAN.wlan_scan(handle, guid)
         if result is not SystemErrorCodes.ERROR_SUCCESS.value:

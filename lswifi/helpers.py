@@ -57,7 +57,7 @@ def format_bytes_as_hex(_bytes):
 
 
 def flag_last_object(seq):
-    """ treat the last object in an iterable differently """
+    """treat the last object in an iterable differently"""
     seq = iter(seq)  # ensure this is an iterator
     a = next(seq)
     for b in seq:
@@ -67,7 +67,7 @@ def flag_last_object(seq):
 
 
 def get_bit(byteval, index) -> bool:
-    """ retrieve bit value from byte at provided index """
+    """retrieve bit value from byte at provided index"""
     return (byteval & (1 << index)) != 0
 
 
@@ -80,7 +80,7 @@ def binary_string_to_int(binary_string: str) -> int:
 
 
 def trim_most_significant_bit(byteval: int) -> int:
-    """ trim the most significant bit """
+    """trim the most significant bit"""
     return byteval & 0x7F
 
 
@@ -140,13 +140,13 @@ def get_channel_number_from_frequency(frequency):
 
 
 class Base64Encoder(json.JSONEncoder):
-    """ A Base64 encoder for JSON """
+    """A Base64 encoder for JSON"""
 
     # example usage: json.dumps(bytes(frame), cls=Base64Encoder)
 
     # pylint: disable=method-hidden
     def default(self, obj):
-        """ Perform default Base64 encode """
+        """Perform default Base64 encode"""
         if isinstance(obj, bytes):
             return b64encode(obj).decode()
         return json.JSONEncoder.default(self, obj)
