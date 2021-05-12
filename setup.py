@@ -15,7 +15,6 @@ try:
 except FileNotFoundError:
     long_description = about["__description__"]
 
-requires = []
 
 setup(
     name=about["__title__"],
@@ -24,11 +23,14 @@ setup(
     description=about["__description__"],
     long_description=readme,
     long_description_content_type="text/markdown",
+    url=about["__url__"],
     author=about["__author__"],
     author_email=about["__author_email__"],
-    python_requires=">3.6,",
+    python_requires=">=3.7",
     entry_points={"console_scripts": ["lswifi=lswifi.__main__:main"]},
-    url=about["__url__"],
+    license="BSD 3-Clause License",
+    pyversion="py3",
+    platforms=["win32"],
     keywords=[
         "lswifi",
         "scanner",
@@ -40,16 +42,17 @@ setup(
         "native wifi",
         "wlanapi",
     ],
-    license="",
     classifiers=[
         "Natural Language :: English",
         "Development Status :: 3 - Alpha",
+        "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Intended Audience :: Information Technology",
         "Intended Audience :: System Administrators",
         "Topic :: Utilities",
+        "Topic :: System :: Networking",
         "Topic :: System :: Networking :: Monitoring",
         "Environment :: Win32 (MS Windows)",
         "Operating System :: Microsoft :: Windows :: Windows 10",
