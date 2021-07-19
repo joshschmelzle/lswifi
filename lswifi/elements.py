@@ -1152,7 +1152,7 @@ class WirelessNetworkBss:
     def __parse_rsn_extension(element_data):
         body = list(memoryview(element_data))
 
-        out = ""
+        supported = []
 
         # field length
         # get_bit(body[0], 0)
@@ -1163,17 +1163,17 @@ class WirelessNetworkBss:
         # protected TWT operations support
         protected_twt = get_bit(body[0], 4)
         if protected_twt:
-            out += f"Protected TWT Operations Support"
+            supported.append("Protected TWT Operations Support")
         # sae hash-to-element
         sae_hash_to_element = get_bit(body[0], 5)
         if sae_hash_to_element:
-            out += f", SAE hash-to-element supported"
+            supported.append(f"SAE hash-to-element")
 
         # reserved
         # get_bit(body[0], 6)
         # get_bit(body[0], 7)
 
-        return out
+        return ", ".join(supported)
 
     @dataclass
     class WPS_Data_Element:
