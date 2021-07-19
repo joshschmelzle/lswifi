@@ -1825,16 +1825,18 @@ class WirelessNetworkBss:
                 if max_mcs < 3:
                     one_sixty_mhz_ss += 1
 
-            if eighty_mhz_ss > 0:
-                self.spatial_streams.value = eighty_mhz_ss
-            if one_sixty_mhz_ss > 0:
-                self.spatial_streams.value = one_sixty_mhz_ss
-
             if self is not None:
+                if eighty_mhz_ss > 0:
+                    self.spatial_streams.value = eighty_mhz_ss
+                if one_sixty_mhz_ss > 0:
+                    self.spatial_streams.value = one_sixty_mhz_ss
                 if forty_and_eighty_in_5g_and_6g:
-                    self.channel_width.value = "80"
+                    # cannot use this bit to determine channel
+                    # D8 std says indicates support for 40 and 80 not one or the other
+                    pass 
                 if onesixty_in_5g_and_6g or onesixty_or_eighty_plus_eighty_in_5g_and_6g:
                     self.channel_width.value = "160"
+                    self.channel_marking = ""
                 self.phy_type.name = "HE"
                 if "ax" not in self.modes:
                     self.modes.append("ax")
@@ -1948,16 +1950,13 @@ class WirelessNetworkBss:
                     self.modes.append("ac")
 
         body = list(memoryview(edata))
-        channel_width = bool(body[0])
-        out = "VHT Channel Width: {}, ".format(channel_width)
+        vht_channel_width = bool(body[0])
+        out = "VHT Channel Width: {}, ".format(vht_channel_width)
         channel_center_frequency_segment_zero = body[1]
         out += "Center Freq. 0: {}, ".format(channel_center_frequency_segment_zero)
         channel_center_frequency_segment_one = body[2]
         out += "Center Freq. 1: {}".format(channel_center_frequency_segment_one)
-        if body[0] == 0:
-            vht_channel_width = False
-        if body[0] == 1:
-            vht_channel_width = True
+        if vht_channel_width:
             if self is not None:
                 self.channel_width.value = "80"
                 for k, v in _80MHZ_CHANNEL_LIST.items():
@@ -1966,18 +1965,15 @@ class WirelessNetworkBss:
                 # self.channel.number = self.channel.number.split(",")[0] + ",+2"
                 self.vht_channel_width = True
                 self.channel_marking = ""
-            if vht_channel_width:
-                if channel_center_frequency_segment_one > 0:
-                    if self is not None:
-                        self.channel_width.value = "160"
-                        self.channel_marking = ""
-                        for k, v in _160MHZ_CHANNEL_LIST.items():
-                            if self.channel_number.value in v:
-                                self.channel_list = " ".join(_160MHZ_CHANNEL_LIST[k])
-                        # self.channel.number = self.channel.number.split(",")[0] + ",+3"
-        # vht_channel_width = body[0]
+            if channel_center_frequency_segment_one > 0:
+                if self is not None:
+                    self.channel_width.value = "160"
+                    self.channel_marking = ""
+                    for k, v in _160MHZ_CHANNEL_LIST.items():
+                        if self.channel_number.value in v:
+                            self.channel_list = " ".join(_160MHZ_CHANNEL_LIST[k])      
+
         return out
-        # return "VHT Channel Width: {}".format(vht_channel_width)
 
     def __parse_tx_power_envelope(edata):
         """
