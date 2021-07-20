@@ -17,20 +17,20 @@ def dequote(s):
         return s[1:-1]
     return s
 
+if WLAN_API.WLAN_API_EXISTS:
+    interfaces = WLAN_API.WLAN.get_wireless_interfaces()
+    print(interfaces)
+    for interface in interfaces:
+        WLAN_API.WLAN.scan(interface.guid)
+        time.sleep(0.1)
+        available_networks = WLAN_API.WLAN.get_wireless_network_bss_list(interface)
+        is_first_avail = True
+        output = []
+        for avail in available_networks:
+            if is_first_avail:
+                output.append([str(i).upper() for i in list(avail.__dict__.keys())])
+                is_first_avail = False
+            output.append([str(i) for i in list(avail.__dict__.values())])
 
-interfaces = WLAN_API.WLAN.get_wireless_interfaces()
-print(interfaces)
-for interface in interfaces:
-    WLAN_API.WLAN.scan(interface.guid)
-    time.sleep(0.1)
-    available_networks = WLAN_API.WLAN.get_wireless_network_bss_list(interface)
-    is_first_avail = True
-    output = []
-    for avail in available_networks:
-        if is_first_avail:
-            output.append([str(i).upper() for i in list(avail.__dict__.keys())])
-            is_first_avail = False
-        output.append([str(i) for i in list(avail.__dict__.values())])
-
-    print(available_networks)
-    assert len(available_networks) > 0
+        print(available_networks)
+        assert len(available_networks) > 0

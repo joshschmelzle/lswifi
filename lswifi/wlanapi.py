@@ -80,10 +80,14 @@ WLAN_REASON_CODE = DWORD
 ## (MAC) address: `typedef UCHAR DOT11_MAC_ADDRESS[6];`
 DOT11_MAC_ADDRESS = c_ubyte * 6
 
+WLAN_API_EXISTS = True
 
 # load wlanapi.dll into memory
-
-WLAN_API = windll.LoadLibrary("wlanapi.dll")
+try:
+    WLAN_API = windll.LoadLibrary("wlanapi.dll")
+except OSError as error:
+    WLAN_API_EXISTS = False
+    print("!!! wlanapi.dll not foud !!!")
 
 # DOT11_AUTH_ALGORITHM enumeration
 
