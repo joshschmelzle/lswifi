@@ -1234,9 +1234,18 @@ class WirelessNetworkBss:
         if "50:6f:9a:0a" in oui:
             out = "Wi-Fi Alliance"
         if "50:6f:9a:09" in oui:  # Wi-Fi Alliance P2P
-            out = "Wi-Fi Alliance P2P"
+            out = "Wi-Fi Alliance: P2P"
         if "50:6f:9a:16" in oui:  # Wi-Fi Alliance MBO
-            out = "Wi-Fi Alliance Multi Band Operation (MBO)"
+            out = "Wi-Fi Alliance: Multi Band Operation (MBO)"
+        if "50:6f:9a:1c" in oui: # Wi-Fi Alliance OWE Transition Mode
+            o1, o2, o3, o4, o5, o6 = [
+                memoryview_body[i] for i in [4, 5, 6, 7, 8, 9]
+            ]  
+            owe_bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
+            owe_ssid_len = int(memoryview_body[10])
+            owe_ssid = "".join([chr(i) for i in memoryview_body[11:]])
+            out = f"Wi-Fi Alliance: OWE Transition Mode"
+            out+= f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
         if "00:0b:86" in oui:  # Aruba
             if oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
@@ -1833,7 +1842,7 @@ class WirelessNetworkBss:
                 if forty_and_eighty_in_5g_and_6g:
                     # cannot use this bit to determine channel
                     # D8 std says indicates support for 40 and 80 not one or the other
-                    pass 
+                    pass
                 if onesixty_in_5g_and_6g or onesixty_or_eighty_plus_eighty_in_5g_and_6g:
                     self.channel_width.value = "160"
                     self.channel_marking = ""
@@ -1971,7 +1980,7 @@ class WirelessNetworkBss:
                     self.channel_marking = ""
                     for k, v in _160MHZ_CHANNEL_LIST.items():
                         if self.channel_number.value in v:
-                            self.channel_list = " ".join(_160MHZ_CHANNEL_LIST[k])      
+                            self.channel_list = " ".join(_160MHZ_CHANNEL_LIST[k])
 
         return out
 
