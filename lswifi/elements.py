@@ -1237,15 +1237,13 @@ class WirelessNetworkBss:
             out = "Wi-Fi Alliance: P2P"
         if "50:6f:9a:16" in oui:  # Wi-Fi Alliance MBO
             out = "Wi-Fi Alliance: Multi Band Operation (MBO)"
-        if "50:6f:9a:1c" in oui: # Wi-Fi Alliance OWE Transition Mode
-            o1, o2, o3, o4, o5, o6 = [
-                memoryview_body[i] for i in [4, 5, 6, 7, 8, 9]
-            ]  
+        if "50:6f:9a:1c" in oui:  # Wi-Fi Alliance OWE Transition Mode
+            o1, o2, o3, o4, o5, o6 = [memoryview_body[i] for i in [4, 5, 6, 7, 8, 9]]
             owe_bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
-            owe_ssid_len = int(memoryview_body[10])
+            int(memoryview_body[10])
             owe_ssid = "".join([chr(i) for i in memoryview_body[11:]])
             out = f"Wi-Fi Alliance: OWE Transition Mode"
-            out+= f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
+            out += f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
         if "00:0b:86" in oui:  # Aruba
             if oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
