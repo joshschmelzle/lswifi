@@ -29,7 +29,6 @@ setup(
     python_requires=">=3.7",
     entry_points={"console_scripts": ["lswifi=lswifi.__main__:main"]},
     license="BSD 3-Clause License",
-    pyversion="py3",
     platforms=["win32"],
     keywords=[
         "lswifi",

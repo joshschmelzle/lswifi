@@ -1132,22 +1132,107 @@ class WirelessNetworkBss:
     def __parse_reduced_neighbor_report(self, element_data):
         body = list(memoryview(element_data))
 
-        # get_bit(body[0], 0)
-        # get_bit(body[0], 1)
-        # # tbtt_info_field_type  =
-        # get_bit(body[0], 2)
-        # get_bit(body[0], 3)
-        # get_bit(body[0], 4)
-        # get_bit(body[0], 5)
-        # get_bit(body[0], 6)
-        # get_bit(body[0], 7)
+        # TBTT information header is body[0] and body[1]
+        # print(get_bit(body[0], 0)) # b0
+        # print(get_bit(body[0], 1)) # b1
+        tbtt_info_field_type = get_bit(body[0], 0) + get_bit(body[0], 1)
+        # print(tbtt_info_field_type)
+        # if the type subfield is 0, it contains the length in octets of each TBTT information field that is included in the TBTT information set field of the neighbor AP information field
+        # get_bit(body[0], 2) b2
+        get_bit(body[0], 2)
+        # print(filtered_neighbor_ap)
+        # get_bit(body[0], 3) b3
+        get_bit(body[0], 3)
+        # get_bit(body[0], 4) b4
+        # get_bit(body[0], 5) b5
+        # get_bit(body[0], 6) b6
+        # get_bit(body[0], 7) b7
+        (
+            get_bit(body[0], 4)
+            + get_bit(body[0], 5)
+            + get_bit(body[0], 6)
+            + get_bit(body[0], 7)
+        )
+        # print(tbtt_information_count)
+        # get_bit(body[1], 0) b8
+        # get_bit(body[1], 1) b9
+        # get_bit(body[1], 2) b10
+        # get_bit(body[1], 3) b11
+        # get_bit(body[1], 4) b12
+        # get_bit(body[1], 5) b13
+        # get_bit(body[1], 6) b14
+        # get_bit(body[1], 7) b15
+        body[1]
+        # print(tbtt_information_length)
         # tbbt_information_count =
         # body[1]
         operating_class = body[2]
         channel_number = body[3]
-        if self is not None:
-            pass
-        return f"Operating Class: {operating_class}, Channel number: {channel_number}"
+        # print(operating_class)
+        # print(channel_number)
+
+        base_out = (
+            f"Operating Class: {operating_class}, Channel number: {channel_number}"
+        )
+
+        buffer = body[4:]
+        tbtt_count = 0
+        if tbtt_info_field_type == 0:
+            while len(buffer) != 0:
+                neighbor_ap_tbtt_offset = buffer[0]
+                base_out += f"\nTBTT {tbtt_count}:"
+                tbtt_count += 1
+                base_out += f"\n  TBTT Offset: {neighbor_ap_tbtt_offset}"
+                buffer.pop(0)
+                if len(buffer) > 5:
+                    o1, o2, o3, o4, o5, o6 = [buffer[i] for i in [0, 1, 2, 3, 4, 5]]
+                    bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
+                    base_out += f", BSSID: {bssid}"
+                    for _ in range(6):
+                        buffer.pop(0)
+                if len(buffer) > 3:
+                    # short ssid
+                    for _ in range(4):
+                        buffer.pop(0)
+                if len(buffer) >= 1:
+                    # bss parameter
+                    # get_bit(buffer[0], 0) b0 - oct recommended
+                    oct_recommended = get_bit(buffer[0], 0)
+                    if oct_recommended:
+                        base_out += f", OCT recommended"
+                    # get_bit(buffer[0], 1) b1 - same SSID
+                    same_ssid = get_bit(buffer[0], 1)
+                    if same_ssid:
+                        base_out += f", Same SSID"
+                    # get_bit(buffer[0], 2) b2 - multiple BSSID
+                    multiple_bssid = get_bit(buffer[0], 2)
+                    if multiple_bssid:
+                        base_out += f", Multiple BSSID"
+                    # get_bit(buffer[0], 3) b3 - tx BSSID
+                    transmitted_bssid = get_bit(buffer[0], 3)
+                    if transmitted_bssid:
+                        base_out += f", Transmitted BSSID"
+                    # get_bit(buffer[0], 4) b4 - member of ESS w/ 2.4/5 GHz co-located AP
+                    ess_with_2g_or_5g_co_located_ap = get_bit(buffer[0], 4)
+                    if ess_with_2g_or_5g_co_located_ap:
+                        base_out += f", member of ESS With 2.4/5 GHz Co-Located AP"
+                    # get_bit(buffer[0], 5) b5 - unsolicited probe responses active
+                    unsolicited_probe_resp_active = get_bit(buffer[0], 5)
+                    if unsolicited_probe_resp_active:
+                        base_out += f", Unsolicited Probe Resp Active"
+                    # get_bit(buffer[0], 6) b6 - co-located ap
+                    co_located_ap = get_bit(buffer[0], 6)
+                    if co_located_ap:
+                        base_out += f", Co-Located AP"
+                    # get_bit(buffer[0], 7) b7 - reserved
+
+                    buffer.pop(0)
+                if len(buffer) >= 1:
+                    # 20 mhz PSD
+                    base_out += f"\n  20 MHz PSD: {buffer[0]}"
+                    buffer.pop(0)
+
+        return base_out
 
     def __parse_rsn_extension(element_data):
         body = list(memoryview(element_data))
@@ -1732,6 +1817,16 @@ class WirelessNetworkBss:
                 out += f", Punctured Sounding Support"
 
             he_phy_cap_oct1 = 7
+
+            # print("hacky test")
+            # print(f"bit 0: {get_bit(body[he_phy_cap_oct1], 0)}")
+            # print(f"bit 1: {get_bit(body[he_phy_cap_oct1], 1)}")
+            # print(f"bit 2: {get_bit(body[he_phy_cap_oct1], 2)}")
+            # print(f"bit 3: {get_bit(body[he_phy_cap_oct1], 3)}")
+            # print(f"bit 4: {get_bit(body[he_phy_cap_oct1], 4)}")
+            # print(f"bit 5: {get_bit(body[he_phy_cap_oct1], 5)}")
+            # print(f"bit 6: {get_bit(body[he_phy_cap_oct1], 6)}")
+            # print(f"bit 7: {get_bit(body[he_phy_cap_oct1], 7)}")
 
             get_bit(body[he_phy_cap_oct1], 0)
             # reserved = octet7bit0
