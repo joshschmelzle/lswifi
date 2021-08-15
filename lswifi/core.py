@@ -496,7 +496,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         else:
             continue
 
-        # this is a list to check for dup bssids
+        # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
         bssid_list.append(str(bss.bssid))
 
         if args.ethers:
