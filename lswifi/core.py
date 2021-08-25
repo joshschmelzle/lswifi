@@ -341,8 +341,10 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
 
                     if wlanapi_bss != user_bss:
                         # print("{} {}".format(wlanapi_bss, user_bss))
-                        if bss_len == index:
-                            print(f"no match for {args.export} found in scan results")
+                        if bss_len == (index + 1):
+                            print(
+                                f"no match for {args.export} found in scan results. please try again ..."
+                            )
                         continue
 
                 export_bss = str(bss.bssid).lower().replace(":", "-")
@@ -494,7 +496,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         else:
             continue
 
-        # this is a list to check for dup bssids
+        # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
         bssid_list.append(str(bss.bssid))
 
         if args.ethers:

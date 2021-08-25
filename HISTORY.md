@@ -1,10 +1,22 @@
 Release History
 ===============
 
-0.1.14 (2021-XX-XX)
+0.1.16 (2021-08-25)
 -------------------
 
-- Handle client interfaces better
+- Improved detection of 6 GHz channel widths
+
+0.1.15 (2021-08-03)
+-------------------
+
+- Improved parsing of RNR
+
+0.1.14 (2021-07-29)
+-------------------
+
+- Add parser for Wi-Fi Alliance OWE Transition Mode 
+- Fix channel parsing bug when HE IEs are present
+- Improve handling client interfaces
 
 0.1.13 (2021-05-08)
 -------------------

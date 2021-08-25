@@ -4,6 +4,12 @@ Publishing and Distribution
 Building and uploading to PyPi
 ------------------------------
 
+Install depends:
+
+```
+python -m pip install wheel setuptools twine
+```
+
 To create a source archive and a wheel for your package, you can run the following command:
 
 ```
