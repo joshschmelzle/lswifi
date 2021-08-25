@@ -1688,6 +1688,7 @@ class WirelessNetworkBss:
 
         ext_tag_name = EXTENSION_IE_DICT.get(eid_ext, None)
 
+        six_ghz_width = ""
         six_ghz_channel = ""
         six_ghz_frequency = ""
         bss_color = ""
@@ -1877,16 +1878,41 @@ class WirelessNetworkBss:
                 out += f", Freq.: {six_ghz_frequency}"
 
                 # control field
-                six_ghz_ops_ie_position + 1
+                six_control_field = six_ghz_ops_ie_position + 1
 
-                six_ghz_ops_ie_position + 2
-                six_ghz_ops_ie_position + 3
+                # control field bits 1 and 2 is the channel width field:
+                ## The Channel Width field indicates the BSS channel width and is 
+                ## set to 0 for 20 MHz, 1 for 40 MHz, 2 for 80 MHz, and 3 for 80+80 or 160 MHz.
+                six_control_field_bit0 = get_bit(body[six_control_field], 0)
+                six_control_field_bit1 = get_bit(body[six_control_field], 1)
+                channel_width_bits = bools_to_binary_string(
+                    [six_control_field_bit1, six_control_field_bit0]
+                )
+                channel_width_value = binary_string_to_int(channel_width_bits)
+                six_ghz_width = "20"
+                if channel_width_value == 1:
+                    six_ghz_width = "40"
+                if channel_width_value == 2:
+                    six_ghz_width = "80"
+                if channel_width_value == 3:
+                    six_ghz_width = "80+80 or 160 MHz"
+                out += f", Width: {six_ghz_width}"
+                if channel_width_value == 3:
+                    six_ghz_width = "160"
+
+                # channel center frequency segment 0
+                six_channel_center_freq_segment_0 = six_ghz_ops_ie_position + 2
+
+                # channel center frequency segment 1
+                six_channel_center_freq_segment_1 = six_ghz_ops_ie_position + 3
 
                 # minimum rate in units of 1 MB/s that non-AP STA is allowed to use
                 minimum_rate = six_ghz_ops_ie_position + 4
                 out += f", Min STA Rate: {minimum_rate} Mbps"
 
             if self is not None:
+                if six_ghz_width:
+                    self.channel_width.value = six_ghz_width
                 if six_ghz_channel:
                     self.channel_number.value = six_ghz_channel
                     self.channel_number_marked.value = six_ghz_channel
