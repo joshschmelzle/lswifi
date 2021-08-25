@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.17 (2021-08-25)
+-------------------
+
+- Fix NSS detection when 6 GHz channel width is 20 MHz
+
 0.1.16 (2021-08-25)
 -------------------
 

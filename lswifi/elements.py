@@ -1840,6 +1840,11 @@ class WirelessNetworkBss:
             octet7bit3 = get_bit(body[he_phy_cap_oct1], 3)
             onesixty_in_5g_and_6g = octet7bit3
 
+            twenty_in_6ghz = False
+
+            if not forty_and_eighty_in_5g_and_6g and not onesixty_in_5g_and_6g:
+                twenty_in_6ghz = True
+
             get_bit(body[he_phy_cap_oct1], 4)
             onesixty_or_eighty_plus_eighty_in_5g_and_6g = octet7bit3
 
@@ -1871,7 +1876,7 @@ class WirelessNetworkBss:
                 bit_b = get_bit(body[octet_number], b)
                 return binary_to_int(bit_a, bit_b)
 
-            if forty_and_eighty_in_5g_and_6g:
+            if forty_and_eighty_in_5g_and_6g or twenty_in_6ghz:
                 max_mcs = nss_map(he_mcs_oct1, 0, 1)
                 if max_mcs < 3:
                     eighty_mhz_ss += 1
