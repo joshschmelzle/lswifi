@@ -2001,17 +2001,22 @@ class WirelessNetworkBss:
                     six_ghz_width = "40"
                 if channel_width_value == 2:
                     six_ghz_width = "80"
-                if channel_width_value == 3:
-                    six_ghz_width = "80+80 or 160 MHz"
-                out += f", Width: {six_ghz_width}"
-                if channel_width_value == 3:
-                    six_ghz_width = "160"
 
                 # channel center frequency segment 0
-                six_ghz_ops_ie_position + 2
+                six_channel_center_freq_seg_0 = body[six_ghz_ops_ie_position + 2]
+                out += f", Frequency Segment 0: {six_channel_center_freq_seg_0}"
 
                 # channel center frequency segment 1
-                six_ghz_ops_ie_position + 3
+                six_channel_center_freq_seg_1 = body[six_ghz_ops_ie_position + 3]
+                out += f", Frequency Segment 1: {six_channel_center_freq_seg_1}"
+
+                if channel_width_value == 3:
+                    if abs(six_channel_center_freq_seg_1 - six_channel_center_freq_seg_0) > 16:
+                        six_ghz_width = "80+80"
+                    if abs(six_channel_center_freq_seg_1 - six_channel_center_freq_seg_0) == 8:
+                        six_ghz_width = "160"
+
+                out += f", Width: {six_ghz_width} MHz"
 
                 # minimum rate in units of 1 MB/s that non-AP STA is allowed to use
                 minimum_rate = six_ghz_ops_ie_position + 4

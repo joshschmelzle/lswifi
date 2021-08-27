@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.18 (2021-08-27)
+-------------------
+
+- More 6 GHz channel width improvements, hopefully didn't break anything.
+
 0.1.17 (2021-08-25)
 -------------------
 
