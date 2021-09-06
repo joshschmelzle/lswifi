@@ -1,12 +1,12 @@
 ![coverage-badge](https://github.com/joshschmelzle/lswifi/blob/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
 
-lswifi: a CLI Wi-Fi scanner tool for Windows
+lswifi: a CLI-centric Wi-Fi scanner tool for Windows
 ===============================================
 
 Documentation
 -------------
 
-`lswifi` is a CLI Wi-Fi scanner tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools. This includes a Received Signal Strength Indicator (RSSI), detection of 802.11 feature set, and more.
+`lswifi` is a CLI-centric Wi-Fi scanner tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools. This includes a Received Signal Strength Indicator (RSSI), detection of 802.11 feature set, and more.
 
 Installation
 ------------
