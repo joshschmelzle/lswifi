@@ -2011,9 +2011,21 @@ class WirelessNetworkBss:
                 out += f", Frequency Segment 1: {six_channel_center_freq_seg_1}"
 
                 if channel_width_value == 3:
-                    if abs(six_channel_center_freq_seg_1 - six_channel_center_freq_seg_0) > 16:
+                    if (
+                        abs(
+                            six_channel_center_freq_seg_1
+                            - six_channel_center_freq_seg_0
+                        )
+                        > 16
+                    ):
                         six_ghz_width = "80+80"
-                    if abs(six_channel_center_freq_seg_1 - six_channel_center_freq_seg_0) == 8:
+                    if (
+                        abs(
+                            six_channel_center_freq_seg_1
+                            - six_channel_center_freq_seg_0
+                        )
+                        == 8
+                    ):
                         six_ghz_width = "160"
 
                 out += f", Width: {six_ghz_width} MHz"
