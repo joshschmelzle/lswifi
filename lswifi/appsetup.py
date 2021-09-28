@@ -76,11 +76,14 @@ def setup_parser() -> argparse.ArgumentParser:
             Print the channel of the connected AP:
               >lswifi -channel
 
-            Print only networks with BSSIDs that contain <mac> (supports partial match):
+            Print only networks with BSSIDs that contain <mac>:
               >lswifi -bssid 06:6D:15:88:81:59
 
             Print additional details (inc. information elements) for a particular BSSID <mac>:
               >lswifi -ies 06:6D:15:88:81:59
+
+            Watch event notifications (inc. roaming, connection, scanning, etc.):
+              >lswifi --watchevents
              """
         ),
         epilog=f"Made with Python by Josh Schmelzle",
@@ -95,53 +98,53 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         metavar="BSSID",
         nargs="?",
-        help="verbose print of information elements for a provided BSSID",
+        help="print extra information about information elements for a specified BSSID",
     )
     parser.add_argument(
         "-threshold",
         "-t",
         metavar="dBm",
         dest="sensitivity",
-        help="display filter threshold used to exclude networks with weak signal strength",
+        help="threshold which excludes networks with weak signal strength (-82 is default)",
     )
     parser.add_argument(
         "-g",
         action="store_true",
-        help="display filter to limit results by the 2.4 GHz band",
+        help="display filter to limit output by 2.4 GHz band",
     )
     parser.add_argument(
         "-a",
         action="store_true",
-        help="display filter to limit results by the 5 GHz band",
+        help="display filter to limit output by 5 GHz band",
     )
     parser.add_argument(
         "-six",
         action="store_true",
-        help="display filter to limit results by the 6 GHz band",
+        help="display filter to limit output by 6 GHz band",
     )
     parser.add_argument(
         "-include",
         dest="include",
         metavar="SSID",
-        help="display filter to include results matching on input (partial matching supported)",
+        help="display filter to limit results by specified SSIDs (partial matching supported)",
     )
     parser.add_argument(
         "-exclude",
         dest="exclude",
         metavar="SSID",
-        help="display filter to exclude results matching on input (partial matching supported)",
+        help="display filter to exclude results by specified SSIDs (partial matching supported)",
     )
     parser.add_argument(
         "-bssid",
         dest="bssid",
         metavar="BSSID",
-        help="display filter to include only a specific 802.11 access point",
+        help="display filter to limit results by specified BSSIDs (partial matching supported)",
     )
     parser.add_argument(
         "--ap-names",
         dest="apnames",
         action="store_true",
-        help="display ap name column and use local cached names in output",
+        help="adds an ap name column to output and will cache ap names locally to help provide consistent results",
     )
     parser.add_argument(
         "-uptime",
@@ -153,7 +156,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--channel-width",
         dest="width",
         metavar="20|40|80|160",
-        help="performs a directed scan for BSSIDs that have a specific channel width",
+        help="display filter to limit output by a specified channel width",
     )
     parser.add_argument(
         "-ethers",
@@ -195,7 +198,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "-raw",
         dest="raw",
         action="store_true",
-        help="format output as the raw value for other scripts",
+        help="format output as the raw value for other scripts (for -ap and -channel only)",
     )
     parser.add_argument(
         "--get-interfaces",
@@ -218,11 +221,6 @@ def setup_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="output will be formatted as json",
     )
-    # parser.add_argument(
-    #    "--keepalive",
-    #    action="store_true",
-    #    help="a keepalive to monitor and display scan results on scan complete events",
-    # )
     parser.add_argument(
         "-export",
         nargs="?",
@@ -230,27 +228,30 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="BSSID",
         dest="export",
         action=ExportAction,
-        help="export bss and ies bytefiles. by default will export all from scan. provide mac address to export only one.",
+        help="export bss and ies bytefiles. default behavior will export all scan. to export one, specify mac address as argument.",
     )
     parser.add_argument(
         "-decode",
         dest="bytefile",
         metavar="BYTEFILE",
-        help="decode raw .BSS or .IES file",
+        help="decode a raw .BSS or .IES file",
     )
     parser.add_argument(
         "--bytes",
         metavar="BSSID",
         dest="bytes",
-        help="lists the scan results in raw byte form for remote troubleshooting.",
+        help="output debugging bytes for a specified BSSID.",
     )
     parser.add_argument(
-        "--watchevents", dest="event_watcher", action="store_true", help="watch events"
+        "--watchevents",
+        dest="event_watcher",
+        action="store_true",
+        help="a special mode which watches for notification on a wireless interface such as connection and roaming events",
     )
     parser.add_argument(
         "--debug",
         action="store_const",
-        help="increase output for debugging",
+        help="increase verbosity in output for debugging",
         const=logging.DEBUG,
         default=logging.INFO,
     )
