@@ -7,11 +7,30 @@ lswifi.helpers
 Provides helper functions that are consumed internally.
 """
 
+import itertools
 import json
 import random
+import re
 from base64 import b64encode
 
 from .constants import _20MHZ_CHANNEL_LIST
+
+__control_chars = "".join(
+    map(chr, itertools.chain(range(0x00, 0x20), range(0x7F, 0xA0)))
+)
+__control_char_re = re.compile("[%s]" % re.escape(__control_chars))
+
+
+def remove_control_chars(text: str) -> str:
+    return __control_char_re.sub("", text)
+
+
+def escape_control_chars(text: str) -> str:
+    if isinstance(text, str):
+        return text.encode("unicode_escape").decode("utf-8")
+    if isinstance(text, bytes):
+        return text.decode("utf-8").encode("unicode_escape").decode("utf-8")
+    return text
 
 
 def generate_pretty_separator(_len, separators, begin, end):
