@@ -58,10 +58,9 @@ class WirelessNetworkBss:
         """
         # init values before parsing IEs
         self.is_byte_file = is_byte_file
+        _ssid = bytes.decode(bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH])
         self.ssid = OutObject(
-            value=bytes.decode(
-                bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH]
-            ),
+            value=_ssid,
             header="SSID",
             align=Alignment.RIGHT,
             subheader="[Network Name]",
@@ -494,7 +493,7 @@ class WirelessNetworkBss:
         is_index_byte = True
         is_length_byte = True
         index = 0
-        for byte, last in flag_last_object(ie_buffer):
+        for byte, is_last_byte in flag_last_object(ie_buffer):
             if is_index_byte:
                 element_id = bytes_to_int(byte)
                 is_index_byte = False
@@ -521,7 +520,7 @@ class WirelessNetworkBss:
                 element_id = bytes_to_int(byte)
                 is_index_byte = False
                 continue
-            if last:
+            if is_last_byte:
                 self._append_information_elements(
                     element_id, element_length, element_data, information_elements
                 )
@@ -537,7 +536,7 @@ class WirelessNetworkBss:
         is_index_byte = True
         is_length_byte = True
         count = 0
-        for byte, last in flag_last_object(bytes):
+        for byte, is_last_byte in flag_last_object(bytes):
             if is_index_byte:
                 eid = byte
                 is_index_byte = False
@@ -606,7 +605,7 @@ class WirelessNetworkBss:
                 eid = byte
                 is_index_byte = False
                 continue
-            if last:
+            if is_last_byte:
                 # passing in None where we would usually pass in self.
                 information_elements.append(
                     WirelessNetworkBss._parse_information_element(
@@ -1302,14 +1301,13 @@ class WirelessNetworkBss:
         ]  # list comprehension
         oui = convert_mac_address_to_string([zero, one, two, three])
         element_body = [element_data[i : i + 1] for i in range(len(element_data))]
-        # oui_type = b""
-        oui_type = int.from_bytes(element_body[3], "little")
+        vendor_oui_type = int.from_bytes(element_body[3], "little")
         out = ""
         apname = ""
         if "08:00:09" in oui:
             out = "Hewlett Packard"
         if "8c:fd:f0" in oui:
-            out = f"OUI: {oui} (Qualcomm Inc.), Subtype: {oui_type}"
+            out = f"Qualcomm Inc, Subtype: {vendor_oui_type}"
         if "00:13:92" in oui:
             out = "Ruckus Wireless"
         if "00:26:86" in oui:
@@ -1330,46 +1328,67 @@ class WirelessNetworkBss:
             out = f"Wi-Fi Alliance: OWE Transition Mode"
             out += f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
         if "00:0b:86" in oui:  # Aruba
-            if oui_type == 1:
+            if vendor_oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
                 if oui_subtype == 3:  # AP Name
                     element_body[5]
-                    apname = "".join([chr(i) for i in memoryview_body[6:]])
-                    # EID 221 (len=20): OUI: 00:0b:86 Subtype: 1 Data b'\x00\x0b\x86\x01\x03\x00Josh_Schmelzle'
-                    out = "OUI: {} (Aruba), Subtype: {}, AP Name: {}".format(
-                        oui, oui_type, apname
+                    apname = remove_control_chars(
+                        "".join([chr(i) for i in memoryview_body[6:]])
                     )
+                    # EID 221 (len=20): OUI: 00:0b:86 Subtype: 1 Data b'\x00\x0b\x86\x01\x03\x00Josh_Schmelzle'
+                    out = f"OUI: {oui} (Aruba), Subtype: {vendor_oui_type}, AP Name: {apname}"
                     if self is not None:
                         self.apname.value = apname
-                        # log.debug(f"(aruba device name) {apname}")
-        if "00:a0:f8" in oui:  # Zebra Technologies
+        if "00:13:92" in oui:  # Ruckus
+            if vendor_oui_type == 3:  # Ruckus AP name
+                apname = remove_control_chars(
+                    "".join([chr(i) for i in memoryview_body[4:]])
+                )
+                out = f"OUI: {oui} (Ruckus), AP Name: {apname}"
+                if self is not None:
+                    self.apname.value = apname
+        if "00:19:77" in oui:  # Aerohive / Extreme
+            if vendor_oui_type == 33:  # Aerohive AP name
+                version = int.from_bytes(element_body[5], "little")
+                if version == 33:
+                    # subtype = int.from_bytes(element_body[6], "little")
+                    # apname_length = int.from_bytes(element_body[7], "little")
+                    apname = remove_control_chars(
+                        "".join([chr(i) for i in memoryview_body[8:]])
+                    )
+                    out = f"OUI: {oui} (Extreme (Aerohive)), Subtype: {vendor_oui_type}, AP Name: {apname}"
+                    if self is not None:
+                        self.apname.value = apname
+        if "00:a0:f8" in oui:  # Zebra Technologies / WiNG / Extreme
             # EID 221 (len=18): OUI: 00:a0:f8 Subtype: 1 Data b'\x00\xa0\xf8\x01\x03\x01\x0f\xc0\x00\x00\x00\x06ap8533'
-            if oui_type == 1:  # AP name
+            if vendor_oui_type == 1:  # AP name
                 # offset = element_body[4, 5, 6, 7, 8, 9, 10] #offset is 7 then + 1 for ap length
                 element_body[11]
-                apname = "".join([chr(i) for i in memoryview_body[12:]])
-                out = "OUI: {} (Extreme (Zebra)), Subtype: {}, AP Name: {}".format(
-                    oui, oui_type, apname
+                apname = remove_control_chars(
+                    "".join([chr(i) for i in memoryview_body[12:]])
                 )
+                out = f"OUI: {oui} (Extreme (WiNG)), Subtype: {vendor_oui_type}, AP Name: {apname}"
                 if self is not None:
                     self.apname.value = apname
         if "5c:5b:35:01" in oui:  # Mist
-            apname = "".join([chr(i) for i in memoryview_body[4:]])
+            apname = remove_control_chars(
+                "".join([chr(i) for i in memoryview_body[4:]])
+            )
             out = (
                 f"OUI: {oui} (Mist), Subtype: {memoryview_body[:1]}, AP Name: {apname}"
             )
             if self is not None:
                 self.apname.value = apname
         if "00:40:96" in oui:  # Cisco
-            if oui_type == 0:
+            if vendor_oui_type == 0:
                 out = "Cisco Aironet (0)"
-            if oui_type == 1:
+            if vendor_oui_type == 1:
                 out = "Cisco Aironet (1)"
-            if oui_type == 3:
+            if vendor_oui_type == 3:
                 out = "Cisco Aironet (3)"
-            if oui_type == 11:
+            if vendor_oui_type == 11:
                 out = "Cisco Aironet (11)"
-            if oui_type == 20:
+            if vendor_oui_type == 20:
                 out = "Cisco Aironet (20)"
         if "00:0b:86" in oui:
             out = f"OUI: {oui} (Aruba, a HPE Company)"
@@ -1518,7 +1537,7 @@ class WirelessNetworkBss:
                     out += f"\n  Serial Number: {decoded}" if data == 0 else ""
 
                 if wps_attribute.desc == "Device Name":
-                    apname = bytes.fromhex(data).decode("utf-8")
+                    apname = remove_control_chars(bytes.fromhex(data).decode("utf-8"))
                     out += f"\n  Device Name: {apname}"
                     if self is not None:
                         self.apname.value = apname
@@ -1533,7 +1552,7 @@ class WirelessNetworkBss:
         if (
             "00:50:f2:02" in oui
         ):  # WMM Information Element and # WMM/WME Parameter Element
-            if oui_type == 2:
+            if vendor_oui_type == 2:
                 if self is not None:
                     if "e" not in self.amendments:
                         self.amendments.append("e")
@@ -2001,17 +2020,34 @@ class WirelessNetworkBss:
                     six_ghz_width = "40"
                 if channel_width_value == 2:
                     six_ghz_width = "80"
-                if channel_width_value == 3:
-                    six_ghz_width = "80+80 or 160 MHz"
-                out += f", Width: {six_ghz_width}"
-                if channel_width_value == 3:
-                    six_ghz_width = "160"
 
                 # channel center frequency segment 0
-                six_ghz_ops_ie_position + 2
+                six_channel_center_freq_seg_0 = body[six_ghz_ops_ie_position + 2]
+                out += f", Frequency Segment 0: {six_channel_center_freq_seg_0}"
 
                 # channel center frequency segment 1
-                six_ghz_ops_ie_position + 3
+                six_channel_center_freq_seg_1 = body[six_ghz_ops_ie_position + 3]
+                out += f", Frequency Segment 1: {six_channel_center_freq_seg_1}"
+
+                if channel_width_value == 3:
+                    if (
+                        abs(
+                            six_channel_center_freq_seg_1
+                            - six_channel_center_freq_seg_0
+                        )
+                        > 16
+                    ):
+                        six_ghz_width = "80+80"
+                    if (
+                        abs(
+                            six_channel_center_freq_seg_1
+                            - six_channel_center_freq_seg_0
+                        )
+                        == 8
+                    ):
+                        six_ghz_width = "160"
+
+                out += f", Width: {six_ghz_width} MHz"
 
                 # minimum rate in units of 1 MB/s that non-AP STA is allowed to use
                 minimum_rate = six_ghz_ops_ie_position + 4
@@ -2595,10 +2631,11 @@ class WirelessNetworkBss:
         """
         The SSID element indicates the identity of an ESS or IBSS.
         The SSID field is between 0 and 32 octets.
+        Escape control characters
         """
         ssid_name = ""
         try:
-            ssid_name = edata.decode()
-        except:
+            ssid_name = escape_control_chars(edata)
+        except Exception:
             pass
-        return f"{ssid_name}"
+        return f"Length: {len(edata)}, SSID: {ssid_name}"

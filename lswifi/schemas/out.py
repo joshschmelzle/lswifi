@@ -12,6 +12,8 @@ this code helps control the formatting when printing to stdout
 from collections.abc import MutableSequence
 from enum import Enum
 
+from lswifi.helpers import escape_control_chars
+
 
 class Alignment(Enum):
     NONE = ""
@@ -81,21 +83,37 @@ class OutObject(object):
     """Object for printing out"""
 
     def __init__(self, **kwargs):
-        self.value = kwargs.get("value", "")
+        __value = kwargs.get("value", "")
+        if isinstance(__value, str):
+            self._value = escape_control_chars(__value)
+        else:
+            self._value = __value
         self.header = Header(kwargs.get("header", ""), align=kwargs.get("align", None))
         self.subheader = SubHeader(kwargs.get("subheader", ""))
 
     def out(self):
         return OUT_TUPLE(self.__str__(), self.header, self.subheader)
 
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        if isinstance(value, str):
+            self._value = escape_control_chars(value)
+            self._value = value
+        else:
+            self._value = value
+
     def __str__(self):
-        return str(self.value)
+        return str(self._value)
 
     def __repr__(self):
-        return self.value
+        return self._value
 
     def __len__(self):
-        return len(str(self.value))
+        return len(str(self._value))
 
 
 class OutList(MutableSequence):

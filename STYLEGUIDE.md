@@ -1,6 +1,13 @@
 Style Guide
 ===========
 
+Defaults
+--------
+
+The default output when `lswifi` is run should contain data in each column. For this reason we would not want to display QBSS information because not all neighboring networks will support QBSS.
+
+The output should display without wrapping on 1080p with 150% scaling.
+
 Dependencies
 ------------
 

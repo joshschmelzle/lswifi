@@ -1,6 +1,13 @@
 Release History
 ===============
 
+0.1.18 (2021-09-28)
+-------------------
+
+- Improvements to 6 GHz channel width detection
+- Add two more vendors for AP name parsing
+- Escape control characters by default for detected SSIDs and AP names
+
 0.1.17 (2021-08-25)
 -------------------
 
