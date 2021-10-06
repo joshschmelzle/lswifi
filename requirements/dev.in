@@ -1,0 +1,9 @@
+-r tests.in
+-r typing.in
+pip-tools
+pre-commit
+tox
+
+# The following packages are considered to be unsafe in a requirements file:
+# pip
+# setuptools

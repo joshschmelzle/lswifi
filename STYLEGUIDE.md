@@ -33,19 +33,6 @@ CamelCase
 
 When using abbreviations in `CamelCase`, capitalize all the letters of the abbreviation. `Dot11SSID` is better than `Dot11Ssid`.
 
-Formatting and Linting
-----------------------
-
-You should be linting the code with `tox -e lint` and running `tox -e format` prior to submitting a PR.
-
-### black
-
-All code should be formatted with [black](https://github.com/ambv/black/).
-
-### flake8
-
-All code should be linted and reviewed with [flake8](http://flake8.pycqa.org/en/latest/)
-
 class design
 ------------
 

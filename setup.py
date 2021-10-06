@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import os
-from setuptools import find_packages, setup
+try:
+    from setuptools import find_packages, setup
+except:
+    raise ImportError("setuptools is required to install lswifi ...")
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -15,6 +18,19 @@ try:
 except FileNotFoundError:
     long_description = about["__description__"]
 
+extras = {
+    "test": [
+        "tox",
+        "black",
+        "isort",
+        "autoflake",
+        "mypy",
+        "pytest",
+        "pytest-cov",
+        "coverage-badge",
+        "scapy",
+    ],
+}
 
 setup(
     name=about["__title__"],
@@ -27,6 +43,7 @@ setup(
     author=about["__author__"],
     author_email=about["__author_email__"],
     python_requires=">=3.7",
+    extras_require=extras,
     entry_points={"console_scripts": ["lswifi=lswifi.__main__:main"]},
     license="BSD 3-Clause License",
     platforms=["win32"],
@@ -44,16 +61,18 @@ setup(
     classifiers=[
         "Natural Language :: English",
         "Development Status :: 3 - Alpha",
+        "Environment :: Console",
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Intended Audience :: Information Technology",
         "Intended Audience :: System Administrators",
+        "Intended Audience :: Telecommunications Industry",
         "Topic :: Utilities",
         "Topic :: System :: Networking",
         "Topic :: System :: Networking :: Monitoring",
         "Environment :: Win32 (MS Windows)",
-        "Operating System :: Microsoft :: Windows :: Windows 10",
+        "Operating System :: Microsoft :: Windows :: Windows 10"
     ],
 )
