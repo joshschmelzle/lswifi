@@ -27,9 +27,15 @@ def remove_control_chars(text: str) -> str:
 
 def escape_control_chars(text: str) -> str:
     if isinstance(text, str):
-        return text.encode("unicode_escape").decode("utf-8")
+        try:
+            return text.encode("unicode_escape").decode("utf-8")
+        except UnicodeDecodeError:
+            return text.encode("unicode_escape").decode("latin-1")
     if isinstance(text, bytes):
-        return text.decode("utf-8").encode("unicode_escape").decode("utf-8")
+        try:
+            return text.decode("utf-8").encode("unicode_escape").decode("utf-8")
+        except UnicodeDecodeError:
+            return text.decode("latin-1").encode("unicode_escape").decode("latin-1")
     return text
 
 

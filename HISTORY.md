@@ -1,6 +1,11 @@
 Release History
 ===============
 
+0.1.19 (2021-10-29)
+-------------------
+
+- Fix crash when utf-8 decode fails on discovered SSIDs
+
 0.1.18 (2021-09-28)
 -------------------
 

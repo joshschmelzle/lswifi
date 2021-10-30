@@ -59,18 +59,12 @@ def main():
             f"is there a stored ack for caching apnames on local machine? ({is_apname_ack_stored})"
         )
 
-    loop = asyncio.get_event_loop()
-
-    main_task = asyncio.ensure_future(core.scan(args, storedack=is_apname_ack_stored))
-
     try:
-        loop.run_until_complete(main_task)
+        asyncio.run(core.scan(args, storedack=is_apname_ack_stored))
     except KeyboardInterrupt:
         log.warning("caught KeyboardInterrupt... stopping...")
     except SystemExit:
         pass
-    finally:
-        loop.close()
 
 
 def user_ack_apnames_disclaimer() -> bool:

@@ -58,7 +58,14 @@ class WirelessNetworkBss:
         """
         # init values before parsing IEs
         self.is_byte_file = is_byte_file
-        _ssid = bytes.decode(bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH])
+        try:
+            _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
+                "utf-8"
+            )
+        except UnicodeDecodeError:
+            _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
+                "latin-1"
+            )
         self.ssid = OutObject(
             value=_ssid,
             header="SSID",
@@ -2633,9 +2640,5 @@ class WirelessNetworkBss:
         The SSID field is between 0 and 32 octets.
         Escape control characters
         """
-        ssid_name = ""
-        try:
-            ssid_name = escape_control_chars(edata)
-        except Exception:
-            pass
+        ssid_name = escape_control_chars(edata)
         return f"Length: {len(edata)}, SSID: {ssid_name}"
