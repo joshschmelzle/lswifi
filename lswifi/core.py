@@ -32,6 +32,7 @@ from .helpers import (
     is_six_band,
     is_two_four_band,
     strip_mac_address_format,
+    remove_control_chars
 )
 from .schemas.out import *
 
@@ -505,7 +506,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         elif args.apnames:
             if stored_ack:
                 scan_bssid = bss.bssid.value
-                scan_apname = bss.apname.value
+                scan_apname = remove_control_chars(bss.apname.value)
 
                 if json_names.get(scan_bssid) is not None:  # if bssid is in json dict
                     cachedAP = json_names[scan_bssid]
