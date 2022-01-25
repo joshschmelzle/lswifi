@@ -11,6 +11,10 @@ instead be directed to through other channels.
 
 ## Code
 
+Please note that I release software under the [Contributor Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/). Please review it. By participating you agree to follow its terms. If you don't vibe with the code of conduct, do not contribute.
+
+Steps:
+
 1. Check for open issues or open a fresh issue to start a discussion around a feature idea or bug.
 2. Fork the repository on GitHub to start making your changes.
 3. Please write a test which shows that the bug was fixed or that the feature works as expected.
