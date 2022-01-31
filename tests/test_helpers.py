@@ -49,10 +49,15 @@ class TestHelpers(object):
         assert helpers.strip_mac_address_format("e6fe.0766.ebf8") == "e6fe0766ebf8"
 
     def test_if_twofour_band(self):
-        assert helpers.is_two_four_band(2447000) is True
+        assert helpers.is_two_four_band(2447) is True
 
     def test_if_five_band(self):
-        assert helpers.is_five_band(5240000) is True
+        assert helpers.is_five_band(5240) is True
+        assert helpers.is_five_band(5905) is True
+        
+    def test_if_six_band(self):
+        assert helpers.is_six_band(5975) is True
+        assert helpers.is_six_band(6215) is True
 
     def test_get_channel_number(self):
         print(helpers.get_channel_number_from_frequency("2910322"))
@@ -121,11 +126,5 @@ class TestHelpers(object):
         assert helpers.get_channel_number_from_frequency("5825") == "165"
         assert helpers.get_channel_number_from_frequency("5845") == "169"
         assert helpers.get_channel_number_from_frequency("5865") == "173"
-        assert helpers.get_channel_number_from_frequency("4915") == "183"
-        assert helpers.get_channel_number_from_frequency("4920") == "184"
-        assert helpers.get_channel_number_from_frequency("4925") == "185"
-        assert helpers.get_channel_number_from_frequency("4935") == "187"
-        assert helpers.get_channel_number_from_frequency("4940") == "188"
-        assert helpers.get_channel_number_from_frequency("4945") == "189"
-        assert helpers.get_channel_number_from_frequency("4960") == "192"
-        assert helpers.get_channel_number_from_frequency("4980") == "196"
+        assert helpers.get_channel_number_from_frequency("5885") == "177"
+        assert helpers.get_channel_number_from_frequency("5905") == "181"
