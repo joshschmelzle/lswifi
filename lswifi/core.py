@@ -452,7 +452,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     continue
                 if is_six_band(int(bss.channel_frequency.value)):
                     continue
-            # handl six band filter
+            # handle six band filter
             if args.six and not args.a and not args.g:
                 if is_two_four_band(int(bss.channel_frequency.value)):
                     continue
