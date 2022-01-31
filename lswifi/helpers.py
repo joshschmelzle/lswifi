@@ -141,7 +141,7 @@ def is_two_four_band(frequency: int) -> bool:
 
 def is_five_band(frequency: int) -> bool:
     """determines if a channel frequency is in the 5.0 GHz ISM band"""
-    if __get_digit(frequency, __num_digits(frequency) - 1) == 5:
+    if __get_digit(frequency, __num_digits(frequency) - 1) == 5 and frequency < 5955:
         return True
     else:
         return False
@@ -149,7 +149,7 @@ def is_five_band(frequency: int) -> bool:
 
 def is_six_band(frequency: int) -> bool:
     """determines if a channel frequency is in the 6.0-7.125 GHz ISM band"""
-    if frequency > 5900 and frequency < 7125:
+    if frequency >= 5955 and frequency < 7125:
         return True
     else:
         return False
