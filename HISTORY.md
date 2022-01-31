@@ -1,6 +1,13 @@
 Release History
 ===============
 
+0.1.20 (2022-01-31)
+-------------------
+
+- Fix 5 GHz filter which was incorrectly filtering 6 GHz channels 1, 5, 9 as 5 GHz channels
+- Don't store control characters in the local AP name cache
+- Update System Error Codes enumeration to suppress an error which occurs when no valid WLAN adapters are available on run
+
 0.1.19 (2021-10-29)
 -------------------
 
