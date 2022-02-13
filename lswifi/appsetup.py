@@ -81,6 +81,12 @@ def setup_parser() -> argparse.ArgumentParser:
 
             Print additional details (inc. information elements) for a particular BSSID <mac>:
               >lswifi -ies 06:6D:15:88:81:59
+              
+            Print and add detected AP names column in output:
+              >lswifi --ap-names
+              
+            Print and add QBSS stations and utilization columns in output:
+              >lswifi --qbss
 
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
@@ -145,6 +151,12 @@ def setup_parser() -> argparse.ArgumentParser:
         dest="apnames",
         action="store_true",
         help="adds an ap name column to output and will cache ap names locally to help provide consistent results",
+    )
+    parser.add_argument(
+        "--qbss",
+        dest="qbss",
+        action="store_true",
+        help="adds station and utilization columns to output using information from AP beacon QBSS IE",
     )
     parser.add_argument(
         "-uptime",

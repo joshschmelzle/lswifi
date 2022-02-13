@@ -578,6 +578,24 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.uptime.out(),
                 ]
             )
+        if args.qbss:
+            out_results.append(
+                [
+                    bss.ssid.out(),
+                    bss.bssid.out(),
+                    bss.apname.out(),
+                    bss.rssi.out(),
+                    bss.phy_type.out(),
+                    bss.channel_number_marked.out(),
+                    bss.channel_frequency.out(),
+                    bss.spatial_streams.out(),
+                    bss.stations.out(),
+                    bss.utilization.out(),
+                    bss.security.out(),
+                    bss.amendments.out(),
+                    bss.uptime.out(),
+                ]
+            )
         else:
             out_results.append(
                 [
