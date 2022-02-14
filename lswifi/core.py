@@ -624,6 +624,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.channel_number_marked.out(),
                     bss.channel_frequency.out(),
                     bss.spatial_streams.out(),
+                    bss.beacon_interval.out(),
                     bss.security.out(),
                     bss.amendments.out(),
                     bss.uptime.out(),

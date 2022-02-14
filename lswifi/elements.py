@@ -89,7 +89,7 @@ class WirelessNetworkBss:
             subheader="[approx.]",
         )
         self.beacon_interval = BeaconInterval(
-            value=bss_entry.BeaconPeriod, header="BEACON", subheader="INTVL."
+            value=bss_entry.BeaconPeriod, header="BEACON", subheader="[ms]"
         )
         self.channel_number = ChannelNumber(bss_entry)
         self.channel_number_marked = ChannelNumber(bss_entry)

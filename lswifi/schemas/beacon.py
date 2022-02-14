@@ -14,11 +14,11 @@ class BeaconInterval(OutObject):
     """Base class for Beacon Interval"""
 
     def __init__(self, **kwargs):
-        self.value = self.get_beacon_interval(kwargs.get("value"))
         super(BeaconInterval, self).__init__(**kwargs)
+        self.value = self.get_beacon_interval(kwargs.get("value"))
 
     def __str__(self):
-        return f"{self.value}ms"
+        return f"{self.value}"
 
     def get_beacon_interval(self, beaconperiod):
         """
