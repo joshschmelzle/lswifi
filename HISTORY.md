@@ -1,6 +1,12 @@
 Release History
 ===============
 
+0.1.21 (2022-02-13)
+-------------------
+
+- Happy Super Bowl LVI and Valentine's Day!
+- Adds --qbss option to add QBSS STA # and CU columns to output
+
 0.1.20 (2022-01-31)
 -------------------
 
