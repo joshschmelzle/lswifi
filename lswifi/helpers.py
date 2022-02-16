@@ -123,7 +123,7 @@ def strip_mac_address_format(mac):
 
 def __get_digit(number, n):
     """internal helper to get the value of a number at a certain position"""
-    return number // 10 ** n % 10
+    return number // 10**n % 10
 
 
 def __num_digits(num: int):

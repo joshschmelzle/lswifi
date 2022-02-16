@@ -32,7 +32,7 @@ from .helpers import (
     is_six_band,
     is_two_four_band,
     strip_mac_address_format,
-    remove_control_chars
+    remove_control_chars,
 )
 from .schemas.out import *
 
@@ -562,77 +562,33 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             }
         )
 
-        if args.qbss and (args.apnames or args.ethers):
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.apname.out(),
-                    bss.rssi.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    bss.stations.out(),
-                    bss.utilization.out(),
-                    # bss.security.out(),
-                    bss.amendments.out(),
-                    bss.uptime.out(),
-                ]
-            )
-        elif args.apnames or args.ethers:
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.apname.out(),
-                    bss.rssi.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    # bss.security.out(),
-                    bss.amendments.out(),
-                    bss.uptime.out(),
-                ]
-            )
-        elif args.qbss:
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.rssi.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    bss.stations.out(),
-                    bss.utilization.out(),
-                    bss.security.out(),
-                    bss.amendments.out(),
-                    bss.uptime.out(),
-                ]
-            )
-        else:
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.rssi.out(),
-                    # bss.signal_quality.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    bss.beacon_interval.out(),
-                    bss.security.out(),
-                    bss.amendments.out(),
-                    bss.uptime.out(),
-                    # bss.modes.out(),
-                    # bss.ie_rates.out()
-                    # bss.ie_numbers.out()
-                ]
-            )
+        out_results.append(
+            [
+                bss.ssid.out(),
+                bss.bssid.out(),
+                bss.rssi.out(),
+                bss.phy_type.out(),
+                bss.channel_number_marked.out(),
+                bss.channel_frequency.out(),
+                bss.spatial_streams.out(),
+                bss.security.out(),
+                bss.amendments.out(),
+                bss.uptime.out(),
+            ]
+        )
+
+        if args.interval:
+            out_results[-1].append(bss.beacon_interval.out())
+
+        if args.tpc:
+            out_results[-1].append(bss.transmit_power.out())
+
+        if args.qbss:
+            out_results[-1].append(bss.stations.out())
+            out_results[-1].append(bss.utilization.out())
+
+        if args.apnames or args.ethers:
+            out_results[-1].append(bss.apname.out())
 
     if args.uptime:  # sort by uptime
         out_results = sorted(

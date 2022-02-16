@@ -107,6 +107,10 @@ class WirelessNetworkBss:
             align=Alignment.CENTER,
             subheader="(B): basic rates [Mbit/s]",
         )
+        self.transmit_power = OutObject(
+            header="TPC",
+            subheader="[dBm]",
+        )
         self.capabilities = Capabilities(bss_entry)
         self.ie_size = bss_entry.IeSize
         self.country_code = "--"
@@ -1739,7 +1743,7 @@ class WirelessNetworkBss:
                             2,
                         )
 
-                        CWmin = 2 ** ECWmin - 1
+                        CWmin = 2**ECWmin - 1
 
                         ECWmax4 = get_bit(memview_body[1], 4)
                         ECWmax5 = get_bit(memview_body[1], 5)
@@ -1753,7 +1757,7 @@ class WirelessNetworkBss:
                             2,
                         )
 
-                        CWmax = 2 ** ECWmax - 1
+                        CWmax = 2**ECWmax - 1
 
                         element_body[1]
                         TXOP_LIMIT = int.from_bytes(
@@ -2570,11 +2574,12 @@ class WirelessNetworkBss:
         )
 
     def __parse_tpc_report_element(self, edata):
+        link_margin = edata[1]
+        transmit_power = edata[0]
         if self is not None:
+            self.transmit_power.value = str(transmit_power)
             if "h" not in self.amendments:
                 self.amendments.append("h")
-        transmit_power = edata[0]
-        link_margin = edata[1]
         return f"Transmit Power: {transmit_power}, Link Margin: {link_margin}"
 
     def __parse_power_constraint_element(self, edata):

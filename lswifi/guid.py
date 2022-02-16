@@ -30,7 +30,7 @@ class GUID(Structure):
             _CLSIDFromString(str(name), byref(self))
 
     def __repr__(self):
-        return u'GUID("%s")' % str(self)
+        return 'GUID("%s")' % str(self)
 
     def __unicode__(self):
         p = c_wchar_p()
