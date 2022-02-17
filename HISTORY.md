@@ -1,10 +1,11 @@
 Release History
 ===============
 
-0.1.22 (n/a)
+0.1.22 (2022-02-16)
 -----------
 
-- Add beacon interval column to output
+- Add --tpc column to output
+- Add beacon --interval column to output
 
 0.1.21 (2022-02-13)
 -------------------
