@@ -1743,7 +1743,7 @@ class WirelessNetworkBss:
                             2,
                         )
 
-                        CWmin = 2**ECWmin - 1
+                        CWmin = 2 ** ECWmin - 1
 
                         ECWmax4 = get_bit(memview_body[1], 4)
                         ECWmax5 = get_bit(memview_body[1], 5)
@@ -1757,7 +1757,7 @@ class WirelessNetworkBss:
                             2,
                         )
 
-                        CWmax = 2**ECWmax - 1
+                        CWmax = 2 ** ECWmax - 1
 
                         element_body[1]
                         TXOP_LIMIT = int.from_bytes(

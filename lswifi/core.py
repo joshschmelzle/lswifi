@@ -31,8 +31,8 @@ from .helpers import (
     is_five_band,
     is_six_band,
     is_two_four_band,
-    strip_mac_address_format,
     remove_control_chars,
+    strip_mac_address_format,
 )
 from .schemas.out import *
 
