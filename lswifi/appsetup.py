@@ -95,7 +95,13 @@ def setup_parser() -> argparse.ArgumentParser:
         epilog=f"Made with Python by Josh Schmelzle",
         fromfile_prefix_chars="@",
     )
-    parser.add_argument("-version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "-version",
+        "--version",
+        "-V",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     parser.add_argument(
         "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
     )
