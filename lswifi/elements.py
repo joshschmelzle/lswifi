@@ -2411,7 +2411,7 @@ class WirelessNetworkBss:
         """
         the RSNE contains the information required to establish an RSNA
 
-        rsnE size is limited by size of an element which is 255 octets.
+        RSNE size is limited by size of an element which is 255 octets.
 
         the RSNE contains up to and including the Version field. All fields after the Version field are optional.
         if any nonzero-length field is absent, then none of the subsequent fields is included.
@@ -2422,7 +2422,9 @@ class WirelessNetworkBss:
             self.amendments.append("i")
         body = list(memoryview(edata))
         version = body[0] + body[1]
-        group_cipher_oui = convert_mac_address_to_string([body[i] for i in [2, 3, 4]])
+        group_cipher_oui = convert_mac_address_to_string(
+            [body[i] for i in [2, 3, 4]]
+        ).upper()
         group_cipher_suite = body[5]
         pairwise_cipher_suite_count = body[6] + body[7]
         index = 8
@@ -2464,12 +2466,17 @@ class WirelessNetworkBss:
                 ",".join(pairwise_list),
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
-        out = "Version: {} Group: {} {}, Pairwise: {}, AKM: {}\n".format(
-            str(version) + ",",
-            group_cipher_oui,
-            "/".join(akm_list),
-            "/".join(pairwise_list),
-            CIPHER_SUITE_DICT[group_cipher_suite],
+        out = (
+            "Version: {} AKM: {} {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
+                str(version) + ",",
+                group_cipher_oui,
+                "/".join(akm_list),
+                f"({akm_suite})",
+                "/".join(pairwise_list),
+                f"({pairwise_cipher_suite})",
+                CIPHER_SUITE_DICT[group_cipher_suite],
+                f"({group_cipher_suite})",
+            )
         )
         PREAUTH = get_bit(body[index], 0)
         NO_PAIRWISE = get_bit(body[index + 1], 1)
