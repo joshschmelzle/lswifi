@@ -2447,6 +2447,7 @@ class WirelessNetworkBss:
         index += 2
         akm_list = []
         count = 0
+        akm_suite = None
         # print("akm before index {}".format(index))
         # print("akm counter value {}".format(akm_cipher_suite_count))
         while count < akm_cipher_suite_count:
