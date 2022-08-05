@@ -11,7 +11,7 @@ APNAMEACKFILE = "apnames.ack"
 APNAMEJSONFILE = "apnames.json"
 
 CIPHER_SUITE_DICT = {
-    0: "Use group cipher suite",
+    0: "Use group", # "Use group cipher suite"
     1: "WEP-40",  # WEP
     2: "TKIP",  # WPA-Personal (TKIP is limited to 54 Mbps)
     3: "Reserved",

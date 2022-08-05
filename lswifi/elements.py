@@ -2427,6 +2427,7 @@ class WirelessNetworkBss:
         ).upper()
         group_cipher_suite = body[5]
         pairwise_cipher_suite_count = body[6] + body[7]
+        pairwise_cipher_suite = 0
         index = 8
         pairwise_list = []
         count = 0
@@ -2443,11 +2444,13 @@ class WirelessNetworkBss:
                 pairwise_list.append(f"unknown({pairwise_cipher_suite})")
             index += 4
             count += 1
+        if pairwise_cipher_suite == 0:
+            pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
         akm_cipher_suite_count = body[index] + body[index + 1]
         index += 2
         akm_list = []
         count = 0
-        akm_suite = None
+        akm_suite = 0
         # print("akm before index {}".format(index))
         # print("akm counter value {}".format(akm_cipher_suite_count))
         while count < akm_cipher_suite_count:
@@ -2461,6 +2464,8 @@ class WirelessNetworkBss:
                 akm_list.append(f"unknown({akm_suite})")
             index += 4
             count += 1
+        if akm_suite == 0:
+            akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
         if self is not None:
             self.security.value = "{}/{}/{}".format(
                 ",".join(akm_list),
