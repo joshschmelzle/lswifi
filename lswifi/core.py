@@ -554,6 +554,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                 "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
                 "rssi": str(bss.rssi),
                 "security": str(bss.security).strip(),
+                "pmf": str(bss.pmf).strip(),
                 "spatial_streams": str(bss.spatial_streams),
                 "ssid": str(bss.ssid).strip(),
                 "stations": str(bss.stations),
@@ -562,20 +563,37 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             }
         )
 
-        out_results.append(
-            [
-                bss.ssid.out(),
-                bss.bssid.out(),
-                bss.rssi.out(),
-                bss.phy_type.out(),
-                bss.channel_number_marked.out(),
-                bss.channel_frequency.out(),
-                bss.spatial_streams.out(),
-                bss.security.out(),
-                bss.amendments.out(),
-                bss.uptime.out(),
-            ]
-        )
+        if args.pmf:
+            out_results.append(
+                [
+                    bss.ssid.out(),
+                    bss.bssid.out(),
+                    bss.rssi.out(),
+                    bss.phy_type.out(),
+                    bss.channel_number_marked.out(),
+                    bss.channel_frequency.out(),
+                    bss.spatial_streams.out(),
+                    bss.security.out(),
+                    bss.amendments.out(),
+                    bss.pmf.out(),
+                    bss.uptime.out(),
+                ]
+            )
+        else:
+            out_results.append(
+                [
+                    bss.ssid.out(),
+                    bss.bssid.out(),
+                    bss.rssi.out(),
+                    bss.phy_type.out(),
+                    bss.channel_number_marked.out(),
+                    bss.channel_frequency.out(),
+                    bss.spatial_streams.out(),
+                    bss.security.out(),
+                    bss.amendments.out(),
+                    bss.uptime.out(),
+                ]
+            )
 
         if args.interval:
             out_results[-1].append(bss.beacon_interval.out())

@@ -29,6 +29,7 @@ from .schemas.ie import *
 from .schemas.modes import *
 from .schemas.out import *
 from .schemas.phy import *
+from .schemas.pmf import *
 from .schemas.rates import *
 from .schemas.security import *
 from .schemas.signalquality import *
@@ -116,6 +117,7 @@ class WirelessNetworkBss:
         self.country_code = "--"
         self.apname = OutObject(header="AP NAME")
         self.security = Security(self.capabilities)
+        self.pmf = PMF()
         self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
         self.stations = OutObject(header="QBSS", subheader="STA")
         self.utilization = OutObject(header="QBSS", subheader="CU")
@@ -2532,8 +2534,17 @@ class WirelessNetworkBss:
             if self is not None:
                 if "w" not in self.amendments:
                     self.amendments.append("w")
-        out += "RSN Capabilities 0x{:02x}{:02x}\n".format(
-            int(RSN_CAP1), int(RSN_CAP0)  # , body[index + 1], body[index]
+        if self is not None:
+            if MFPC:
+                self.pmf.value = "{}".format("Required" if MFPR else "Capable")
+            else:
+                self.pmf.value = "--"
+            # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
+        out += "RSN Capabilities 0x{:02x}{:02x}, PMF: MFPC? {} MFPR? {}\n".format(
+            int(RSN_CAP1),
+            int(RSN_CAP0),
+            "Yes" if MFPC else "No",
+            "Yes" if MFPR else "No",  # , body[index + 1], body[index]
         )
         return out
 
