@@ -179,6 +179,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-uptime",
+        "--uptime",
         dest="uptime",
         action="store_true",
         help="sort output by access point uptime based on beacon timestamp",
