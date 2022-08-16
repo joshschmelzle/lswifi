@@ -12,7 +12,7 @@ Installation
 > python -m pip install lswifi
 ```
 
-![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/31Pu7mCVFR.gif "animation showing install of lswifi")
+![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/pip_install.gif "animation showing install of lswifi")
 
 Usage
 -----
@@ -41,7 +41,7 @@ Output verbose information (including Information Elements) for BSSID `00:00:00:
 > lswifi -ies 00:00:00:00:00:00
 ```
 
-![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/Wtj6xTEisE.gif "animation showing printing verbose information for a particular BSSID")
+![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/information_elements.gif "animation showing printing verbose information for a particular BSSID")
 
 Print help information:
 
@@ -49,7 +49,7 @@ Print help information:
 > lswifi -h
 ```
 
-![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/BCKaCek52E.gif "animation showing printing help for lswifi")
+![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/help_menu.gif "animation showing printing help for lswifi")
 
 Upgrading
 ---------
