@@ -29,6 +29,7 @@ from .schemas.ie import *
 from .schemas.modes import *
 from .schemas.out import *
 from .schemas.phy import *
+from .schemas.pmf import *
 from .schemas.rates import *
 from .schemas.security import *
 from .schemas.signalquality import *
@@ -89,7 +90,7 @@ class WirelessNetworkBss:
             subheader="[approx.]",
         )
         self.beacon_interval = BeaconInterval(
-            value=bss_entry.BeaconPeriod, header="BEACON", subheader="INTVL."
+            value=bss_entry.BeaconPeriod, header="BEACON", subheader="[ms]"
         )
         self.channel_number = ChannelNumber(bss_entry)
         self.channel_number_marked = ChannelNumber(bss_entry)
@@ -107,14 +108,19 @@ class WirelessNetworkBss:
             align=Alignment.CENTER,
             subheader="(B): basic rates [Mbit/s]",
         )
+        self.transmit_power = OutObject(
+            header="TPC",
+            subheader="[dBm]",
+        )
         self.capabilities = Capabilities(bss_entry)
         self.ie_size = bss_entry.IeSize
         self.country_code = "--"
         self.apname = OutObject(header="AP NAME")
         self.security = Security(self.capabilities)
+        self.pmf = PMF()
         self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
-        self.stations = OutObject(header="STA", subheader="CNT")
-        self.utilization = OutObject(header="CHNL", subheader="UTIL")
+        self.stations = OutObject(header="QBSS", subheader="STA")
+        self.utilization = OutObject(header="QBSS", subheader="CU")
         self.ie_numbers = OutList(header="IEs")
         self.exie_numbers = OutList(header="EXT IEs")
         self.amendments = OutList(header="AMENDMENTS", subheader="[802.11]")
@@ -2407,7 +2413,7 @@ class WirelessNetworkBss:
         """
         the RSNE contains the information required to establish an RSNA
 
-        rsnE size is limited by size of an element which is 255 octets.
+        RSNE size is limited by size of an element which is 255 octets.
 
         the RSNE contains up to and including the Version field. All fields after the Version field are optional.
         if any nonzero-length field is absent, then none of the subsequent fields is included.
@@ -2418,9 +2424,12 @@ class WirelessNetworkBss:
             self.amendments.append("i")
         body = list(memoryview(edata))
         version = body[0] + body[1]
-        group_cipher_oui = convert_mac_address_to_string([body[i] for i in [2, 3, 4]])
+        group_cipher_oui = convert_mac_address_to_string(
+            [body[i] for i in [2, 3, 4]]
+        ).upper()
         group_cipher_suite = body[5]
         pairwise_cipher_suite_count = body[6] + body[7]
+        pairwise_cipher_suite = 0
         index = 8
         pairwise_list = []
         count = 0
@@ -2437,10 +2446,13 @@ class WirelessNetworkBss:
                 pairwise_list.append(f"unknown({pairwise_cipher_suite})")
             index += 4
             count += 1
+        if pairwise_cipher_suite == 0:
+            pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
         akm_cipher_suite_count = body[index] + body[index + 1]
         index += 2
         akm_list = []
         count = 0
+        akm_suite = 0
         # print("akm before index {}".format(index))
         # print("akm counter value {}".format(akm_cipher_suite_count))
         while count < akm_cipher_suite_count:
@@ -2454,18 +2466,25 @@ class WirelessNetworkBss:
                 akm_list.append(f"unknown({akm_suite})")
             index += 4
             count += 1
+        if akm_suite == 0:
+            akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
         if self is not None:
             self.security.value = "{}/{}/{}".format(
                 ",".join(akm_list),
                 ",".join(pairwise_list),
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
-        out = "Version: {} Group: {} {}, Pairwise: {}, AKM: {}\n".format(
-            str(version) + ",",
-            group_cipher_oui,
-            "/".join(akm_list),
-            "/".join(pairwise_list),
-            CIPHER_SUITE_DICT[group_cipher_suite],
+        out = (
+            "Version: {} AKM: {} {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
+                str(version) + ",",
+                group_cipher_oui,
+                "/".join(akm_list),
+                f"({akm_suite})",
+                "/".join(pairwise_list),
+                f"({pairwise_cipher_suite})",
+                CIPHER_SUITE_DICT[group_cipher_suite],
+                f"({group_cipher_suite})",
+            )
         )
         PREAUTH = get_bit(body[index], 0)
         NO_PAIRWISE = get_bit(body[index + 1], 1)
@@ -2515,8 +2534,17 @@ class WirelessNetworkBss:
             if self is not None:
                 if "w" not in self.amendments:
                     self.amendments.append("w")
-        out += "RSN Capabilities 0x{:02x}{:02x}\n".format(
-            int(RSN_CAP1), int(RSN_CAP0)  # , body[index + 1], body[index]
+        if self is not None:
+            if MFPC:
+                self.pmf.value = "{}".format("Required" if MFPR else "Capable")
+            else:
+                self.pmf.value = "--"
+            # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
+        out += "RSN Capabilities 0x{:02x}{:02x}, PMF: MFPC? {} MFPR? {}\n".format(
+            int(RSN_CAP1),
+            int(RSN_CAP0),
+            "Yes" if MFPC else "No",
+            "Yes" if MFPR else "No",  # , body[index + 1], body[index]
         )
         return out
 
@@ -2570,11 +2598,12 @@ class WirelessNetworkBss:
         )
 
     def __parse_tpc_report_element(self, edata):
+        link_margin = edata[1]
+        transmit_power = edata[0]
         if self is not None:
+            self.transmit_power.value = str(transmit_power)
             if "h" not in self.amendments:
                 self.amendments.append("h")
-        transmit_power = edata[0]
-        link_margin = edata[1]
         return f"Transmit Power: {transmit_power}, Link Margin: {link_margin}"
 
     def __parse_power_constraint_element(self, edata):

@@ -31,6 +31,7 @@ from .helpers import (
     is_five_band,
     is_six_band,
     is_two_four_band,
+    remove_control_chars,
     strip_mac_address_format,
 )
 from .schemas.out import *
@@ -451,7 +452,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     continue
                 if is_six_band(int(bss.channel_frequency.value)):
                     continue
-            # handl six band filter
+            # handle six band filter
             if args.six and not args.a and not args.g:
                 if is_two_four_band(int(bss.channel_frequency.value)):
                     continue
@@ -505,7 +506,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         elif args.apnames:
             if stored_ack:
                 scan_bssid = bss.bssid.value
-                scan_apname = bss.apname.value
+                scan_apname = remove_control_chars(bss.apname.value)
 
                 if json_names.get(scan_bssid) is not None:  # if bssid is in json dict
                     cachedAP = json_names[scan_bssid]
@@ -553,6 +554,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                 "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
                 "rssi": str(bss.rssi),
                 "security": str(bss.security).strip(),
+                "pmf": str(bss.pmf).strip(),
                 "spatial_streams": str(bss.spatial_streams),
                 "ssid": str(bss.ssid).strip(),
                 "stations": str(bss.stations),
@@ -561,19 +563,19 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
             }
         )
 
-        if args.apnames or args.ethers:
+        if args.pmf:
             out_results.append(
                 [
                     bss.ssid.out(),
                     bss.bssid.out(),
-                    bss.apname.out(),
                     bss.rssi.out(),
                     bss.phy_type.out(),
                     bss.channel_number_marked.out(),
                     bss.channel_frequency.out(),
                     bss.spatial_streams.out(),
-                    # bss.security.out(),
+                    bss.security.out(),
                     bss.amendments.out(),
+                    bss.pmf.out(),
                     bss.uptime.out(),
                 ]
             )
@@ -583,7 +585,6 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.ssid.out(),
                     bss.bssid.out(),
                     bss.rssi.out(),
-                    # bss.signal_quality.out(),
                     bss.phy_type.out(),
                     bss.channel_number_marked.out(),
                     bss.channel_frequency.out(),
@@ -591,20 +592,39 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                     bss.security.out(),
                     bss.amendments.out(),
                     bss.uptime.out(),
-                    # bss.modes.out(),
-                    # bss.ie_rates.out()
-                    # bss.ie_numbers.out()
                 ]
             )
 
+        if args.interval:
+            out_results[-1].append(bss.beacon_interval.out())
+
+        if args.tpc:
+            out_results[-1].append(bss.transmit_power.out())
+
+        if args.qbss:
+            out_results[-1].append(bss.stations.out())
+            out_results[-1].append(bss.utilization.out())
+
+        if args.apnames or args.ethers:
+            out_results[-1].append(bss.apname.out())
+
+    def get_index(key):
+        for r in out_results:
+            for i, x in enumerate(r):
+                if key in str(x.header):
+                    return i
+        return -1
+
     if args.uptime:  # sort by uptime
         out_results = sorted(
-            out_results, key=lambda x: int(x[9].value.split("d")[0]), reverse=False
+            out_results,
+            key=lambda x: int(x[get_index("UPTIME")].value.split("d")[0]),
+            reverse=False,
         )
-    elif args.apnames or args.ethers:  # sort by RSSI
-        out_results = sorted(out_results, key=lambda x: x[3].value, reverse=False)
-    else:
-        out_results = sorted(out_results, key=lambda x: x[2].value, reverse=False)
+    else:  # sort by RSSI
+        out_results = sorted(
+            out_results, key=lambda x: x[get_index("RSSI")].value, reverse=False
+        )
 
     # here because i added the verbose, byte file func and export func to this func
     if args.ies or args.bytes or args.export:
@@ -622,7 +642,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         headers = []
         subheaders = []
 
-        # check for substring that indicates interface is connected to a BSSID in results
+        # check for substring that indicates the scanning interface is also connected to a BSSID found in results
         for row in out_results:
             for data in row:
                 if "(*)" in str(data):
@@ -688,12 +708,11 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
         else:
             print(json.dumps(json_out))
 
-    # TODO: needs a test to verify this actually does what it should. ALERT the user of dup MACs
     duplicates = set([x for x in bssid_list if bssid_list.count(x) > 1])
     if duplicates:
-        log.warning("***DUPLICATE MACS***")
+        log.warning("***BSSIDS WITH DUPLICATE MACs***")
         log.warning(duplicates)
-        log.warning("***DUPLICATE MACS***")
+        log.warning("***BSSIDS WITH DUPLICATE MACs***")
 
     if args.apnames:
         if stored_ack:

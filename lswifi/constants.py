@@ -11,7 +11,7 @@ APNAMEACKFILE = "apnames.ack"
 APNAMEJSONFILE = "apnames.json"
 
 CIPHER_SUITE_DICT = {
-    0: "Use group cipher suite",
+    0: "Use group",  # "Use group cipher suite"
     1: "WEP-40",  # WEP
     2: "TKIP",  # WPA-Personal (TKIP is limited to 54 Mbps)
     3: "Reserved",
@@ -35,14 +35,14 @@ AKM_SUITE_DICT = {
     2: "PSK",
     3: "FT-802.1X",
     4: "FT-PSK",
-    5: "802.1X",
+    5: "802.1X-SHA-256",  # WPA3 - Enterprise (Non-CNSA)
     6: "PSK",
     7: "TDLS",
     8: "SAE",
     9: "FT-SAE",
     10: "APPeerKey",
     11: "802.1X-Suite-B-SHA-256",
-    12: "802.1X 192-bit",  # WPA3 - Enterprise
+    12: "802.1X-SHA-384",  # WPA3 - Enterprise (CNSA)
     13: "FT-802.1X-SHA-384",
     18: "OWE",
 }
@@ -292,14 +292,8 @@ _20MHZ_CHANNEL_LIST = {
     "5825": "165",
     "5845": "169",
     "5865": "173",
-    "4915": "183",
-    "4920": "184",
-    "4925": "185",
-    "4935": "187",
-    "4940": "188",
-    "4945": "189",
-    "4960": "192",
-    "4980": "196",
+    "5885": "177",
+    "5905": "181",
     "5955": "1",
     "5975": "5",
     "5995": "9",

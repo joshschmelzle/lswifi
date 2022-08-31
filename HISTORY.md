@@ -1,6 +1,30 @@
 Release History
 ===============
 
+0.1.23 (2022-04-26)
+-------------------
+
+- RSN parsing enhancements for WPA3
+
+0.1.22 (2022-02-16)
+-----------
+
+- Add --tpc column to output
+- Add beacon --interval column to output
+
+0.1.21 (2022-02-13)
+-------------------
+
+- Happy Super Bowl LVI and Valentine's Day!
+- Adds --qbss option to add QBSS STA # and CU columns to output
+
+0.1.20 (2022-01-31)
+-------------------
+
+- Fix 5 GHz filter which was incorrectly filtering 6 GHz channels 1, 5, 9 as 5 GHz channels
+- Don't store control characters in the local AP name cache
+- Update System Error Codes enumeration to suppress an error which occurs when no valid WLAN adapters are available on run
+
 0.1.19 (2021-10-29)
 -------------------
 

@@ -81,6 +81,12 @@ def setup_parser() -> argparse.ArgumentParser:
 
             Print additional details (inc. information elements) for a particular BSSID <mac>:
               >lswifi -ies 06:6D:15:88:81:59
+              
+            Print and add detected AP names column in output:
+              >lswifi --ap-names
+              
+            Print and add QBSS stations and utilization columns in output:
+              >lswifi --qbss
 
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
@@ -89,7 +95,13 @@ def setup_parser() -> argparse.ArgumentParser:
         epilog=f"Made with Python by Josh Schmelzle",
         fromfile_prefix_chars="@",
     )
-    parser.add_argument("-version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "-version",
+        "--version",
+        "-V",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     parser.add_argument(
         "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
     )
@@ -147,7 +159,33 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds an ap name column to output and will cache ap names locally to help provide consistent results",
     )
     parser.add_argument(
+        "--qbss",
+        dest="qbss",
+        action="store_true",
+        help="adds station and utilization columns to output using information from AP beacon QBSS IE",
+    )
+    parser.add_argument(
+        "-tpc", "--tpc",
+        dest="tpc",
+        action="store_true",
+        help="adds TPC column to output using information from AP beacon 802.11h",
+    )
+    parser.add_argument(
+        "--mfp",
+        "--pmf",
+        dest="pmf",
+        action="store_true",
+        help="adds Protected Management Frame column to output using information from AP beacon RSNE",
+    )
+    parser.add_argument(
+        "--interval",
+        dest="interval",
+        action="store_true",
+        help="adds beacon period column to output using information from AP beacon",
+    )
+    parser.add_argument(
         "-uptime",
+        "--uptime",
         dest="uptime",
         action="store_true",
         help="sort output by access point uptime based on beacon timestamp",
