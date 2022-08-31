@@ -102,9 +102,9 @@ def setup_parser() -> argparse.ArgumentParser:
         action="version",
         version=f"%(prog)s {__version__}",
     )
-    parser.add_argument(
-        "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
-    )
+    # parser.add_argument(
+    #     "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
+    # )
     parser.add_argument(
         "-ies",
         type=str,
