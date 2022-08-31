@@ -300,6 +300,8 @@ class Client(object):
 
             # if we want to watch wlan events on the terminal
             if self.args.event_watcher:
+                # if str(wlan_event).strip() in ["interface_removal", "interface_arrival"]:
+                #    self.mac = self.lookup_mac_on_guid(self.iface)
                 # if we want verbose info printed to the terminal
                 if self.args.debug:
                     if str(wlan_event).strip() in [
@@ -419,6 +421,6 @@ class Client(object):
             self.log.debug(f"callback {callback} added")
             handles.append(self.client_handle)
             self.log.debug(f"handle {self.client_handle} added")
-        except Exception as ex:
+        except Exception:
             traceback.print_exc()
             WLAN_API.WLAN.close_handle(self.client_handle)

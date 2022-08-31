@@ -165,10 +165,17 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds station and utilization columns to output using information from AP beacon QBSS IE",
     )
     parser.add_argument(
-        "--tpc",
+        "-tpc", "--tpc",
         dest="tpc",
         action="store_true",
         help="adds TPC column to output using information from AP beacon 802.11h",
+    )
+    parser.add_argument(
+        "--mfp",
+        "--pmf",
+        dest="pmf",
+        action="store_true",
+        help="adds Protected Management Frame column to output using information from AP beacon RSNE",
     )
     parser.add_argument(
         "--interval",
@@ -178,6 +185,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-uptime",
+        "--uptime",
         dest="uptime",
         action="store_true",
         help="sort output by access point uptime based on beacon timestamp",

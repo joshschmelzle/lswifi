@@ -76,11 +76,11 @@ class OUT_TUPLE:
         return str(self.value)
 
     def __repr__(self):
-        print(f"OUT_TUPLE({self.value},{self.header},{self.subheader}")
+        return f"OUT_TUPLE({self.value},{self.header},{self.subheader})"
 
 
 class OutObject(object):
-    """Object for printing out"""
+    """Object for printing to stdout"""
 
     def __init__(self, **kwargs):
         __value = kwargs.get("value", "")
@@ -102,7 +102,6 @@ class OutObject(object):
     def value(self, value):
         if isinstance(value, str):
             self._value = escape_control_chars(value)
-            self._value = value
         else:
             self._value = value
 
