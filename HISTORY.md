@@ -1,6 +1,31 @@
 Release History
 ===============
 
+0.1.28 (2022-08-06)
+-------------------
+
+- Fix sorting problem introduced by rearranging columns in 0.1.27
+
+0.1.27 (2022-08-05)
+-------------------
+
+- Enable optional argument for Management Frame Protection column (--pmf or --mfp)
+
+0.1.26 (2022-08-05)
+-------------------
+
+- Improve RSN handling with a detected network is using AKM 0 and group cipher 0.
+
+0.1.25 (2022-08-05)
+-------------------
+
+- Version mishap
+
+0.1.24 (2022-08-05)
+-------------------
+
+- Fix AKM suite bug
+
 0.1.23 (2022-04-26)
 -------------------
 
