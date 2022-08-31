@@ -105,6 +105,15 @@ def setup_parser() -> argparse.ArgumentParser:
     # parser.add_argument(
     #     "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
     # )
+    # parser.add_argument(
+    #     "-i", "--interval", dest="interval", metavar="interval", help="set interval in seconds between scans"
+    # )
+    # parser.add_argument(
+    #     "-n", "--scans", dest="scans", metavar="num", help="set how many scans to do before exiting"
+    # )
+    # parser.add_argument(
+    #     "--time", dest="time", metavar="seconds", help="set test duration length in seconds"
+    # )
     parser.add_argument(
         "-ies",
         type=str,
@@ -178,8 +187,8 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds Protected Management Frame column to output using information from AP beacon RSNE",
     )
     parser.add_argument(
-        "--interval",
-        dest="interval",
+        "--period",
+        dest="period",
         action="store_true",
         help="adds beacon period column to output using information from AP beacon",
     )

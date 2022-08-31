@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import sys
+import time
 from time import sleep
 
 # app imports
@@ -65,12 +66,7 @@ def watch_events(args, interfaces) -> None:
     except KeyboardInterrupt:
         pass
 
-
-async def scan(args, **kwargs):
-    """
-    async func to perform a scan
-    """
-    clients = []
+def start(args, **kwargs):
     log = logging.getLogger(__name__)
     interfaces = WLAN_API.WLAN.get_wireless_interfaces()
 
@@ -89,7 +85,12 @@ async def scan(args, **kwargs):
         if args.display_ethers:
             displayEthers()
             sys.exit(0)
-
+            
+        if args.bytefile:
+            decode_bytefile(args)
+            sys.exit(0)
+        
+        scanning = True
         for interface in interfaces:
             if (
                 args.get_interface_info
@@ -97,28 +98,44 @@ async def scan(args, **kwargs):
                 or args.get_current_channel
                 or args.supported
             ):
+                scanning = False
                 print(get_interface_info(args, interface))
-                continue
-            elif args.bytefile:
-                decode_bytefile(args)
-                sys.exit(0)
-            else:  # TODO: this should be async.
-                client = Client(args, interface)
-                clients.append(client)
-                await client.scan()
+    
+        if scanning:
+            asyncio.run(scan(interfaces, args, **kwargs))
+    except KeyboardInterrupt:
+        log.warning("caught KeyboardInterrupt... stopping...")
+    except SystemExit:
+        pass
+    
+    sys.exit(0)
 
-        while True:  # can something be futured or awaited?
-            if all([i.scan_finished for i in clients]):
-                break
+async def scan(interfaces, args, **kwargs):
+    """
+    async func to perform a scan
+    """
+    log = logging.getLogger(__name__)
+    clients = []
+    try:
+        iface_count = len(interfaces)
+        if iface_count > 1:
+            log.info(f"starting scans on {iface_count} interfaces")
+        # initialize scan and wait for each adapter present on host
+        for interface in interfaces: 
+            client = Client(args, interface)
+            clients.append(client)
+            log.debug(f"initializing scan on {client.iface.description} {client.iface.guid_string}")
+            await client.scan()
+            log.debug(f"initialized scan on {client.iface.description} {client.iface.guid_string}")
+            while not client.scan_finished:
+                pass
+            if client.data is None:
+                log.debug(f"no scan data for {client.mac}")
             else:
-                await asyncio.sleep(0.1)
-
-        for client in clients:
-            if client.data is not None:
                 log.debug(f"start parsing bss ies for {client.mac}")
-                parse_bss_list_and_print(client.data, args, **kwargs)
+                parse_bss_list_and_print(client.data, client, args, **kwargs)
                 log.debug(f"finish parsing bss ies for {client.mac}")
-        sys.exit(0)
+    
     except asyncio.CancelledError:
         pass
     except SystemExit as error:
@@ -269,7 +286,7 @@ def updateAPNames(json_names, scan_names) -> None:
         log.debug("<updateAPNames> nothing to update")
 
 
-def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
+def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
     DISPLAY_SENSITIVITY = -82
     out_results = []
     bssid_list = []
@@ -595,7 +612,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
                 ]
             )
 
-        if args.interval:
+        if args.period:
             out_results[-1].append(bss.beacon_interval.out())
 
         if args.tpc:
@@ -633,7 +650,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, args, **kwargs):
     # outlist to screen
     log.info(
         f"display filter sensitivity {DISPLAY_SENSITIVITY}; "
-        f"output includes {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results."
+        f"output includes {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results for {client.mac}."
     )
 
     if len(out_results) > 0:

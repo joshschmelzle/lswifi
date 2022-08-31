@@ -59,12 +59,7 @@ def main():
             f"is there a stored ack for caching apnames on local machine? ({is_apname_ack_stored})"
         )
 
-    try:
-        asyncio.run(core.scan(args, storedack=is_apname_ack_stored))
-    except KeyboardInterrupt:
-        log.warning("caught KeyboardInterrupt... stopping...")
-    except SystemExit:
-        pass
+    core.start(args, storedack=is_apname_ack_stored)
 
 
 def user_ack_apnames_disclaimer() -> bool:

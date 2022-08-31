@@ -334,8 +334,8 @@ class Client(object):
 
                     self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(self.iface)
-                    self.log.debug(f"({self.mac}), finish get_bss_list...")
                     self.scan_finished = True
+                    self.log.debug(f"({self.mac}), finish get_bss_list...")
 
                 # if str(wlan_event).strip() == "network_available":
                 #    pass
@@ -399,7 +399,7 @@ class Client(object):
         Then the application can call the WlanGetNetworkBssList or WlanGetAvailableNetworkList
           function to retrieve a list of available wireless networks.
         """
-        self.log.info(f"timeout interval ({self.timeout_interval} seconds) exceeded...")
+        self.log.info(f"timeout interval ({self.timeout_interval} seconds) for {self.mac} exceeded...")
         self.log.debug(f"({self.mac}), start get_bss_list...")
         self.data = self.get_bss_list(self.iface)
         self.log.debug(f"({self.mac}), finish get_bss_list...")
