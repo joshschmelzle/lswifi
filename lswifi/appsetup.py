@@ -174,7 +174,8 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds station and utilization columns to output using information from AP beacon QBSS IE",
     )
     parser.add_argument(
-        "-tpc", "--tpc",
+        "-tpc",
+        "--tpc",
         dest="tpc",
         action="store_true",
         help="adds TPC column to output using information from AP beacon 802.11h",
