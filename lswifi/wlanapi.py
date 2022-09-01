@@ -8,7 +8,9 @@ mostly wrapper code around Native Wifi wlanapi.h
 """
 
 import contextlib
+import logging
 import sys
+import threading
 from ctypes import (
     c_bool,
     c_byte,
@@ -23,6 +25,7 @@ from ctypes import (
     c_wchar,
 )
 from enum import Enum
+from subprocess import check_output
 
 from .guid import GUID
 
@@ -887,11 +890,37 @@ class WirelessInterface(object):
     """Data class for the wireless interface"""
 
     def __init__(self, wlan_iface_info):
+        self.log = logging.getLogger(__name__)
         self.description = wlan_iface_info.strInterfaceDescription
         self.guid = GUID(wlan_iface_info.InterfaceGuid)
         self.guid_string = str(wlan_iface_info.InterfaceGuid)
         self.state = wlan_iface_info.isState
         self.state_string = WLAN_INTERFACE_STATE_DICT.get(self.state, 0)
+        self.map_guid_to_mac_and_connection_name(self.guid, self.description)
+
+    def map_guid_to_mac_and_connection_name(self, guid, description) -> None:
+        guid = str(guid)[1:-1]  # remove { } around guid
+        exe = 'getmac.exe /FO "CSV" /V'  # use getmac.exe to map interface guid to mac
+        cmd = f"{exe}"
+        try:
+            output = check_output(cmd)
+            mac = ""
+            self.log.debug(
+                "checking output from '%s' for Wireless NIC mac and connection name lookup based on guid",
+                exe,
+            )
+            for line in output.decode().splitlines():
+                if guid in line or description in line:
+                    connection = line.split(",")
+                    mac = connection[2].replace('"', "")
+                    self.mac = mac.lower().replace("-", ":")
+                    self.connection_name = connection[0].replace('"', "")
+                    self.log.debug(
+                        f"guid {guid} maps to {self.mac} and {self.connection_name}"
+                    )
+                    break
+        except FileNotFoundError:
+            pass
 
     def __str__(self):
         return f"Interface: {self.__dict__}"
@@ -1538,7 +1567,8 @@ class WLAN:
         """Returns a list of WirelessInterface objects based on the wireless
         interfaces available.
         """
-        out_list = []
+        out_list = {}
+        threads = list()
         handle = WLAN.open_handle()
         try:
             wlan_interfaces = WLAN.enumerate_interfaces(handle)
@@ -1546,9 +1576,31 @@ class WLAN:
             num = wlan_interfaces.contents.NumberOfItems
             ifaces_pointer = addressof(wlan_interfaces.contents.InterfaceInfo)
             wlan_interface_info_list = (data_type * num).from_address(ifaces_pointer)
-            for info in wlan_interface_info_list:
-                wlan_iface = WirelessInterface(info)
-                out_list.append(wlan_iface)
+
+            def wirelessinterfacethread(index, info):
+                out_list[index] = WirelessInterface(info)
+
+            for index, info in enumerate(wlan_interface_info_list):
+                x = threading.Thread(
+                    target=wirelessinterfacethread,
+                    args=(
+                        index,
+                        info,
+                    ),
+                )
+                threads.append(x)
+                x.start()
+
+            for index, thread in enumerate(threads):
+                thread.join()
+
+            out_list = {
+                k: out_list[k] for k in sorted(out_list)
+            }  # sort by key (index) numerically
+
+            # for info in wlan_interface_info_list:
+            #     wlan_iface = WirelessInterface(info)
+            #     out_list.append(wlan_iface)
         finally:
             WLAN.free_memory(wlan_interfaces)
             WLAN.close_handle(handle)

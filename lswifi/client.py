@@ -11,7 +11,6 @@ import functools
 import logging
 import pprint
 import traceback
-from subprocess import check_output
 from threading import Timer
 from types import SimpleNamespace
 from typing import Union
@@ -109,7 +108,6 @@ def parse_result(result, data_type, **kwargs):
 
 
 def get_interface_info(args, iface) -> str:
-    logging.getLogger(__name__)
     outstr = ""
     interface_info = {}
 
@@ -137,9 +135,9 @@ def get_interface_info(args, iface) -> str:
 
     if not args.get_current_channel and not args.get_current_ap:
         if connected:
-            outstr += f"Interface: {iface.description} is connected\n"
+            outstr += f"Interface: {iface.connection_name} is connected\n"
         else:
-            outstr += f"Interface: {iface.description} is disconnected\n"
+            outstr += f"Interface: {iface.connection_name} is disconnected\n"
 
     if not args.supported:
         # print(interface_info.items())
@@ -249,19 +247,19 @@ def get_interface_info(args, iface) -> str:
                         if args.raw:
                             return f"{bssid}, {channel}"
                         else:
-                            return f"Interface: {iface.description}, BSSID: {bssid}, CHANNEL: {channel}"
+                            return f"Interface: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel}"
 
                     if args.get_current_ap:
                         if args.raw:
                             return bssid
                         else:
-                            return f"Interface: {iface.description}, BSSID: {bssid}"
+                            return f"Interface: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}"
 
                     if args.get_current_channel:
                         if args.raw:
                             return channel
                         else:
-                            return f"Interface: {iface.description}, Channel: {channel}"
+                            return f"Interface: {iface.connection_name}, MAC: {iface.mac}. Channel: {channel}"
         return outstr
     else:
         return ""
@@ -271,7 +269,6 @@ class Client(object):
     scan_finished = False
     data = None
     guid = ""
-    mac = ""
     log = logging.getLogger(__name__)
     get_bssid_args = SimpleNamespace(
         get_current_ap=True,
@@ -301,7 +298,6 @@ class Client(object):
             # if we want to watch wlan events on the terminal
             if self.args.event_watcher:
                 # if str(wlan_event).strip() in ["interface_removal", "interface_arrival"]:
-                #    self.mac = self.lookup_mac_on_guid(self.iface)
                 # if we want verbose info printed to the terminal
                 if self.args.debug:
                     if str(wlan_event).strip() in [
@@ -369,29 +365,6 @@ class Client(object):
                 scan_error,
             )
 
-    def lookup_mac_on_guid(self, iface) -> str:
-        guid = str(iface.guid)[1:-1]  # remove { } around guid
-        result = guid  # store guid in result
-        exe = 'getmac.exe /FO "CSV" /V'  # use getmac.exe to map interface guid to mac
-        cmd = f"{exe}"
-        try:
-            output = check_output(cmd)
-            mac = ""
-            self.log.debug(
-                "checking output from '%s' for client mac lookup on guid", exe
-            )
-            for line in output.decode().splitlines():
-                if guid in line or iface.description in line:
-                    conn = line.split(",")
-                    mac = conn[2].replace('"', "")
-                    result = mac.lower().replace("-", ":")
-                    self.log.debug(f"guid {guid} maps to {result}")
-                    break
-        except FileNotFoundError:
-            pass
-        finally:
-            return result
-
     def scan_timeout(self) -> None:
         """
         The application should then wait to receive the
@@ -399,7 +372,9 @@ class Client(object):
         Then the application can call the WlanGetNetworkBssList or WlanGetAvailableNetworkList
           function to retrieve a list of available wireless networks.
         """
-        self.log.info(f"timeout interval ({self.timeout_interval} seconds) for {self.mac} exceeded...")
+        self.log.info(
+            f"timeout interval ({self.timeout_interval} seconds) for {self.mac} exceeded..."
+        )
         self.log.debug(f"({self.mac}), start get_bss_list...")
         self.data = self.get_bss_list(self.iface)
         self.log.debug(f"({self.mac}), finish get_bss_list...")
@@ -411,7 +386,7 @@ class Client(object):
             self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
             self.args = args
             self.iface = iface
-            self.mac = self.lookup_mac_on_guid(iface)
+            self.mac = self.iface.mac
             # self.first_event = True
             self.client_handle = WLAN_API.WLAN.open_handle()
             callback = self.register_notification(

@@ -15,7 +15,6 @@ import json
 import logging
 import os
 import sys
-import time
 from time import sleep
 
 # app imports
@@ -44,10 +43,12 @@ def list_interfaces(interfaces) -> None:
     """
 
     print(f"There are {len(interfaces)} interfaces on this system:")
-    for interface in interfaces:
+    for _index, interface in interfaces.items():
         print(
+            f"    Connection Name: {interface.connection_name}\n"
             f"    Description: {interface.description}\n"
             f"    GUID: {interface.guid_string.replace('{', '').replace('}', '').lower()}\n"
+            f"    MAC: {interface.mac}\n"
             f"    State: {interface.state_string}\n"
         )
     sys.exit()
@@ -57,7 +58,7 @@ def watch_events(args, interfaces) -> None:
     """
     Watch for notifications on wireless interfaces
     """
-    for interface in interfaces:
+    for _index, interface in interfaces.items():
         Client(args, interface)
 
     try:
@@ -65,6 +66,7 @@ def watch_events(args, interfaces) -> None:
             sleep(5)
     except KeyboardInterrupt:
         pass
+
 
 def start(args, **kwargs):
     log = logging.getLogger(__name__)
@@ -85,13 +87,13 @@ def start(args, **kwargs):
         if args.display_ethers:
             displayEthers()
             sys.exit(0)
-            
+
         if args.bytefile:
             decode_bytefile(args)
             sys.exit(0)
-        
+
         scanning = True
-        for interface in interfaces:
+        for _index, interface in interfaces.items():
             if (
                 args.get_interface_info
                 or args.get_current_ap
@@ -100,15 +102,16 @@ def start(args, **kwargs):
             ):
                 scanning = False
                 print(get_interface_info(args, interface))
-    
+
         if scanning:
             asyncio.run(scan(interfaces, args, **kwargs))
     except KeyboardInterrupt:
         log.warning("caught KeyboardInterrupt... stopping...")
     except SystemExit:
         pass
-    
+
     sys.exit(0)
+
 
 async def scan(interfaces, args, **kwargs):
     """
@@ -121,12 +124,16 @@ async def scan(interfaces, args, **kwargs):
         if iface_count > 1:
             log.info(f"starting scans on {iface_count} interfaces")
         # initialize scan and wait for each adapter present on host
-        for interface in interfaces: 
+        for _index, interface in interfaces.items():
             client = Client(args, interface)
             clients.append(client)
-            log.debug(f"initializing scan on {client.iface.description} {client.iface.guid_string}")
+            log.debug(
+                f"initializing scan on {client.iface.description} {client.iface.guid_string}"
+            )
             await client.scan()
-            log.debug(f"initialized scan on {client.iface.description} {client.iface.guid_string}")
+            log.debug(
+                f"initialized scan on {client.iface.description} {client.iface.guid_string}"
+            )
             while not client.scan_finished:
                 pass
             if client.data is None:
@@ -135,7 +142,7 @@ async def scan(interfaces, args, **kwargs):
                 log.debug(f"start parsing bss ies for {client.mac}")
                 parse_bss_list_and_print(client.data, client, args, **kwargs)
                 log.debug(f"finish parsing bss ies for {client.mac}")
-    
+
     except asyncio.CancelledError:
         pass
     except SystemExit as error:
