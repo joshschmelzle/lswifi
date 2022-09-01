@@ -1567,7 +1567,7 @@ class WLAN:
         """Returns a list of WirelessInterface objects based on the wireless
         interfaces available.
         """
-        out_list = {}
+        ifaces = {}
         threads = list()
         handle = WLAN.open_handle()
         try:
@@ -1578,7 +1578,7 @@ class WLAN:
             wlan_interface_info_list = (data_type * num).from_address(ifaces_pointer)
 
             def wirelessinterfacethread(index, info):
-                out_list[index] = WirelessInterface(info)
+                ifaces[index] = WirelessInterface(info)
 
             for index, info in enumerate(wlan_interface_info_list):
                 x = threading.Thread(
@@ -1594,8 +1594,8 @@ class WLAN:
             for index, thread in enumerate(threads):
                 thread.join()
 
-            out_list = {
-                k: out_list[k] for k in sorted(out_list)
+            ifaces = {
+                k: ifaces[k] for k in sorted(ifaces)
             }  # sort by key (index) numerically
 
             # for info in wlan_interface_info_list:
@@ -1604,7 +1604,7 @@ class WLAN:
         finally:
             WLAN.free_memory(wlan_interfaces)
             WLAN.close_handle(handle)
-        return out_list
+        return ifaces
 
     @staticmethod
     def get_wireless_network_bss_list(interface) -> list:
