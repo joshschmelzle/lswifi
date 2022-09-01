@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 
 # app imports
@@ -118,15 +119,19 @@ async def scan(interfaces, args, **kwargs):
     async func to perform a scan
     """
     log = logging.getLogger(__name__)
-    clients = []
+    clients = {}
+    background_tasks = set()
     try:
         iface_count = len(interfaces)
         if iface_count > 1:
             log.info(f"starting scans on {iface_count} interfaces")
-        # initialize scan and wait for each adapter present on host
-        for _index, interface in interfaces.items():
-            client = Client(args, interface)
-            clients.append(client)
+
+        #############################
+        # new async example working #
+        #############################
+
+        async def scanfunc(index, args, iface):
+            client = Client(args, iface)
             log.debug(
                 f"initializing scan on {client.iface.description} {client.iface.guid_string}"
             )
@@ -136,12 +141,50 @@ async def scan(interfaces, args, **kwargs):
             )
             while not client.scan_finished:
                 pass
+
+            clients[index] = client
+
+        for idx, iface in interfaces.items():
+            task = scanfunc(idx, args, iface)
+            background_tasks.add(task)
+
+        with ThreadPoolExecutor(max_workers=len(interfaces.items())) as executor:
+            [executor.submit(asyncio.run, task) for task in background_tasks]
+
+        clients = {
+            k: clients[k] for k in sorted(clients)
+        }  # sort by key (index) numerically
+
+        for _idx, client in clients.items():
             if client.data is None:
                 log.debug(f"no scan data for {client.mac}")
             else:
                 log.debug(f"start parsing bss ies for {client.mac}")
                 parse_bss_list_and_print(client.data, client, args, **kwargs)
                 log.debug(f"finish parsing bss ies for {client.mac}")
+
+        ############################
+        # old sync example working #
+        ############################
+
+        # for _index, interface in interfaces.items():
+        #     client = Client(args, interface)
+        #     clients[_index] = client
+        #     log.debug(
+        #         f"initializing scan on {client.iface.description} {client.iface.guid_string}"
+        #     )
+        #     await client.scan()
+        #     log.debug(
+        #         f"initialized scan on {client.iface.description} {client.iface.guid_string}"
+        #     )
+        #     while not client.scan_finished:
+        #         pass
+        #     if client.data is None:
+        #         log.debug(f"no scan data for {client.mac}")
+        #     else:
+        #         log.debug(f"start parsing bss ies for {client.mac}")
+        #         parse_bss_list_and_print(client.data, client, args, **kwargs)
+        #         log.debug(f"finish parsing bss ies for {client.mac}")
 
     except asyncio.CancelledError:
         pass
@@ -217,7 +260,6 @@ def appendEthers(data):
 
 
 def loadEthers() -> dict:
-    logging.getLogger(__name__)
     appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
     is_path = os.path.isdir(appdata_path)
     if not is_path:

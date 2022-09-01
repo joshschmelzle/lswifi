@@ -20,7 +20,7 @@ def dequote(s):
 if WLAN_API.WLAN_API_EXISTS:
     interfaces = WLAN_API.WLAN.get_wireless_interfaces()
     print(interfaces)
-    for interface in interfaces:
+    for _idx, interface in interfaces.items():
         WLAN_API.WLAN.scan(interface.guid)
         time.sleep(0.1)
         available_networks = WLAN_API.WLAN.get_wireless_network_bss_list(interface)
