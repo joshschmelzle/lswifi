@@ -906,7 +906,7 @@ class WirelessInterface(object):
             output = check_output(cmd)
             mac = ""
             self.log.debug(
-                "checking output from '%s' for Wireless NIC mac and connection name lookup based on guid",
+                "checking output from '%s' to do a lookup on given guid for matching MAC and connection name",
                 exe,
             )
             for line in output.decode().splitlines():
