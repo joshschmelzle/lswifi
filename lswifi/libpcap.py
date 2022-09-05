@@ -15,10 +15,9 @@ inspiration and code extracted from https://github.com/secdev/scapy/blob/master/
 
 # stdlib imports
 import logging
-from ctypes import *
 import struct
 import time
-
+from ctypes import *
 
 """ FORMAT CHARACTERS FOR STRUCT
 ================================
@@ -53,9 +52,9 @@ u_char = c_ubyte
 FILE = c_void_p
 STRING = c_char_p
 
+
 class timeval(Structure):
-    _fields_ = [('tv_sec', c_long),
-                ('tv_usec', c_long)]
+    _fields_ = [("tv_sec", c_long), ("tv_usec", c_long)]
 
 
 """ GLOBAL HEADER
@@ -73,14 +72,17 @@ typedef struct pcap_hdr_s {
 } pcap_hdr_t;
 """
 
+
 class pcap_global_header(Structure):
-    _fields_ = [('magic_number', bpf_u_int32),
-                ('version_major', u_short),
-                ('version_minor', u_short),
-                ('thiszone', bpf_int32),
-                ('sigfigs', bpf_u_int32),
-                ('snaplen', bpf_u_int32),
-                ('linktype', bpf_u_int32)]
+    _fields_ = [
+        ("magic_number", bpf_u_int32),
+        ("version_major", u_short),
+        ("version_minor", u_short),
+        ("thiszone", bpf_int32),
+        ("sigfigs", bpf_u_int32),
+        ("snaplen", bpf_u_int32),
+        ("linktype", bpf_u_int32),
+    ]
 
 
 """ RECORD (PACKET) HEADER
@@ -95,13 +97,13 @@ typedef struct pcaprec_hdr_s {
 } pcaprec_hdr_t;
 """
 
+
 class pcap_packet_header(Structure):
     """
     Header of a packet in the pcap file.
     """
-    _fields_ = [('ts', timeval),
-                ('caplen', bpf_u_int32),
-                ('len', bpf_u_int32)]
+
+    _fields_ = [("ts", timeval), ("caplen", bpf_u_int32), ("len", bpf_u_int32)]
 
 
 LIBPCAP_GLOBAL_HEADER_FMT = "@ I H H i I I I "
@@ -145,18 +147,23 @@ in practice, all tools set it to 0
 LIBPCAP_SIGFIGS = 0
 LIBPCAP_SNAPLEN = 65535
 
+
 class LINKTYPE(object):
     """
     LINK-LAYER HEADER TYPE VALUES
     https://www.tcpdump.org/linktypes.html
     """
+
     def __init__(self, name, value, dlt):
         self.name = name
         self.value = value
         self.dlt = dlt
 
+
 LINKTYPE_IEEE802_11 = LINKTYPE("LINKTYPE_IEEE802_11", 105, "DLT_IEEE802_11")
-LINKTYPE_IEEE802_11_RADIOTAP = LINKTYPE("LINKTYPE_IEEE802_11_RADIOTAP", 127, "DLT_IEEE802_11_RADIO")
+LINKTYPE_IEEE802_11_RADIOTAP = LINKTYPE(
+    "LINKTYPE_IEEE802_11_RADIOTAP", 127, "DLT_IEEE802_11_RADIO"
+)
 
 LIBPCAP_RECORD_HEADER_FMT = "@ I I I I"
 
@@ -164,8 +171,6 @@ LIBPCAP_RECORD_HEADER_FMT = "@ I I I I"
 # LINKTYPE_ETHERNET             , 1  , IEEE 802.3 Ethernet
 # LINKTYPE_IEEE802_11           , 105, IEEE 802.11
 # LINKTYPE_IEEE802_11_RADIOTAP  , 127, Radiotap link-layer information followed by an 802.11 header
-
-
 
 
 """ PACKET DATA
@@ -228,7 +233,6 @@ class LIBPCAP:
         for i in data:
             self.write(i)
         return
-
 
     def close(self):
         self.pcap.close()
