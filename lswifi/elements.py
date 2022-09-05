@@ -58,6 +58,7 @@ class WirelessNetworkBss:
         :param bss_entry:
         """
         # init values before parsing IEs
+        self.log = logging.getLogger(__name__)
         self.is_byte_file = is_byte_file
         try:
             _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
@@ -135,35 +136,42 @@ class WirelessNetworkBss:
         self.besteffort_acm = OutObject(header="AC_BE")
         self.background_acm = OutObject(header="AC_BK")
 
-        if not is_byte_file:
-            # parse IEs
-            self.raw_information_elements = self._get_information_elements_buffer(
-                bss_entry
-            )
-            self.iesbytes = bytearray(self.raw_information_elements)
-            # self.iesbytes = [c for c in self.raw_information_elements]
-            self.information_elements = WirelessNetworkBss.process_information_elements(
-                self, bss_entry
-            )
+        try:
+            if not is_byte_file:
+                # parse IEs
+                self.raw_information_elements = self._get_information_elements_buffer(
+                    bss_entry
+                )
+                self.iesbytes = bytearray(self.raw_information_elements)
+                # self.iesbytes = [c for c in self.raw_information_elements]
 
-            # do stuff now that IEs have been parsed
+                self.information_elements = (
+                    WirelessNetworkBss.process_information_elements(self, bss_entry)
+                )
 
-            # if self.dtim.value:
-            #    print(f"dtim {self.dtim.value} present for {self.bssid}")
-            # else:
-            #    print(f"dtim not present for {self.bssid}")
-            self.ie_rates.value = self.parse_rates(self.ie_rates)
-            if len(self.channel_number_marked) == 1:
-                self.channel_number_marked.value = f"  {self.channel_number_marked}"
-            if len(self.channel_number_marked) == 2:
-                self.channel_number_marked.value = f" {self.channel_number_marked}"
-            # if len(self.channel_number) == 3:
-            #    pass
-            self.channel_number_marked.value = (
-                f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
+                # do stuff now that IEs have been parsed
+
+                # if self.dtim.value:
+                #    print(f"dtim {self.dtim.value} present for {self.bssid}")
+                # else:
+                #    print(f"dtim not present for {self.bssid}")
+                self.ie_rates.value = self.parse_rates(self.ie_rates)
+                if len(self.channel_number_marked) == 1:
+                    self.channel_number_marked.value = f"  {self.channel_number_marked}"
+                if len(self.channel_number_marked) == 2:
+                    self.channel_number_marked.value = f" {self.channel_number_marked}"
+                # if len(self.channel_number) == 3:
+                #    pass
+                self.channel_number_marked.value = (
+                    f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
+                )
+
+            self.band = Band(self.channel_frequency.value)
+        except Exception:
+            self.log.error(
+                f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
             )
-
-        self.band = Band(self.channel_frequency.value)
+            raise
 
     @staticmethod
     def convert_timestamp_to_uptime(timestamp) -> str:
@@ -1072,6 +1080,9 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        self.log.debug(
+            f"Undecoded IE ({element_id}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+        )
         return WLAN_API.InformationElement(
             element_id,
             WirelessNetworkBss.get_eid_name(element_id),
@@ -1112,7 +1123,7 @@ class WirelessNetworkBss:
     def __parse_symbol_proprietary(element_data):
         body = list(memoryview(element_data))
         zero, one, two = [body[i] for i in [0, 1, 2]]
-        mac = convert_mac_address_to_string([zero, one, two])
+        convert_mac_address_to_string([zero, one, two])
         sub_body = [element_data[i : i + 1] for i in range(len(element_data))]
         out = ""
         # https://github.com/wireshark/wireshark/commit/44129c6ded87914461d48190918fb2b29dd93105
@@ -1126,9 +1137,8 @@ class WirelessNetworkBss:
         timestamp = ""  # this is 4 bytes following the previous
         out += f"Associated Clients {assoc_clients}, Load {load_kbps} Kbps, Load {load_pps} pkt/s"
         out += f"\nDesired Client Tx Power: {client_txpower}, Timestamp (developer did not do this yet)"
-        if mac == "00:a0:f8":  # Zebra Technologies
-            # TODO: come back and reorg this code
-            pass
+        # if mac == "00:a0:f8":  # Zebra Technologies
+        #     pass
 
         return out
 
@@ -1319,20 +1329,25 @@ class WirelessNetworkBss:
         apname = ""
         if "08:00:09" in oui:
             out = "Hewlett Packard"
+            return out
         if "8c:fd:f0" in oui:
             out = f"Qualcomm Inc, Subtype: {vendor_oui_type}"
-        if "00:13:92" in oui:
-            out = "Ruckus Wireless"
+            return out
         if "00:26:86" in oui:
             out = "Quantenna Communications, Inc."
+            return out
         if "00:e0:4c" in oui:
             out = "Realtek Semiconductor Corp."
+            return out
         if "50:6f:9a:0a" in oui:
             out = "Wi-Fi Alliance"
+            return out
         if "50:6f:9a:09" in oui:  # Wi-Fi Alliance P2P
             out = "Wi-Fi Alliance: P2P"
+            return out
         if "50:6f:9a:16" in oui:  # Wi-Fi Alliance MBO
             out = "Wi-Fi Alliance: Multi Band Operation (MBO)"
+            return out
         if "50:6f:9a:1c" in oui:  # Wi-Fi Alliance OWE Transition Mode
             o1, o2, o3, o4, o5, o6 = [memoryview_body[i] for i in [4, 5, 6, 7, 8, 9]]
             owe_bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
@@ -1340,7 +1355,9 @@ class WirelessNetworkBss:
             owe_ssid = "".join([chr(i) for i in memoryview_body[11:]])
             out = f"Wi-Fi Alliance: OWE Transition Mode"
             out += f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
+            return out
         if "00:0b:86" in oui:  # Aruba
+            out = f"OUI: 00:0b:86 (Aruba, a HPE Company)"
             if vendor_oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
                 if oui_subtype == 3:  # AP Name
@@ -1349,17 +1366,20 @@ class WirelessNetworkBss:
                         "".join([chr(i) for i in memoryview_body[6:]])
                     )
                     # EID 221 (len=20): OUI: 00:0b:86 Subtype: 1 Data b'\x00\x0b\x86\x01\x03\x00Josh_Schmelzle'
-                    out = f"OUI: {oui} (Aruba), Subtype: {vendor_oui_type}, AP Name: {apname}"
+                    out += f", Subtype: {vendor_oui_type}, AP Name: {apname}"
                     if self is not None:
                         self.apname.value = apname
+            return out
         if "00:13:92" in oui:  # Ruckus
+            out = f"OUI: {oui} (Ruckus Wireless)"
             if vendor_oui_type == 3:  # Ruckus AP name
                 apname = remove_control_chars(
                     "".join([chr(i) for i in memoryview_body[4:]])
                 )
-                out = f"OUI: {oui} (Ruckus), AP Name: {apname}"
+                out += f", AP Name: {apname}"
                 if self is not None:
                     self.apname.value = apname
+            return out
         if "00:19:77" in oui:  # Aerohive / Extreme
             if vendor_oui_type == 33:  # Aerohive AP name
                 version = int.from_bytes(element_body[5], "little")
@@ -1372,6 +1392,7 @@ class WirelessNetworkBss:
                     out = f"OUI: {oui} (Extreme (Aerohive)), Subtype: {vendor_oui_type}, AP Name: {apname}"
                     if self is not None:
                         self.apname.value = apname
+            return out
         if "00:a0:f8" in oui:  # Zebra Technologies / WiNG / Extreme
             # EID 221 (len=18): OUI: 00:a0:f8 Subtype: 1 Data b'\x00\xa0\xf8\x01\x03\x01\x0f\xc0\x00\x00\x00\x06ap8533'
             if vendor_oui_type == 1:  # AP name
@@ -1383,6 +1404,7 @@ class WirelessNetworkBss:
                 out = f"OUI: {oui} (Extreme (WiNG)), Subtype: {vendor_oui_type}, AP Name: {apname}"
                 if self is not None:
                     self.apname.value = apname
+            return out
         if "5c:5b:35:01" in oui:  # Mist
             apname = remove_control_chars(
                 "".join([chr(i) for i in memoryview_body[4:]])
@@ -1392,6 +1414,7 @@ class WirelessNetworkBss:
             )
             if self is not None:
                 self.apname.value = apname
+            return out
         if "00:40:96" in oui:  # Cisco
             if vendor_oui_type == 0:
                 out = "Cisco Aironet (0)"
@@ -1403,18 +1426,22 @@ class WirelessNetworkBss:
                 out = "Cisco Aironet (11)"
             if vendor_oui_type == 20:
                 out = "Cisco Aironet (20)"
-        if "00:0b:86" in oui:
-            out = f"OUI: {oui} (Aruba, a HPE Company)"
+            return out
         if "00:16:32" in oui:  # Samsung
             out = "Samsung"
+            return out
         if "00:10:18" in oui:  # Broadcom
             out = "Broadcom"
+            return out
         if "00:90:4c" in oui:  # Epigram
             out = "Epigram"
+            return out
         if "00:03:7f" in oui:  # Atheros
             out = "Atheros"
+            return out
         if "00:15:6d" in oui:  # Ubiquiti
             out = "Ubiquiti"
+            return out
         if "00:50:f2:04" in oui:  # Device name here
             out = "Microsoft WPS"
             """
@@ -1520,6 +1547,7 @@ class WirelessNetworkBss:
                 attribute_length = int(attribute_length, 16)
 
                 data = ""
+
                 for _ in range(attribute_length):  # data is variable length
                     data += get_next_hex(element_data_iterator)
 
@@ -1558,10 +1586,13 @@ class WirelessNetworkBss:
                 idx += 4 + attribute_length
                 if idx >= ln:
                     break
+            return out
         if "00:50:f2:11" in oui:
             out = "Microsoft"
+            return out
         if "00:50:f2:01" in oui:
             out = "Microsoft"
+            return out
         if (
             "00:50:f2:02" in oui
         ):  # WMM Information Element and # WMM/WME Parameter Element
@@ -1636,6 +1667,7 @@ class WirelessNetworkBss:
                     )
                     if self is not None:
                         pass  # print(f"{self.bssid}({self.ssid.value}): WMM subtype 0 - {memoryview_body}\n{out}")
+
                 if oui_subtype == 1:  # WMM/WME Parameter Element
                     out += "Subtype {}, Version {}, QoS 0x{}\n".format(
                         oui_subtype, version, qos.hex()
@@ -1789,8 +1821,12 @@ class WirelessNetworkBss:
                     out += PARSE_AC_PARAMETER(memoryview_body[20:], element_body[20:])
                 if oui_subtype == 2:  # TSPEC Element
                     pass
+                return out
 
-        return out
+        self.log.debug(
+            f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+        )
+        return f"OUI: {oui}"
 
     def __parse_extension_tag_element(self, element_data):
         """
@@ -2540,7 +2576,7 @@ class WirelessNetworkBss:
             else:
                 self.pmf.value = "--"
             # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
-        out += "RSN Capabilities 0x{:02x}{:02x}, PMF: MFPC? {} MFPR? {}\n".format(
+        out += "RSN Capabilities: 0x{:02x}{:02x}, PMF Capable (MFPC): {}, PMF Required (MFPR): {}\n".format(
             int(RSN_CAP1),
             int(RSN_CAP0),
             "Yes" if MFPC else "No",

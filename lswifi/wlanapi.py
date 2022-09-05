@@ -60,6 +60,7 @@ class SystemErrorCodes(Enum):
     ERROR_NOT_SUPPORTED = 50
     ERROR_SERVICE_NOT_ACTIVE = 1062
     ERROR_NOT_FOUND = 1168
+    ERROR_REMOTE_SESSION_LIMIT_EXCEEDED = 1220
     ERROR_NDIS_DOT11_POWER_STATE_INVALID = 0x80342002
     ERROR_INVALID_STATE = 5023
 
@@ -1533,6 +1534,7 @@ class WLAN:
         handle = WLAN.open_handle()
         result = WLAN.wlan_scan(handle, guid)
         if result is not SystemErrorCodes.ERROR_SUCCESS.value:
+            WLAN.close_handle(handle)
             raise Exception(f"wlan scan() failed: {SystemErrorCodes(result)}:{result}")
         WLAN.close_handle(handle)
 
@@ -1567,6 +1569,7 @@ class WLAN:
         """Returns a list of WirelessInterface objects based on the wireless
         interfaces available.
         """
+        log = logging.getLogger(__name__)
         ifaces = {}
         threads = list()
         handle = WLAN.open_handle()
@@ -1577,12 +1580,12 @@ class WLAN:
             ifaces_pointer = addressof(wlan_interfaces.contents.InterfaceInfo)
             wlan_interface_info_list = (data_type * num).from_address(ifaces_pointer)
 
-            def wirelessinterfacethread(index, info):
+            def WirelessInterfaceThread(index, info):
                 ifaces[index] = WirelessInterface(info)
 
             for index, info in enumerate(wlan_interface_info_list):
                 x = threading.Thread(
-                    target=wirelessinterfacethread,
+                    target=WirelessInterfaceThread,
                     args=(
                         index,
                         info,
@@ -1601,6 +1604,8 @@ class WLAN:
             # for info in wlan_interface_info_list:
             #     wlan_iface = WirelessInterface(info)
             #     out_list.append(wlan_iface)
+        except KeyboardInterrupt:
+            log.warning("caught KeyboardInterrupt... stopping...")
         finally:
             WLAN.free_memory(wlan_interfaces)
             WLAN.close_handle(handle)

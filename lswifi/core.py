@@ -9,13 +9,14 @@ code to manage clients (interfaces), their data, and writing out results.
 
 # python imports
 import asyncio
+import concurrent.futures
 import contextlib
 import datetime
 import json
 import logging
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
+import time
 from time import sleep
 
 # app imports
@@ -72,6 +73,7 @@ def watch_events(args, interfaces) -> None:
 def start(args, **kwargs):
     log = logging.getLogger(__name__)
     interfaces = WLAN_API.WLAN.get_wireless_interfaces()
+    loops_completed = 0
 
     try:
         if args.list_interfaces:
@@ -105,11 +107,49 @@ def start(args, **kwargs):
                 print(get_interface_info(args, interface))
 
         if scanning:
-            asyncio.run(scan(interfaces, args, **kwargs))
+            scans = 1
+            interval = 0.1
+            timeout = 0
+            if args.interval:
+                interval = int(args.interval)
+                log.debug(f"interval between scans is {interval}")
+            if args.scans:
+                scans = int(args.scans)
+                log.debug(f"number of scans is {scans}")
+            if args.time:
+                timeout = int(args.time)
+                log.debug(f"duration of time for recurring scans is {timeout} seconds")
+
+            if timeout > 0:  # we're scanning during a given time period
+                timeout_start = time.time()
+
+                while time.time() < timeout_start + timeout:
+                    asyncio.run(scan(interfaces, args, **kwargs))
+                    loops_completed += 1
+                    time.sleep(interval)
+            else:  # we're scanning a given number of times
+                for index in range(scans):
+                    asyncio.run(scan(interfaces, args, **kwargs))
+                    loops_completed += 1
+                    time.sleep(interval)
+
+            if loops_completed > 1:
+                log.info(f"total number of scans completed is {loops_completed}")
     except KeyboardInterrupt:
-        log.warning("caught KeyboardInterrupt... stopping...")
+        if loops_completed > 1:
+            log.info(
+                f"total number of scans completed during this session is {loops_completed}"
+            )
+        log.warning("keyboard interruption detected... stopping...")
     except SystemExit:
         pass
+    except asyncio.CancelledError:
+        raise
+    except SystemExit as error:
+        if error == 0:
+            log.error(error)
+        else:
+            pass
 
     sys.exit(0)
 
@@ -119,9 +159,9 @@ async def scan(interfaces, args, **kwargs):
     async func to perform a scan
     """
     log = logging.getLogger(__name__)
-    clients = {}
-    background_tasks = set()
     try:
+        clients = {}
+        background_tasks = set()
         iface_count = len(interfaces)
         if iface_count > 1:
             log.info(f"starting scans on {iface_count} interfaces")
@@ -139,8 +179,11 @@ async def scan(interfaces, args, **kwargs):
             log.debug(
                 f"initialized scan on {client.iface.description} {client.iface.guid_string}"
             )
-            while not client.scan_finished:
-                pass
+            try:
+                while not client.scan_finished:
+                    time.sleep(0.1)
+            except KeyboardInterrupt:
+                raise
 
             clients[index] = client
 
@@ -148,8 +191,17 @@ async def scan(interfaces, args, **kwargs):
             task = scanfunc(idx, args, iface)
             background_tasks.add(task)
 
-        with ThreadPoolExecutor(max_workers=len(interfaces.items())) as executor:
-            [executor.submit(asyncio.run, task) for task in background_tasks]
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(interfaces.items())
+        ) as executor:
+            futures = []
+            for task in background_tasks:
+                futures.append(executor.submit(asyncio.run, task))
+            for future in concurrent.futures.as_completed(futures):
+                if future.result():
+                    print(future.result())
+
+            #  [executor.submit(asyncio.run, task) for task in background_tasks]
 
         clients = {
             k: clients[k] for k in sorted(clients)
@@ -157,11 +209,14 @@ async def scan(interfaces, args, **kwargs):
 
         for _idx, client in clients.items():
             if client.data is None:
-                log.debug(f"no scan data for {client.mac}")
+                log.warning(f"no scan data for {client.mac}")
             else:
                 log.debug(f"start parsing bss ies for {client.mac}")
                 parse_bss_list_and_print(client.data, client, args, **kwargs)
                 log.debug(f"finish parsing bss ies for {client.mac}")
+
+        for _idx, client in clients.items():
+            client.__del__()  # need to garbage collect the and close the client handle
 
         ############################
         # old sync example working #
@@ -186,13 +241,8 @@ async def scan(interfaces, args, **kwargs):
         #         parse_bss_list_and_print(client.data, client, args, **kwargs)
         #         log.debug(f"finish parsing bss ies for {client.mac}")
 
-    except asyncio.CancelledError:
-        pass
-    except SystemExit as error:
-        if error == 0:
-            log.error(error)
-        else:
-            pass
+    except KeyboardInterrupt:
+        raise
 
 
 def displayEthers():

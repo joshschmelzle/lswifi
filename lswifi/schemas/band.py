@@ -19,6 +19,7 @@ class Band(OutObject):
         self.is_2ghz = is_two_four_band(int(frequency))
         self.is_5ghz = is_five_band(int(frequency))
         self.is_6ghz = is_six_band(int(frequency))
+        band = None
         if self.is_2ghz:
             band = "2GHz"
         if self.is_5ghz:

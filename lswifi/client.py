@@ -280,13 +280,20 @@ class Client(object):
 
     def get_bss_list(self, interface) -> Union[list, None]:
         if interface:
-            wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
-                interface
-            )
-            if len(wireless_network_bss_list) == 0:
-                return None
+            try:
+                wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
+                    interface
+                )
 
-            return wireless_network_bss_list
+                if len(wireless_network_bss_list) == 0:
+                    return None
+
+                return wireless_network_bss_list
+            except Exception as error:
+                self.log.error(
+                    f"Unexpected error when trying to get the BSS list on {interface.mac}"
+                )
+                self.log.error(error)
         else:
             return None
 
@@ -389,13 +396,26 @@ class Client(object):
             self.mac = self.iface.mac
             # self.first_event = True
             self.client_handle = WLAN_API.WLAN.open_handle()
-            callback = self.register_notification(
+            self.is_handle_closed = False
+            self.callback = self.register_notification(
                 self.on_event_notification, self.client_handle
             )
-            callbacks.append(callback)
-            self.log.debug(f"callback {callback} added")
+            callbacks.append(self.callback)
+            self.log.debug(f"callback {self.callback} added")
             handles.append(self.client_handle)
             self.log.debug(f"handle {self.client_handle} added")
         except Exception:
             traceback.print_exc()
             WLAN_API.WLAN.close_handle(self.client_handle)
+
+    def __del__(self):
+        # callbacks.remove(self.client_handle)
+        if not self.is_handle_closed:
+            result = WLAN_API.WLAN.close_handle(self.client_handle)
+            self.log.debug(f"handle {self.client_handle} closed with result {result}")
+            if int(result) == 0:
+                self.is_handle_closed = True
+            else:
+                self.log.debug(
+                    f"problem closing {self.client_handle} with result {result}"
+                )
