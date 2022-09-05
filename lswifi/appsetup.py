@@ -43,6 +43,34 @@ def setup_logger(args) -> logging.Logger:
     return logging.getLogger(__name__)
 
 
+def sensitivity(value):
+    """validate user provided sensitivity is between -1 and -100"""
+    try:
+        display_sensitivity = int(value)
+        if display_sensitivity not in range(-100, -1):
+            raise argparse.ArgumentTypeError(
+                "rssi sensitivity threshold must be between -1 and -100"
+            )
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value} not a valid threshold")
+    return display_sensitivity
+
+
+def width(value):
+    """validate user provided channel bandwidth is 20, 40, 80, or 160"""
+
+    valid_channels = ["20", "40", "80", "160"]
+    if value == "None":
+        return None
+
+    width = str(value)
+    if width not in valid_channels:
+        raise argparse.ArgumentTypeError(
+            f"channel width {width} not valid. must use one of these: {', '.join(valid_channels)}"
+        )
+    return width
+
+
 def setup_parser() -> argparse.ArgumentParser:
     """Setup the parser for arguments passed into the module from the CLI.
 
@@ -137,6 +165,8 @@ def setup_parser() -> argparse.ArgumentParser:
         "-t",
         metavar="dBm",
         dest="sensitivity",
+        default="-82",
+        type=sensitivity,
         help="threshold which excludes networks with weak signal strength (-82 is default)",
     )
     parser.add_argument(
@@ -214,6 +244,8 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--channel-width",
         dest="width",
+        type=width,
+        default="None",
         metavar="20|40|80|160",
         help="display filter to limit output by a specified channel width",
     )

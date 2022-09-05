@@ -1326,9 +1326,7 @@ class WirelessNetworkBss:
         """
         log = logging.getLogger(__name__)
         memoryview_body = list(memoryview(element_data))
-        zero, one, two, three = [
-            memoryview_body[i] for i in [0, 1, 2, 3]
-        ]  
+        zero, one, two, three = [memoryview_body[i] for i in [0, 1, 2, 3]]
         oui3 = convert_mac_address_to_string([zero, one, two]).upper()
         oui = convert_mac_address_to_string([zero, one, two, three])
         element_body = [element_data[i : i + 1] for i in range(len(element_data))]

@@ -386,7 +386,6 @@ def updateAPNames(json_names, scan_names) -> None:
 
 
 def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
-    DISPLAY_SENSITIVITY = -82
     out_results = []
     bssid_list = []
 
@@ -515,16 +514,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
             break
 
         # handle weakest rssi value we want to see displayed to the screen
-        if args.sensitivity:
-            try:
-                DISPLAY_SENSITIVITY = int(args.sensitivity)
-                if DISPLAY_SENSITIVITY not in range(-100, -1):
-                    print("rssi threshold must be between -1 and -100... exiting...")
-                    sys.exit(-1)
-            except ValueError:
-                print(f"{args.sensitivity} not a valid threshold... exiting...")
-                sys.exit(-1)
-        if bss.rssi.value < DISPLAY_SENSITIVITY:
+        if bss.rssi.value < args.sensitivity:
             continue
 
         # handle band filters
@@ -578,13 +568,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
                     pass
 
         # handle width filter
-        valid_channels = ["20", "40", "80", "160"]
         if args.width is not None:
-            if args.width not in valid_channels:
-                print(
-                    f"channel width {args.width} not valid. must use one of these values: {', '.join(valid_channels)}"
-                )
-                sys.exit(-1)
             if args.width not in str(bss.channel_width):
                 continue
 
@@ -662,6 +646,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
                 "channel_number": str(bss.channel_number).strip(),
                 "channel_width": str(bss.channel_width).strip(),
                 "connected": connected,
+                "epoch": client.last_scan_time,
                 "ies": sorted(bss.ie_numbers.elements),
                 "ies_extension": sorted(bss.exie_numbers.elements),
                 "modes": sorted(bss.modes.elements),
@@ -748,7 +733,7 @@ def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
 
     # outlist to screen
     log.info(
-        f"display filter sensitivity {DISPLAY_SENSITIVITY}; "
+        f"display filter sensitivity {args.sensitivity}; "
         f"output includes {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results for {client.mac}."
     )
 

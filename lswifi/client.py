@@ -10,6 +10,7 @@ client side code for requesting a scan, waiting for scan complete, and getting t
 import functools
 import logging
 import pprint
+import time
 import traceback
 from threading import Timer
 from types import SimpleNamespace
@@ -269,6 +270,7 @@ class Client(object):
     scan_finished = False
     data = None
     guid = ""
+    last_scan_time = None
     log = logging.getLogger(__name__)
     get_bssid_args = SimpleNamespace(
         get_current_ap=True,
@@ -312,6 +314,7 @@ class Client(object):
                         "scan_complete",
                     ]:
                         self.data = self.get_bss_list(self.iface)
+                        self.last_scan_time = time.time()
                         if self.data is not None:
                             self.log.info(
                                 f"({self.mac}), bssid: ({bssid}), event: ({wlan_event}), get_bss_list: ({len(self.data)} BSSIDs)"
@@ -337,6 +340,7 @@ class Client(object):
 
                     self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(self.iface)
+                    self.last_scan_time = time.time()
                     self.scan_finished = True
                     self.log.debug(f"({self.mac}), finish get_bss_list...")
 
