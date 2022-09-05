@@ -39,29 +39,27 @@ from .helpers import (
 from .schemas.out import *
 
 
-def list_interfaces(interfaces) -> None:
+def list_interfaces(clients) -> None:
     """
     Print interfaces and exit
     """
 
-    print(f"There are {len(interfaces)} interfaces on this system:")
-    for _index, interface in interfaces.items():
+    print(f"There are {len(clients)} interfaces on this system:")
+    for _index, client in clients.items():
         print(
-            f"    Connection Name: {interface.connection_name}\n"
-            f"    Description: {interface.description}\n"
-            f"    GUID: {interface.guid_string.replace('{', '').replace('}', '').lower()}\n"
-            f"    MAC: {interface.mac}\n"
-            f"    State: {interface.state_string}\n"
+            f"    Connection Name: {client.iface.connection_name}\n"
+            f"    Description: {client.iface.description}\n"
+            f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
+            f"    MAC: {client.iface.mac}\n"
+            f"    State: {client.iface.state_string}\n"
         )
     sys.exit()
 
 
-def watch_events(args, interfaces) -> None:
+def watch_events(args, clients) -> None:
     """
     Watch for notifications on wireless interfaces
     """
-    for _index, interface in interfaces.items():
-        Client(args, interface)
 
     try:
         while True:
@@ -72,15 +70,17 @@ def watch_events(args, interfaces) -> None:
 
 def start(args, **kwargs):
     log = logging.getLogger(__name__)
-    interfaces = WLAN_API.WLAN.get_wireless_interfaces()
-    loops_completed = 0
 
     try:
+        clients = {}
+        for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
+            clients[index] = Client(args, iface)
+
         if args.list_interfaces:
-            list_interfaces(interfaces)
+            list_interfaces(clients)
 
         if args.event_watcher:
-            watch_events(args, interfaces)
+            watch_events(args, clients)
             sys.exit(0)
 
         if args.append:
@@ -96,7 +96,18 @@ def start(args, **kwargs):
             sys.exit(0)
 
         scanning = True
-        for _index, interface in interfaces.items():
+
+        # for _index, interface in interfaces.items():
+        #     if (
+        #         args.get_interface_info
+        #         or args.get_current_ap
+        #         or args.get_current_channel
+        #         or args.supported
+        #     ):
+        #         scanning = False
+        #         print(get_interface_info(args, interface))
+
+        for _index, client in clients.items():
             if (
                 args.get_interface_info
                 or args.get_current_ap
@@ -104,9 +115,10 @@ def start(args, **kwargs):
                 or args.supported
             ):
                 scanning = False
-                print(get_interface_info(args, interface))
+                print(get_interface_info(args, client.iface))
 
         if scanning:
+            loops_completed = 0
             scans = 1
             interval = 0.1
             timeout = 0
@@ -124,12 +136,12 @@ def start(args, **kwargs):
                 timeout_start = time.time()
 
                 while time.time() < timeout_start + timeout:
-                    asyncio.run(scan(interfaces, args, **kwargs))
+                    asyncio.run(scan(clients, args, **kwargs))
                     loops_completed += 1
                     time.sleep(interval)
             else:  # we're scanning a given number of times
                 for index in range(scans):
-                    asyncio.run(scan(interfaces, args, **kwargs))
+                    asyncio.run(scan(clients, args, **kwargs))
                     loops_completed += 1
                     time.sleep(interval)
 
@@ -141,8 +153,6 @@ def start(args, **kwargs):
                 f"total number of scans completed during this session is {loops_completed}"
             )
         log.warning("keyboard interruption detected... stopping...")
-    except SystemExit:
-        pass
     except asyncio.CancelledError:
         raise
     except SystemExit as error:
@@ -154,15 +164,14 @@ def start(args, **kwargs):
     sys.exit(0)
 
 
-async def scan(interfaces, args, **kwargs):
+async def scan(clients, args, **kwargs):
     """
     async func to perform a scan
     """
     log = logging.getLogger(__name__)
     try:
-        clients = {}
         background_tasks = set()
-        iface_count = len(interfaces)
+        iface_count = len(clients)
         if iface_count > 1:
             log.info(f"starting scans on {iface_count} interfaces")
 
@@ -170,8 +179,7 @@ async def scan(interfaces, args, **kwargs):
         # new async example working #
         #############################
 
-        async def scanfunc(index, args, iface):
-            client = Client(args, iface)
+        async def scanfunc(index, args, client):
             log.debug(
                 f"initializing scan on {client.iface.description} {client.iface.guid_string}"
             )
@@ -187,19 +195,18 @@ async def scan(interfaces, args, **kwargs):
 
             clients[index] = client
 
-        for idx, iface in interfaces.items():
-            task = scanfunc(idx, args, iface)
+        for _index, client in clients.items():
+            task = scanfunc(_index, args, client)
             background_tasks.add(task)
 
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(interfaces.items())
+            max_workers=len(clients.items())
         ) as executor:
             futures = []
             for task in background_tasks:
                 futures.append(executor.submit(asyncio.run, task))
             for future in concurrent.futures.as_completed(futures):
-                if future.result():
-                    print(future.result())
+                pass
 
             #  [executor.submit(asyncio.run, task) for task in background_tasks]
 
@@ -212,11 +219,11 @@ async def scan(interfaces, args, **kwargs):
                 log.warning(f"no scan data for {client.mac}")
             else:
                 log.debug(f"start parsing information elements for {client.mac}")
-                parse_bss_list_and_print(client.data, client, args, **kwargs)
+                parse_bss_list_and_print(client, args, **kwargs)
                 log.debug(f"finish parsing information elements for {client.mac}")
 
-        for _idx, client in clients.items():
-            client.__del__()  # need to garbage collect the and close the client handle
+        # for _idx, client in clients.items():
+        #     client.__del__()  # need to garbage collect the and close the client handle
 
         ############################
         # old sync example working #
@@ -385,9 +392,11 @@ def updateAPNames(json_names, scan_names) -> None:
         log.debug("<updateAPNames> nothing to update")
 
 
-def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
+def parse_bss_list_and_print(client, args, **kwargs):
     out_results = []
     bssid_list = []
+
+    wireless_network_bss_list = client.data
 
     log = logging.getLogger(__name__)
 
@@ -634,7 +643,8 @@ def parse_bss_list_and_print(wireless_network_bss_list, client, args, **kwargs):
         if bss.bssid.connected:
             connected = True
             if not args.json:
-                bss.bssid.value += "(*)"
+                if "(*)" not in bss.bssid.value:
+                    bss.bssid.value += "(*)"
 
         json_out.append(
             {

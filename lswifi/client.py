@@ -12,7 +12,7 @@ import logging
 import pprint
 import time
 import traceback
-from threading import Timer
+from threading import Lock, Timer
 from types import SimpleNamespace
 from typing import Union
 
@@ -33,6 +33,75 @@ from .wlanapi import (
     WLAN_NOTIFICATION_SOURCE_SECURITY,
     WLANConnectionAttributes,
 )
+
+
+class TimerEx(object):
+    """
+    A reusable thread safe timer implementation
+    """
+
+    def __init__(self, interval_sec, function, *args, **kwargs):
+        """
+        Create a timer object which can be restarted
+
+        :param interval_sec: The timer interval in seconds
+        :param function: The user function timer should call once elapsed
+        :param args: The user function arguments array (optional)
+        :param kwargs: The user function named arguments (optional)
+        """
+        self._interval_sec = interval_sec
+        self._function = function
+        self._args = args
+        self._kwargs = kwargs
+        # Locking is needed since the '_timer' object might be replaced in a different thread
+        self._timer_lock = Lock()
+        self._timer = None
+
+    def start(self, restart_if_alive=True):
+        """
+        Starts the timer and returns this object [e.g. my_timer = TimerEx(10, my_func).start()]
+
+        :param restart_if_alive: 'True' to start a new timer if current one is still alive
+        :return: This timer object (i.e. self)
+        """
+        with self._timer_lock:
+            # Current timer still running
+            if self._timer is not None:
+                if not restart_if_alive:
+                    # Keep the current timer
+                    return self
+                # Cancel the current timer
+                self._timer.cancel()
+            # Create new timer
+            self._timer = Timer(self._interval_sec, self.__internal_call)
+            self._timer.start()
+        # Return this object to allow single line timer start
+        return self
+
+    def cancel(self):
+        """
+        Cancels the current timer if alive
+        """
+        with self._timer_lock:
+            if self._timer is not None:
+                self._timer.cancel()
+                self._timer = None
+
+    def is_alive(self):
+        """
+        :return: True if current timer is alive (i.e not elapsed yet)
+        """
+        with self._timer_lock:
+            if self._timer is not None:
+                return self._timer.is_alive()
+        return False
+
+    def __internal_call(self):
+        # Release timer object
+        with self._timer_lock:
+            self._timer = None
+        # Call the user defined function
+        self._function(*self._args, **self._kwargs)
 
 
 class Event(object):
@@ -267,18 +336,50 @@ def get_interface_info(args, iface) -> str:
 
 
 class Client(object):
-    scan_finished = False
-    data = None
-    guid = ""
-    last_scan_time = None
-    log = logging.getLogger(__name__)
-    get_bssid_args = SimpleNamespace(
-        get_current_ap=True,
-        raw=True,
-        event_watcher=True,
-        get_current_channel=False,
-        supported=False,
-    )
+    def __init__(self, args, iface, ssid=None):
+        try:
+            self.log = logging.getLogger(__name__)
+            self.scan_finished = False
+            self.data = None
+            self.last_scan_time = None
+            self.get_bssid_args = SimpleNamespace(
+                get_current_ap=True,
+                raw=True,
+                event_watcher=True,
+                get_current_channel=False,
+                supported=False,
+            )
+            self.timeout_interval = 4.0
+            self.client_handle = WLAN_API.WLAN.open_handle()
+            # self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
+            self.scan_timer = TimerEx(self.timeout_interval, self.scan_timeout)
+            self.args = args
+            self.iface = iface
+            self.mac = iface.mac
+            # self.first_event = True
+            self.is_handle_closed = False
+            self.callback = self.register_notification(
+                self.on_event_notification, self.client_handle
+            )
+            callbacks.append(self.callback)
+            self.log.debug(f"callback {self.callback} added")
+            handles.append(self.client_handle)
+            self.log.debug(f"handle {self.client_handle} added")
+        except Exception:
+            traceback.print_exc()
+            WLAN_API.WLAN.close_handle(self.client_handle)
+
+    def __del__(self):
+        # callbacks.remove(self.client_handle)
+        if not self.is_handle_closed:
+            result = WLAN_API.WLAN.close_handle(self.client_handle)
+            self.log.debug(f"handle {self.client_handle} closed with result {result}")
+            if int(result) == 0:
+                self.is_handle_closed = True
+            else:
+                self.log.debug(
+                    f"problem closing {self.client_handle} with result {result}"
+                )
 
     def get_bss_list(self, interface) -> Union[list, None]:
         if interface:
@@ -299,7 +400,11 @@ class Client(object):
         else:
             return None
 
-    def on_event_notification(self, wlan_event) -> None:
+    def on_event_notification(self, wlan_event, iface_guid) -> None:
+        if self.iface.guid_string == str(iface_guid):
+            pass
+        else:
+            return
         if wlan_event is not None:
             # attempt to get connected bssid
             bssid = get_interface_info(self.get_bssid_args, self.iface)
@@ -346,7 +451,6 @@ class Client(object):
 
                 # if str(wlan_event).strip() == "network_available":
                 #    pass
-                #
 
     def register_notification(self, callback, handle):
         c_back = WLAN_API.WLAN.wlan_register_notification(
@@ -358,13 +462,14 @@ class Client(object):
     def on_wlan_notification(callback, notification_data, p):
         event = Event.from_notification_data(notification_data)
         if event is not None:
-            callback(event)
+            callback(event, notification_data.contents.InterfaceGuid)
 
     def my_handle(self):
         return self.client_handle
 
     async def scan(self):
         try:
+            self.scan_finished = False
             self.log.debug(f"{self.iface.guid}: scan requested...")
             self.scan_timer.start()
             WLAN_API.WLAN.scan(self.iface.guid)
@@ -390,36 +495,3 @@ class Client(object):
         self.data = self.get_bss_list(self.iface)
         self.log.debug(f"({self.mac}), finish get_bss_list...")
         self.scan_finished = True
-
-    def __init__(self, args, iface, ssid=None):
-        try:
-            self.timeout_interval = 4.0
-            self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
-            self.args = args
-            self.iface = iface
-            self.mac = self.iface.mac
-            # self.first_event = True
-            self.client_handle = WLAN_API.WLAN.open_handle()
-            self.is_handle_closed = False
-            self.callback = self.register_notification(
-                self.on_event_notification, self.client_handle
-            )
-            callbacks.append(self.callback)
-            self.log.debug(f"callback {self.callback} added")
-            handles.append(self.client_handle)
-            self.log.debug(f"handle {self.client_handle} added")
-        except Exception:
-            traceback.print_exc()
-            WLAN_API.WLAN.close_handle(self.client_handle)
-
-    def __del__(self):
-        # callbacks.remove(self.client_handle)
-        if not self.is_handle_closed:
-            result = WLAN_API.WLAN.close_handle(self.client_handle)
-            self.log.debug(f"handle {self.client_handle} closed with result {result}")
-            if int(result) == 0:
-                self.is_handle_closed = True
-            else:
-                self.log.debug(
-                    f"problem closing {self.client_handle} with result {result}"
-                )

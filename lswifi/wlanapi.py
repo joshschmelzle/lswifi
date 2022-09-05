@@ -1569,7 +1569,6 @@ class WLAN:
         """Returns a list of WirelessInterface objects based on the wireless
         interfaces available.
         """
-        log = logging.getLogger(__name__)
         ifaces = {}
         threads = list()
         handle = WLAN.open_handle()
@@ -1605,6 +1604,7 @@ class WLAN:
             #     wlan_iface = WirelessInterface(info)
             #     out_list.append(wlan_iface)
         except KeyboardInterrupt:
+            log = logging.getLogger(__name__)
             log.warning("caught KeyboardInterrupt... stopping...")
         finally:
             WLAN.free_memory(wlan_interfaces)
