@@ -293,7 +293,7 @@ class Client(object):
                 self.log.error(
                     f"Unexpected error when trying to get the BSS list on {interface.mac}"
                 )
-                self.log.error(error)
+                # self.log.error(error)
         else:
             return None
 

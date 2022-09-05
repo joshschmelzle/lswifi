@@ -7,6 +7,8 @@ lswifi.constants
 define app constant values
 """
 
+from collections import namedtuple
+
 APNAMEACKFILE = "apnames.ack"
 APNAMEJSONFILE = "apnames.json"
 
@@ -136,14 +138,27 @@ IE_DICT = {
     255: "Extension",
 }
 
+VENDOR = namedtuple("VENDOR", "friendly company")
+
 VENDOR_SPECIFIC_DICT = {
-    "00-0B-86": ["Aruba", "Aruba Networks Inc."],
-    "00-50-F2": ["Microsoft", "Microsoft Corporation"],
-    "00-03-7F": ["Atheros", "Atheros Communications Inc."],
-    "00-10-18": ["Broadcom", "Broadcom"],
-    "00-17-F2": ["Apple", "Apple Inc."],
-    "00-15-6D": ["Ubiquiti", "Ubiquiti Networks Inc."],
-    "00-26-86": ["Quantenna", "Quantenna"],
+    "00:0B:86": VENDOR("Aruba", "Aruba Networks Inc."),
+    "00:50:F2": VENDOR("Microsoft", "Microsoft Corporation"),
+    "00:03:7F": VENDOR("Atheros", "Atheros Communications Inc."),
+    "00:10:18": VENDOR("Broadcom", "Broadcom"),
+    "C8:3A:6B": VENDOR("Roku", "Roku, Inc"),
+    "08:00:09": VENDOR("HP", "Hewlett Packard"),
+    "00:17:F2": VENDOR("Apple", "Apple Inc."),
+    "00:1D:0F": VENDOR("TP-Link", "TP-LINK Technologies Co., Ltd."),
+    "00:15:6D": VENDOR("Ubiquiti", "Ubiquiti Networks Inc."),
+    "00:26:86": VENDOR("Quantenna", "Quantenna Communications, Inc."),
+    "00:E0:4C": VENDOR("Realtek", "Realtek Semiconductor Corp."),
+    "00:16:32": VENDOR("Samsung", "Samsung Electronics Co.,Ltd"),
+    "00:10:18": VENDOR("Broadcom", "Broadcom"),
+    "00:90:4C": VENDOR("Epigram", "Epigram, Inc."),
+    "00:03:7F": VENDOR("Atheros", "Atheros Communications, Inc."),
+    "00:15:6D": VENDOR("Ubiquiti", "Ubiquiti Networks Inc."),
+    "00:0C:43": VENDOR("Ralink", "Ralink Technology, Corp."),
+    "00:0C:E7": VENDOR("MediaTek", "MediaTek Inc."),
 }
 
 EXTENSION_IE_DICT = {

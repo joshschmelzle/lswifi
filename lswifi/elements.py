@@ -9,6 +9,8 @@ code used to parse the information elements provided by Native Wifi's wlanapi.h
 
 import logging
 import math
+import os
+import sys
 from collections import namedtuple
 from ctypes import addressof, c_char
 from dataclasses import dataclass
@@ -167,9 +169,14 @@ class WirelessNetworkBss:
                 )
 
             self.band = Band(self.channel_frequency.value)
-        except Exception:
+        except Exception as error:
             self.log.error(
                 f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
+            )
+            exception_type, exception_object, exception_traceback = sys.exc_info()
+            fname = os.path.split(exception_traceback.tb_frame.f_code.co_filename)[1]
+            self.log.error(
+                f"{exception_object} {exception_type} {fname}:{exception_traceback.tb_lineno}"
             )
             raise
 
@@ -1321,23 +1328,15 @@ class WirelessNetworkBss:
         memoryview_body = list(memoryview(element_data))
         zero, one, two, three = [
             memoryview_body[i] for i in [0, 1, 2, 3]
-        ]  # list comprehension
+        ]  
+        oui3 = convert_mac_address_to_string([zero, one, two]).upper()
         oui = convert_mac_address_to_string([zero, one, two, three])
         element_body = [element_data[i : i + 1] for i in range(len(element_data))]
         vendor_oui_type = int.from_bytes(element_body[3], "little")
         out = ""
         apname = ""
-        if "08:00:09" in oui:
-            out = "Hewlett Packard"
-            return out
         if "8c:fd:f0" in oui:
             out = f"Qualcomm Inc, Subtype: {vendor_oui_type}"
-            return out
-        if "00:26:86" in oui:
-            out = "Quantenna Communications, Inc."
-            return out
-        if "00:e0:4c" in oui:
-            out = "Realtek Semiconductor Corp."
             return out
         if "50:6f:9a:0a" in oui:
             out = "Wi-Fi Alliance"
@@ -1426,21 +1425,6 @@ class WirelessNetworkBss:
                 out = "Cisco Aironet (11)"
             if vendor_oui_type == 20:
                 out = "Cisco Aironet (20)"
-            return out
-        if "00:16:32" in oui:  # Samsung
-            out = "Samsung"
-            return out
-        if "00:10:18" in oui:  # Broadcom
-            out = "Broadcom"
-            return out
-        if "00:90:4c" in oui:  # Epigram
-            out = "Epigram"
-            return out
-        if "00:03:7f" in oui:  # Atheros
-            out = "Atheros"
-            return out
-        if "00:15:6d" in oui:  # Ubiquiti
-            out = "Ubiquiti"
             return out
         if "00:50:f2:04" in oui:  # Device name here
             out = "Microsoft WPS"
@@ -1823,6 +1807,9 @@ class WirelessNetworkBss:
                     pass
                 return out
 
+        if oui3 in VENDOR_SPECIFIC_DICT:
+            vendor = VENDOR_SPECIFIC_DICT[oui3].friendly
+            return f"OUI: {oui3} ({vendor})"
         self.log.debug(
             f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
         )

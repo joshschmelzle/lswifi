@@ -211,9 +211,9 @@ async def scan(interfaces, args, **kwargs):
             if client.data is None:
                 log.warning(f"no scan data for {client.mac}")
             else:
-                log.debug(f"start parsing bss ies for {client.mac}")
+                log.debug(f"start parsing information elements for {client.mac}")
                 parse_bss_list_and_print(client.data, client, args, **kwargs)
-                log.debug(f"finish parsing bss ies for {client.mac}")
+                log.debug(f"finish parsing information elements for {client.mac}")
 
         for _idx, client in clients.items():
             client.__del__()  # need to garbage collect the and close the client handle
