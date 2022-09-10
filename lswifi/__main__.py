@@ -55,7 +55,7 @@ def main():
     if args.apnames:
         is_apname_ack_stored = user_ack_apnames_disclaimer()
         log.debug(
-            f"is there a stored ack for caching apnames on local machine? ({is_apname_ack_stored})"
+            f"is there a stored acknowledgement for caching apnames on local machine? {'Yes' if is_apname_ack_stored else 'No'}"
         )
 
     core.start(args, storedack=is_apname_ack_stored)
@@ -79,16 +79,16 @@ def user_ack_apnames_disclaimer() -> bool:
     else:
         print(
             "---\n"
-            "AP (Access Point) names are not contained in every scan result.\n\n"
             "What?\n"
             "  - This feature locally caches BSSIDs and any detected corresponding AP names.\n"
             "  - Caching this information helps to more consistently provide AP names in output.\n"
             "Why?\n"
             "  - AP names are typically identified in beacon frames.\n"
-            "  - Dwell time varies per channel meaning it could be less than the beacon interval.\n"
-            "  - Retrieved scan results are a combination of beacons, probe responses, or sometimes a merged frame.\n"
+            "  - Dwell time (during a scan) varies per channel and can be shorter than the standard beacon interval.\n"
+            "  - Retrieved scan results are a combination of beacons, probe responses, and sometimes a merge of both.\n"
+            "  - This means results for a given BSSID might be from a beacon in one scan and a probe response in another.\n"
             "Where?\n"
-            "  - Data is stored and read from a JSON file on your local device here:\n\n"
+            "  - Any data collected is stored and read from a JSON file on your local device here:\n\n"
             f"{apnames}\n"
             "---\n"
         )

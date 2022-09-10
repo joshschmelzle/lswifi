@@ -404,7 +404,7 @@ def parse_bss_list_and_print(client, args, **kwargs):
         for key, value in kwargs.items():
             if args.apnames and "stored" in key:
                 log.debug(
-                    f"has user provided ack for caching AP names on their local machine? ({value})"
+                    f"has user provided ack for caching AP names on their local machine? {'Yes' if value else 'No'}"
                 )
                 if value:
                     stored_ack = value
