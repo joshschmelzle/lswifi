@@ -71,6 +71,17 @@ def watch_events(args, clients) -> None:
 def start(args, **kwargs):
     log = logging.getLogger(__name__)
 
+    is_caching_acknowledged = False
+
+    if kwargs is not None:
+        for key, value in kwargs.items():
+            if args.apnames and "stored" in key:
+                log.debug(
+                    f"has user provided ack for caching AP names on their local machine? {'Yes' if value else 'No'}"
+                )
+                if value:
+                    is_caching_acknowledged = value
+
     try:
         clients = {}
         for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
@@ -117,6 +128,8 @@ def start(args, **kwargs):
                 scanning = False
                 print(get_interface_info(args, client.iface))
 
+        # TODO move other non-scanning functions here
+
         if scanning:
             loops_completed = 0
             scans = 1
@@ -136,12 +149,12 @@ def start(args, **kwargs):
                 timeout_start = time.time()
 
                 while time.time() < timeout_start + timeout:
-                    asyncio.run(scan(clients, args, **kwargs))
+                    asyncio.run(scan(clients, is_caching_acknowledged, args))
                     loops_completed += 1
                     time.sleep(interval)
             else:  # we're scanning a given number of times
                 for index in range(scans):
-                    asyncio.run(scan(clients, args, **kwargs))
+                    asyncio.run(scan(clients, is_caching_acknowledged, args))
                     loops_completed += 1
                     time.sleep(interval)
 
@@ -164,7 +177,7 @@ def start(args, **kwargs):
     sys.exit(0)
 
 
-async def scan(clients, args, **kwargs):
+async def scan(clients, is_caching_acknowledged, args):
     """
     async func to perform a scan
     """
@@ -179,7 +192,7 @@ async def scan(clients, args, **kwargs):
         # new async example working #
         #############################
 
-        async def scanfunc(index, args, client):
+        async def scanfunc(index, client):
             log.debug(
                 f"initializing scan on {client.iface.description} {client.iface.guid_string}"
             )
@@ -196,7 +209,7 @@ async def scan(clients, args, **kwargs):
             clients[index] = client
 
         for _index, client in clients.items():
-            task = scanfunc(_index, args, client)
+            task = scanfunc(_index, client)
             background_tasks.add(task)
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -219,7 +232,7 @@ async def scan(clients, args, **kwargs):
                 log.warning(f"no scan data for {client.mac}")
             else:
                 log.debug(f"start parsing information elements for {client.mac}")
-                parse_bss_list_and_print(client, args, **kwargs)
+                parse_bss_list_and_print(client, is_caching_acknowledged, args)
                 log.debug(f"finish parsing information elements for {client.mac}")
 
         # for _idx, client in clients.items():
@@ -392,7 +405,7 @@ def updateAPNames(json_names, scan_names) -> None:
         log.debug("<updateAPNames> nothing to update")
 
 
-def parse_bss_list_and_print(client, args, **kwargs):
+def parse_bss_list_and_print(client, is_caching_acknowledged, args):
     out_results = []
     bssid_list = []
 
@@ -400,23 +413,11 @@ def parse_bss_list_and_print(client, args, **kwargs):
 
     log = logging.getLogger(__name__)
 
-    if kwargs is not None:
-        for key, value in kwargs.items():
-            if args.apnames and "stored" in key:
-                log.debug(
-                    f"has user provided ack for caching AP names on their local machine? {'Yes' if value else 'No'}"
-                )
-                if value:
-                    stored_ack = value
-                else:
-                    stored_ack = value
-
     if args.ethers:
         ethers = loadEthers()
 
-    if args.apnames:
-        if stored_ack:
-            json_names = loadAPNames()
+    if is_caching_acknowledged:
+        json_names = loadAPNames()
 
     exportpath = None
 
@@ -613,7 +614,7 @@ def parse_bss_list_and_print(client, args, **kwargs):
             if bss.bssid.value in ethers:
                 bss.apname.value = ethers[bss.bssid.value]
         elif args.apnames:
-            if stored_ack:
+            if is_caching_acknowledged:
                 scan_bssid = bss.bssid.value
                 scan_apname = remove_control_chars(bss.apname.value)
 
@@ -717,7 +718,8 @@ def parse_bss_list_and_print(client, args, **kwargs):
             out_results[-1].append(bss.utilization.out())
 
         if args.apnames or args.ethers:
-            out_results[-1].append(bss.apname.out())
+            if is_caching_acknowledged:
+                out_results[-1].append(bss.apname.out())
 
     def get_index(key):
         for r in out_results:
@@ -826,7 +828,7 @@ def parse_bss_list_and_print(client, args, **kwargs):
         log.warning("***BSSIDS WITH DUPLICATE MACs***")
 
     if args.apnames:
-        if stored_ack:
+        if is_caching_acknowledged:
             updateAPNames(json_names, newapnames)
 
 
