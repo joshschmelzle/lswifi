@@ -131,7 +131,7 @@ def setup_parser() -> argparse.ArgumentParser:
         version=f"%(prog)s {__version__}",
     )
     # parser.add_argument(
-    #     "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use"
+    #     "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use", help=argparse.SUPPRESS
     # )
     parser.add_argument(
         "-i",
@@ -313,13 +313,19 @@ def setup_parser() -> argparse.ArgumentParser:
         help="output will be formatted as json",
     )
     parser.add_argument(
+        "--csv",
+        dest="csv",
+        action="store_true",
+        help="output will be formatted as csv",
+    )
+    parser.add_argument(
         "-export",
         nargs="?",
         type=str,
         metavar="BSSID",
         dest="export",
         action=ExportAction,
-        help="export bss and ies bytefiles. default behavior will export all scan. to export one, specify mac address as argument.",
+        help="export bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.",
     )
     parser.add_argument(
         "-decode",
@@ -331,7 +337,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--bytes",
         metavar="BSSID",
         dest="bytes",
-        help="output debugging bytes for a specified BSSID.",
+        help="output debugging bytes for a specified BSSID found in scan results.",
     )
     parser.add_argument(
         "--watchevents",

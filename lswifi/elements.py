@@ -70,75 +70,79 @@ class WirelessNetworkBss:
             _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
                 "latin-1"
             )
-        self.ssid = OutObject(
-            value=_ssid,
-            header="SSID",
-            align=Alignment.RIGHT,
-            subheader="[Network Name]",
-        )
-        self.bssid = BSSID(bss_entry, connected_bssid, header="BSSID")
-        self.phy_id = bss_entry.PhyId
-        self.bss_type = OutObject(
-            value=WLAN_API.DOT11_BSS_TYPE_DICT[bss_entry.dot11BssType], header="TYPE"
-        )
-        self.phy_type = PHYType(bss_entry)
-        self.rssi = OutObject(value=bss_entry.Rssi, header="RSSI", subheader="[dBm]")
-        self.signal_quality = SignalQuality(value=bss_entry.LinkQuality, header="QUAL")
-        self.has_country_code = bss_entry.InRegDomain
-        self.timestamp = bss_entry.Timestamp
-        self.host_timestamp = bss_entry.HostTimestamp
-        self.uptime = OutObject(
-            value=self.convert_timestamp_to_uptime(self.timestamp),
-            header="AP UPTIME",
-            subheader="[approx.]",
-        )
-        self.beacon_interval = BeaconInterval(
-            value=bss_entry.BeaconPeriod, header="BEACON", subheader="[ms]"
-        )
-        self.channel_number = ChannelNumber(bss_entry)
-        self.channel_number_marked = ChannelNumber(bss_entry)
-        self.channel_frequency = OutObject(
-            value=int(bss_entry.ChCenterFrequency / 1000),
-            header="FREQ.",
-            subheader="",
-        )
-        # self.is_5ghz is used because sometime 2.4 GHz networks include VHT IEs
-        self.is_5ghz = is_five_band(int(self.channel_frequency.value))
-        self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
-        self.wlanrateset = Rates(bss_entry)
-        self.ie_rates = OutObject(
-            header="SUPPORTED RATES",
-            align=Alignment.CENTER,
-            subheader="(B): basic rates [Mbit/s]",
-        )
-        self.transmit_power = OutObject(
-            header="TPC",
-            subheader="[dBm]",
-        )
-        self.capabilities = Capabilities(bss_entry)
-        self.ie_size = bss_entry.IeSize
-        self.country_code = "--"
-        self.apname = OutObject(header="AP NAME")
-        self.security = Security(self.capabilities)
-        self.pmf = PMF()
-        self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
-        self.stations = OutObject(header="QBSS", subheader="STA")
-        self.utilization = OutObject(header="QBSS", subheader="CU")
-        self.ie_numbers = OutList(header="IEs")
-        self.exie_numbers = OutList(header="EXT IEs")
-        self.amendments = OutList(header="AMENDMENTS", subheader="[802.11]")
-        self.modes = Modes(header="MODES")
-        self.bssbytes = bss_entry
-        self.bsscolor = OutList(header="BSS", subheader="COLOR")
-        self.channel_marking = ""
-        self.channel_list = self.channel_number.value
-        self.dtim = OutObject(header="DTIM")
-        self.voice_acm = OutObject(header="AC_VO")
-        self.video_acm = OutObject(header="AC_VI")
-        self.besteffort_acm = OutObject(header="AC_BE")
-        self.background_acm = OutObject(header="AC_BK")
-
         try:
+            self.ssid = OutObject(
+                value=_ssid,
+                header="SSID",
+                align=Alignment.RIGHT,
+                subheader="[Network Name]",
+            )
+            self.bssid = BSSID(bss_entry, connected_bssid, header="BSSID")
+            self.phy_id = bss_entry.PhyId
+            self.bss_type = OutObject(
+                value=WLAN_API.DOT11_BSS_TYPE_DICT[bss_entry.dot11BssType],
+                header="TYPE",
+            )
+            self.phy_type = PHYType(bss_entry)
+            self.rssi = OutObject(value=bss_entry.Rssi, header="RSSI", subheader="dBm")
+            self.signal_quality = SignalQuality(
+                value=bss_entry.LinkQuality, header="QUAL"
+            )
+            self.has_country_code = bss_entry.InRegDomain
+            self.timestamp = bss_entry.Timestamp
+            self.host_timestamp = bss_entry.HostTimestamp
+            self.uptime = OutObject(
+                value=self.convert_timestamp_to_uptime(self.timestamp),
+                header="AP UPTIME",
+                subheader="[approx.]",
+            )
+            self.beacon_interval = BeaconInterval(
+                value=bss_entry.BeaconPeriod, header="BEACON", subheader="[ms]"
+            )
+            self.channel_number = ChannelNumber(bss_entry)
+            self.channel_number_marked = ChannelNumber(bss_entry)
+            self.channel_frequency = OutObject(
+                value="{:.3f}".format(float(bss_entry.ChCenterFrequency / 1000000)),
+                header="FREQ.",
+                subheader="[GHz]",
+            )
+            # self.is_5ghz is used because sometime 2.4 GHz networks include VHT IEs
+            self.is_5ghz = is_five_band(int(float(self.channel_frequency.value)))
+
+            self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
+            self.wlanrateset = Rates(bss_entry)
+            self.ie_rates = OutObject(
+                header="SUPPORTED RATES",
+                align=Alignment.CENTER,
+                subheader="(B): basic rates [Mbit/s]",
+            )
+            self.transmit_power = OutObject(
+                header="TPC",
+                subheader="dBm",
+            )
+            self.capabilities = Capabilities(bss_entry)
+            self.ie_size = bss_entry.IeSize
+            self.country_code = "--"
+            self.apname = OutObject(header="AP NAME")
+            self.security = Security(self.capabilities)
+            self.pmf = PMF()
+            self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
+            self.stations = OutObject(header="QBSS", subheader="STA")
+            self.utilization = OutObject(header="QBSS", subheader="CU")
+            self.ie_numbers = OutList(header="IEs")
+            self.exie_numbers = OutList(header="EXT IEs")
+            self.amendments = OutList(header="AMENDMENTS", subheader="[802.11]")
+            self.modes = Modes(header="MODES")
+            self.bssbytes = bss_entry
+            self.bsscolor = OutList(header="BSS", subheader="COLOR")
+            self.channel_marking = ""
+            self.channel_list = self.channel_number.value
+            self.dtim = OutObject(header="DTIM")
+            self.voice_acm = OutObject(header="AC_VO")
+            self.video_acm = OutObject(header="AC_VI")
+            self.besteffort_acm = OutObject(header="AC_BE")
+            self.background_acm = OutObject(header="AC_BK")
+
             if not is_byte_file:
                 # parse IEs
                 self.raw_information_elements = self._get_information_elements_buffer(
@@ -168,7 +172,7 @@ class WirelessNetworkBss:
                     f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
                 )
 
-            self.band = Band(self.channel_frequency.value)
+            self.band = Band(int(float(self.channel_frequency.value)))
         except Exception as error:
             self.log.error(
                 f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
@@ -1086,7 +1090,6 @@ class WirelessNetworkBss:
                 element_data,
                 format_bytes_as_hex(element_data),
             )
-
         self.log.debug(
             f"Undecoded IE ({element_id}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
         )
@@ -2583,10 +2586,10 @@ class WirelessNetworkBss:
         quiet_duration = edata[2] + edata[3]
         quiet_offset = edata[4] + edata[5]
         return (
-            f"Count {quiet_count}, "
-            f"Period {quiet_period}, "
-            f"Duration {quiet_duration}, "
-            f"Offset {quiet_offset}"
+            f"Count: {quiet_count}, "
+            f"Period: {quiet_period}, "
+            f"Duration: {quiet_duration}, "
+            f"Offset: {quiet_offset}"
         )
 
     def __parse_erp_element(self, edata):

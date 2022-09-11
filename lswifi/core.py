@@ -11,6 +11,7 @@ code to manage clients (interfaces), their data, and writing out results.
 import asyncio
 import concurrent.futures
 import contextlib
+import csv
 import datetime
 import json
 import logging
@@ -39,35 +40,6 @@ from .helpers import (
 from .schemas.out import *
 
 
-def list_interfaces(clients) -> None:
-    """
-    Print interfaces and exit
-    """
-
-    print(f"There are {len(clients)} interfaces on this system:")
-    for _index, client in clients.items():
-        print(
-            f"    Connection Name: {client.iface.connection_name}\n"
-            f"    Description: {client.iface.description}\n"
-            f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
-            f"    MAC: {client.iface.mac}\n"
-            f"    State: {client.iface.state_string}\n"
-        )
-    sys.exit()
-
-
-def watch_events(args, clients) -> None:
-    """
-    Watch for notifications on wireless interfaces
-    """
-
-    try:
-        while True:
-            sleep(5)
-    except KeyboardInterrupt:
-        pass
-
-
 def start(args, **kwargs):
     log = logging.getLogger(__name__)
 
@@ -88,11 +60,20 @@ def start(args, **kwargs):
             clients[index] = Client(args, iface)
 
         if args.list_interfaces:
-            list_interfaces(clients)
+            print(f"There are {len(clients)} interfaces on this system:")
+            for _index, client in clients.items():
+                print(
+                    f"    Connection Name: {client.iface.connection_name}\n"
+                    f"    Description: {client.iface.description}\n"
+                    f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
+                    f"    MAC: {client.iface.mac}\n"
+                    f"    State: {client.iface.state_string}\n"
+                )
+            sys.exit(0)
 
         if args.event_watcher:
-            watch_events(args, clients)
-            sys.exit(0)
+            while True:
+                sleep(5)
 
         if args.append:
             appendEthers(args.append)
@@ -145,26 +126,42 @@ def start(args, **kwargs):
                 timeout = int(args.time)
                 log.debug(f"duration of time for recurring scans is {timeout} seconds")
 
+            csv_file_name = ""
+            if args.csv:
+                now = (
+                    datetime.datetime.now()
+                    .astimezone()
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace(":", "_")
+                )
+                csv_file_name = f"lswifi_{now}.csv"
+
             if timeout > 0:  # we're scanning during a given time period
                 timeout_start = time.time()
 
                 while time.time() < timeout_start + timeout:
-                    asyncio.run(scan(clients, is_caching_acknowledged, args))
+                    asyncio.run(
+                        scan(clients, is_caching_acknowledged, csv_file_name, args)
+                    )
                     loops_completed += 1
                     time.sleep(interval)
             else:  # we're scanning a given number of times
                 for index in range(scans):
-                    asyncio.run(scan(clients, is_caching_acknowledged, args))
+                    asyncio.run(
+                        scan(clients, is_caching_acknowledged, csv_file_name, args)
+                    )
                     loops_completed += 1
                     time.sleep(interval)
 
             if loops_completed > 1:
                 log.info(f"total number of scans completed is {loops_completed}")
     except KeyboardInterrupt:
-        if loops_completed > 1:
-            log.info(
-                f"total number of scans completed during this session is {loops_completed}"
-            )
+        if not args.event_watcher:
+            if loops_completed > 1:
+                log.info(
+                    f"total number of scans completed during this session is {loops_completed}"
+                )
         log.warning("keyboard interruption detected... stopping...")
     except asyncio.CancelledError:
         raise
@@ -177,7 +174,7 @@ def start(args, **kwargs):
     sys.exit(0)
 
 
-async def scan(clients, is_caching_acknowledged, args):
+async def scan(clients, is_caching_acknowledged, csv_file_name, args):
     """
     async func to perform a scan
     """
@@ -188,9 +185,8 @@ async def scan(clients, is_caching_acknowledged, args):
         if iface_count > 1:
             log.info(f"starting scans on {iface_count} interfaces")
 
-        #############################
-        # new async example working #
-        #############################
+        if args.csv:
+            log.info(f"exporting scans to {csv_file_name}")
 
         async def scanfunc(index, client):
             log.debug(
@@ -221,8 +217,6 @@ async def scan(clients, is_caching_acknowledged, args):
             for future in concurrent.futures.as_completed(futures):
                 pass
 
-            #  [executor.submit(asyncio.run, task) for task in background_tasks]
-
         clients = {
             k: clients[k] for k in sorted(clients)
         }  # sort by key (index) numerically
@@ -232,16 +226,33 @@ async def scan(clients, is_caching_acknowledged, args):
                 log.warning(f"no scan data for {client.mac}")
             else:
                 log.debug(f"start parsing information elements for {client.mac}")
-                parse_bss_list_and_print(client, is_caching_acknowledged, args)
+                (
+                    out_results,
+                    bss_len,
+                    bssid_list,
+                    json_names,
+                    json_out,
+                    newapnames,
+                ) = parse_bss_list(client, is_caching_acknowledged, csv_file_name, args)
+                if args.ies or args.bytes or args.export:
+                    return
+                print_bss_list(
+                    out_results,
+                    bss_len,
+                    client.mac,
+                    bssid_list,
+                    is_caching_acknowledged,
+                    json_names,
+                    json_out,
+                    newapnames,
+                    args,
+                )
                 log.debug(f"finish parsing information elements for {client.mac}")
-
-        # for _idx, client in clients.items():
-        #     client.__del__()  # need to garbage collect the and close the client handle
 
         ############################
         # old sync example working #
         ############################
-
+        #
         # for _index, interface in interfaces.items():
         #     client = Client(args, interface)
         #     clients[_index] = client
@@ -405,7 +416,7 @@ def updateAPNames(json_names, scan_names) -> None:
         log.debug("<updateAPNames> nothing to update")
 
 
-def parse_bss_list_and_print(client, is_caching_acknowledged, args):
+def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
     out_results = []
     bssid_list = []
 
@@ -415,6 +426,8 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
 
     if args.ethers:
         ethers = loadEthers()
+
+    json_names = {}
 
     if is_caching_acknowledged:
         json_names = loadAPNames()
@@ -460,7 +473,7 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
                 user_bss = args.bytes.lower()
 
             if args.export:
-                if args.export != 4:
+                if args.export != 4:  # if lswifi -export xx:xx:xx:nn:nn:nn
                     user_bss = args.export
                     # print(f"{bss_len} {index}")
                     # print(f"{wlanapi_bss} {user_bss}")
@@ -498,10 +511,16 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
                 # print(f"{bsspath} {iespath}")
 
                 if args.export != 4:
+                    log.info(
+                        f"found and exporting requested bssid from the scan results of {client.mac}."
+                    )
                     print(f"raw byte files for {args.export} exported to {exportpath}")
                     break
-                elif bss_len == index:
-                    print(f"{bss_len} total raw byte files exported to {exportpath}")
+                elif (bss_len - 1) == index:
+                    log.info(
+                        f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
+                    )
+                    print(f"files exported to {exportpath}")
 
                 continue
 
@@ -510,6 +529,9 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
                 # print("{} {}".format(wlanapi_bss, user_bss))
                 continue
             if args.ies:
+                log.info(
+                    f"found requested bssid in the scan results from {client.mac}."
+                )
                 print(bss)
             if args.bytes:
                 print("bss.bssbytes.send():")
@@ -533,48 +555,48 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
         else:
             # handle a band filter
             if args.a and args.g and not args.six:
-                if is_two_four_band(int(bss.channel_frequency.value)):
+                if is_two_four_band(bss.channel_frequency.value):
                     pass
-                if is_five_band(int(bss.channel_frequency.value)):
+                if is_five_band(bss.channel_frequency.value):
                     pass
-                if is_six_band(int(bss.channel_frequency.value)):
+                if is_six_band(bss.channel_frequency.value):
                     continue
             if args.a and args.six and not args.g:
-                if is_two_four_band(int(bss.channel_frequency.value)):
+                if is_two_four_band(bss.channel_frequency.value):
                     continue
-                if is_five_band(int(bss.channel_frequency.value)):
+                if is_five_band(bss.channel_frequency.value):
                     pass
-                if is_six_band(int(bss.channel_frequency.value)):
+                if is_six_band(bss.channel_frequency.value):
                     pass
             if args.a and not args.six and not args.g:
-                if is_two_four_band(int(bss.channel_frequency.value)):
+                if is_two_four_band(bss.channel_frequency.value):
                     continue
-                if is_five_band(int(bss.channel_frequency.value)):
+                if is_five_band(bss.channel_frequency.value):
                     pass
-                if is_six_band(int(bss.channel_frequency.value)):
+                if is_six_band(bss.channel_frequency.value):
                     continue
             # handle g band filter
             if args.g and args.six and not args.a:
-                if is_two_four_band(int(bss.channel_frequency.value)):
+                if is_two_four_band(bss.channel_frequency.value):
                     pass
-                if is_five_band(int(bss.channel_frequency.value)):
+                if is_five_band(bss.channel_frequency.value):
                     continue
-                if is_six_band(int(bss.channel_frequency.value)):
+                if is_six_band(bss.channel_frequency.value):
                     pass
             if args.g and not args.six and not args.a:
-                if is_two_four_band(int(bss.channel_frequency.value)):
+                if is_two_four_band(bss.channel_frequency.value):
                     pass
-                if is_five_band(int(bss.channel_frequency.value)):
+                if is_five_band(bss.channel_frequency.value):
                     continue
-                if is_six_band(int(bss.channel_frequency.value)):
+                if is_six_band(bss.channel_frequency.value):
                     continue
             # handle six band filter
             if args.six and not args.a and not args.g:
-                if is_two_four_band(int(bss.channel_frequency.value)):
+                if is_two_four_band(bss.channel_frequency.value):
                     continue
-                if is_five_band(int(bss.channel_frequency.value)):
+                if is_five_band(bss.channel_frequency.value):
                     continue
-                if is_six_band(int(bss.channel_frequency.value)):
+                if is_six_band(bss.channel_frequency.value):
                     pass
 
         # handle width filter
@@ -630,7 +652,7 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
                             ] = scan_apname  # then 1) update new hash table with current AP name
                             bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
                     log.debug(
-                        f"LIVE BSSID {scan_bssid} CACHED {cachedAP} SCANNED {scan_apname}"
+                        f"BSSID from scan: {scan_bssid}, Name from cache: {cachedAP}, Name from scanned {scan_apname}"
                     )
                 elif scan_apname != "":  # working with new AP name
                     newapnames[
@@ -640,72 +662,57 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
         # bss.element.out() contains a tuple with the following values
         #   1. value, 2. header and alignment (left, center, right), 3. subheader
 
-        connected = False
         if bss.bssid.connected:
-            connected = True
-            if not args.json:
-                if "(*)" not in bss.bssid.value:
-                    bss.bssid.value += "(*)"
+            if not args.json and not args.csv:
+                # if "(*)" not in bss.bssid.value:
+                bss.bssid.value += "(*)"
 
-        json_out.append(
-            {
-                "amendments": sorted(bss.amendments.elements),
-                "apname": str(bss.apname).strip(),
-                "bssid": str(bss.bssid).strip(),
-                "bss_type=": str(bss.bss_type).strip(),
-                "channel_frequency": str(bss.channel_frequency).strip(),
-                "channel_number": str(bss.channel_number).strip(),
-                "channel_width": str(bss.channel_width).strip(),
-                "connected": connected,
-                "epoch": client.last_scan_time,
-                "ies": sorted(bss.ie_numbers.elements),
-                "ies_extension": sorted(bss.exie_numbers.elements),
-                "modes": sorted(bss.modes.elements),
-                "phy_type": str(bss.phy_type).strip(),
-                "rates_basic": [x for x in bss.wlanrateset.basic.split(" ")],
-                "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
-                "rssi": str(bss.rssi),
-                "security": str(bss.security).strip(),
-                "pmf": str(bss.pmf).strip(),
-                "spatial_streams": str(bss.spatial_streams),
-                "ssid": str(bss.ssid).strip(),
-                "stations": str(bss.stations),
-                "uptime": str(bss.uptime).strip(),
-                "utilization": str(bss.utilization).strip(),
-            }
+        if args.json:
+            json_out.append(
+                {
+                    "amendments": sorted(bss.amendments.elements),
+                    "apname": str(bss.apname).strip(),
+                    "bssid": str(bss.bssid).strip(),
+                    "bss_type=": str(bss.bss_type).strip(),
+                    "channel_frequency": str(bss.channel_frequency).strip(),
+                    "channel_number": str(bss.channel_number).strip(),
+                    "channel_width": str(bss.channel_width).strip(),
+                    "connected": bss.bssid.connected,
+                    "epoch": client.last_scan_time_epoch,
+                    "ies": sorted(bss.ie_numbers.elements),
+                    "ies_extension": sorted(bss.exie_numbers.elements),
+                    "modes": sorted(bss.modes.elements),
+                    "pmf": str(bss.pmf).strip(),
+                    "phy_type": str(bss.phy_type).strip(),
+                    "rates_basic": [x for x in bss.wlanrateset.basic.split(" ")],
+                    "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
+                    "rssi": str(bss.rssi),
+                    "security": str(bss.security).strip(),
+                    "spatial_streams": str(bss.spatial_streams),
+                    "ssid": str(bss.ssid).strip(),
+                    "stations": str(bss.stations),
+                    "uptime": str(bss.uptime).strip(),
+                    "utilization": str(bss.utilization).strip(),
+                }
+            )
+
+        out_results.append(
+            [
+                bss.ssid.out(),
+                bss.bssid.out(),
+                bss.rssi.out(),
+                bss.phy_type.out(),
+                bss.channel_number_marked.out(),
+                bss.channel_frequency.out(),
+                bss.spatial_streams.out(),
+                bss.security.out(),
+                bss.amendments.out(),
+                bss.uptime.out(),
+            ]
         )
 
         if args.pmf:
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.rssi.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    bss.security.out(),
-                    bss.amendments.out(),
-                    bss.pmf.out(),
-                    bss.uptime.out(),
-                ]
-            )
-        else:
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.rssi.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    bss.security.out(),
-                    bss.amendments.out(),
-                    bss.uptime.out(),
-                ]
-            )
+            out_results[-1].insert(len(out_results[-1]) - 1, bss.pmf.out())
 
         if args.period:
             out_results[-1].append(bss.beacon_interval.out())
@@ -720,6 +727,53 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
         if args.apnames or args.ethers:
             if is_caching_acknowledged:
                 out_results[-1].append(bss.apname.out())
+
+        if args.csv:
+            has_headings = False
+            csv_file_exists = os.path.exists(csv_file_name)
+            mode = "w"
+            if csv_file_exists:
+                mode = "a"
+                with open(csv_file_name, "r") as f:
+                    try:
+                        has_headings = csv.Sniffer().has_header(f.read(1024))
+                    except csv.Error:
+                        # The file seems to be empty
+                        has_headings = False
+
+            with open(csv_file_name, mode, newline="") as csvfile:
+                fieldnames = list()
+                for column in out_results[-1]:
+                    header = str(column.header)
+                    if "QBSS" in header:
+                        if "STA" in str(column.subheader):
+                            fieldnames.append("QBSS STA")
+                        if "CU" in str(column.subheader):
+                            fieldnames.append("QBSS CU")
+                    else:
+                        fieldnames.append(str(column.header))
+
+                fieldnames.insert(0, "TIMESTAMP")
+                fieldnames.insert(1, "INTERFACE MAC")
+
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                rowdata = {
+                    "TIMESTAMP": client.last_scan_time_iso,
+                    "INTERFACE MAC": client.mac,
+                }
+                for column in out_results[-1]:
+                    if "QBSS" in str(column.header):
+                        if "STA" in str(column.subheader):
+                            rowdata["QBSS STA"] = column.value
+                        if "CU" in str(column.subheader):
+                            rowdata[f"QBSS CU"] = column.value
+
+                    else:
+                        rowdata[f"{column.header}"] = column.value
+                # print(rowdata)
+                if not has_headings:
+                    writer.writeheader()
+                writer.writerow(rowdata)
 
     def get_index(key):
         for r in out_results:
@@ -739,14 +793,24 @@ def parse_bss_list_and_print(client, is_caching_acknowledged, args):
             out_results, key=lambda x: x[get_index("RSSI")].value, reverse=False
         )
 
-    # here because i added the verbose, byte file func and export func to this func
-    if args.ies or args.bytes or args.export:
-        return
+    return out_results, bss_len, bssid_list, json_names, json_out, newapnames
 
-    # outlist to screen
+
+def print_bss_list(
+    out_results,
+    bss_len,
+    client_mac,
+    bssid_list,
+    is_caching_acknowledged,
+    json_names,
+    json_out,
+    newapnames,
+    args,
+):
+    log = logging.getLogger(__name__)
     log.info(
         f"display filter sensitivity {args.sensitivity}; "
-        f"output includes {len(out_results)} of {len(wireless_network_bss_list)} BSSIDs detected in scan results for {client.mac}."
+        f"output includes {len(out_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
     )
 
     if len(out_results) > 0:

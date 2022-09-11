@@ -131,23 +131,26 @@ def __num_digits(num: int):
     return len(str(num))
 
 
-def is_two_four_band(frequency: int) -> bool:
+def is_two_four_band(frequency: str) -> bool:
     """determines if a channel frequency is in the 2.4 GHz ISM band"""
+    frequency = int(float(frequency))
     if __get_digit(frequency, __num_digits(frequency) - 1) == 2:
         return True
     else:
         return False
 
 
-def is_five_band(frequency: int) -> bool:
+def is_five_band(frequency: str) -> bool:
     """determines if a channel frequency is in the 5.0 GHz ISM band"""
+    frequency = int(float(frequency))
     if __get_digit(frequency, __num_digits(frequency) - 1) == 5 and frequency < 5955:
         return True
     else:
         return False
 
 
-def is_six_band(frequency: int) -> bool:
+def is_six_band(frequency: str) -> bool:
+    frequency = int(float(frequency))
     """determines if a channel frequency is in the 5.95-7.125 GHz ISM band"""
     if frequency >= 5955 and frequency < 7125:
         return True
