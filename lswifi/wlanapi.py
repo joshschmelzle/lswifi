@@ -1555,7 +1555,7 @@ class WLAN:
             data = ssid
             dot11_ssid = byref(DOT11SSID(length, data))
         else:
-            dot11_ssid = None
+            dot11_ssid = None  # type: ignore
         result = func_ref(client_handle, byref(interface_guid), dot11_ssid, None, None)
         if result is not SystemErrorCodes.ERROR_SUCCESS.value:
             raise WLANScanError(
