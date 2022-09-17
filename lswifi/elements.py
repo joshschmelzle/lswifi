@@ -16,7 +16,6 @@ from ctypes import addressof, c_char
 from dataclasses import dataclass
 from datetime import timedelta
 from struct import unpack_from
-from typing import List
 
 from . import wlanapi as WLAN_API
 from .constants import *
@@ -201,7 +200,7 @@ class WirelessNetworkBss:
         )
 
     @staticmethod
-    def parse_rates(ie_rates) -> List:
+    def parse_rates(ie_rates) -> str:
         """
         takes a list of rates including basic rates, and orders them.
 
@@ -212,8 +211,7 @@ class WirelessNetworkBss:
             ie_rates.value = ie_rates.value.replace("(b)", "*")
             basics = []
             supported = []
-            list = ie_rates.value.strip().split(" ")
-            for rate in list:
+            for rate in ie_rates.value.strip().split(" "):
                 rate = rate.lower()
                 if "*" in rate or "(b)" in rate:
                     rate = rate.replace("*", "").replace("(b)", "")
@@ -222,14 +220,14 @@ class WirelessNetworkBss:
                     supported.append(float(rate) if "." in rate else int(rate))
             rates = basics + supported
             rates.sort(key=float)
-            rates = [str(s) for s in rates]
-            basics = [str(s) for s in basics]
-            for index, value in enumerate(rates):
-                if value in basics:
-                    rates[index] = f"{value}(B)"
-            return " ".join(rates)
-        else:
-            return []
+
+            rates_out = [str(s) for s in rates]
+            basics_out = [str(s) for s in basics]
+            for index, value in enumerate(rates_out):
+                if value in basics_out:
+                    rates_out[index] = f"{value}(B)"
+            return " ".join(rates_out)
+        return ""
 
     @staticmethod
     def printoutlist(outlist):
