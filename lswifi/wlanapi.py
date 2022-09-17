@@ -1564,7 +1564,7 @@ class WLAN:
         return result
 
     @staticmethod
-    def get_wireless_interfaces() -> list:
+    def get_wireless_interfaces() -> dict:
         """Returns a list of WirelessInterface objects based on the wireless
         interfaces available.
         """
