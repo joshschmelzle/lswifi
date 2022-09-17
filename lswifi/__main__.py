@@ -35,7 +35,7 @@ from .constants import APNAMEACKFILE, APNAMEJSONFILE
 
 
 def app_path() -> None:
-    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
     path_exists = os.path.isdir(appdata_path)
     if not path_exists:
         os.mkdir(appdata_path)
@@ -66,7 +66,7 @@ def user_ack_apnames_disclaimer() -> bool:
     """retrieve ack from user that BSSIDs and discovered apnames will be cached in appdata"""
     logger = logging.getLogger(__name__)
     if os.getenv("LOCALAPPDATA"):
-        appdata_folder = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+        appdata_folder = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
     else:
         raise OSError
     is_path = os.path.isdir(appdata_folder)

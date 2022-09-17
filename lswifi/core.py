@@ -360,7 +360,7 @@ def appendEthers(data):
 
 
 def loadEthers() -> dict:
-    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
     is_path = os.path.isdir(appdata_path)
     if not is_path:
         os.makedirs(appdata_path)
@@ -378,7 +378,7 @@ def loadEthers() -> dict:
 
 def loadAPNames() -> dict:
     log = logging.getLogger(__name__)
-    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
     is_path = os.path.isdir(appdata_path)
     if not is_path:
         os.makedirs(appdata_path)
@@ -397,7 +397,7 @@ def loadAPNames() -> dict:
 
 def updateAPNames(json_names, scan_names) -> None:
     log = logging.getLogger(__name__)
-    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
     is_path = os.path.isdir(appdata_path)
     if not is_path:
         os.makedirs(appdata_path)
