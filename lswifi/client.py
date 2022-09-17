@@ -393,11 +393,11 @@ class Client(object):
                     return None
 
                 return wireless_network_bss_list
-            except Exception as error:
+            except Exception:
                 self.log.error(
                     f"Unexpected error when trying to get the BSS list on {interface.mac}"
                 )
-                # self.log.error(error)
+                return None
         else:
             return None
 
