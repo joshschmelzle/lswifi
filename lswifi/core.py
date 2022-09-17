@@ -18,11 +18,12 @@ import logging
 import os
 import sys
 import time
+from operator import itemgetter
 from time import sleep
 
 # app imports
 from . import wlanapi as WLAN_API
-from .__version__ import __title__
+from .__version__ import __title__, __version__
 from .client import Client, get_interface_info
 from .constants import APNAMEJSONFILE
 from .elements import WirelessNetworkBss
@@ -127,7 +128,8 @@ def start(args, **kwargs):
                 log.debug(f"duration of time for recurring scans is {timeout} seconds")
 
             csv_file_name = ""
-            if args.csv:
+            json_file_name = ""
+            if args.csv or args.json:
                 now = (
                     datetime.datetime.now()
                     .astimezone()
@@ -136,20 +138,33 @@ def start(args, **kwargs):
                     .replace(":", "_")
                 )
                 csv_file_name = f"lswifi_{now}.csv"
+                json_file_name = f"lswifi_{now}.json"
 
             if timeout > 0:  # we're scanning during a given time period
                 timeout_start = time.time()
 
                 while time.time() < timeout_start + timeout:
                     asyncio.run(
-                        scan(clients, is_caching_acknowledged, csv_file_name, args)
+                        scan(
+                            clients,
+                            is_caching_acknowledged,
+                            csv_file_name,
+                            json_file_name,
+                            args,
+                        )
                     )
                     loops_completed += 1
                     time.sleep(interval)
             else:  # we're scanning a given number of times
                 for index in range(scans):
                     asyncio.run(
-                        scan(clients, is_caching_acknowledged, csv_file_name, args)
+                        scan(
+                            clients,
+                            is_caching_acknowledged,
+                            csv_file_name,
+                            json_file_name,
+                            args,
+                        )
                     )
                     loops_completed += 1
                     time.sleep(interval)
@@ -174,7 +189,7 @@ def start(args, **kwargs):
     sys.exit(0)
 
 
-async def scan(clients, is_caching_acknowledged, csv_file_name, args):
+async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, args):
     """
     async func to perform a scan
     """
@@ -186,7 +201,9 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, args):
             log.info(f"starting scans on {iface_count} interfaces")
 
         if args.csv:
-            log.info(f"exporting scans to {csv_file_name}")
+            log.info(f"exporting scans as CSV to {csv_file_name}")
+        if args.json:
+            log.info(f"exporting scans as JSON to {json_file_name}")
 
         async def scanfunc(index, client):
             log.debug(
@@ -233,7 +250,9 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, args):
                     json_names,
                     json_out,
                     newapnames,
-                ) = parse_bss_list(client, is_caching_acknowledged, csv_file_name, args)
+                ) = parse_bss_list(
+                    client, is_caching_acknowledged, csv_file_name, json_file_name, args
+                )
                 if args.ies or args.bytes or args.export:
                     return
                 print_bss_list(
@@ -416,9 +435,13 @@ def updateAPNames(json_names, scan_names) -> None:
         log.debug("<updateAPNames> nothing to update")
 
 
-def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
+def parse_bss_list(
+    client, is_caching_acknowledged, csv_file_name, json_file_name, args
+):
     out_results = []
     bssid_list = []
+    csv_out = []
+    json_out = []
 
     wireless_network_bss_list = client.data
 
@@ -458,8 +481,6 @@ def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
         # print(datetime.datetime.now().replace(microsecond=0).isoformat().replace(":",""))
 
     newapnames = {}
-
-    json_out = []
 
     bss_len = len(wireless_network_bss_list)
     # WirelessNetworkBss object
@@ -670,15 +691,16 @@ def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
         if args.json:
             json_out.append(
                 {
+                    "timestamp": client.last_scan_time_iso,
+                    "interface mac": client.mac,
                     "amendments": sorted(bss.amendments.elements),
                     "apname": str(bss.apname).strip(),
                     "bssid": str(bss.bssid).strip(),
-                    "bss_type=": str(bss.bss_type).strip(),
+                    "bss_type": str(bss.bss_type).strip(),
                     "channel_frequency": str(bss.channel_frequency).strip(),
                     "channel_number": str(bss.channel_number).strip(),
                     "channel_width": str(bss.channel_width).strip(),
                     "connected": bss.bssid.connected,
-                    "epoch": client.last_scan_time_epoch,
                     "ies": sorted(bss.ie_numbers.elements),
                     "ies_extension": sorted(bss.exie_numbers.elements),
                     "modes": sorted(bss.modes.elements),
@@ -689,13 +711,47 @@ def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
                     "rssi": str(bss.rssi),
                     "security": str(bss.security).strip(),
                     "spatial_streams": str(bss.spatial_streams),
-                    "ssid": str(bss.ssid).strip(),
+                    "ssid": str(bss.ssid),
                     "stations": str(bss.stations),
                     "uptime": str(bss.uptime).strip(),
                     "utilization": str(bss.utilization).strip(),
                 }
             )
-
+        if args.csv:
+            csv_out.append(
+                {
+                    "timestamp": client.last_scan_time_iso,
+                    "interface mac": client.mac,
+                    "amendments": "/".join(sorted(bss.amendments.elements)),
+                    "apname": str(bss.apname).strip(),
+                    "bssid": str(bss.bssid).strip(),
+                    "bss_type": str(bss.bss_type).strip(),
+                    "channel_frequency": str(bss.channel_frequency).strip(),
+                    "channel_number": str(bss.channel_number).strip(),
+                    "channel_width": str(bss.channel_width).strip(),
+                    "connected": bss.bssid.connected,
+                    "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
+                    "ies_extension": "/".join(
+                        map(str, sorted(bss.exie_numbers.elements))
+                    ),
+                    "modes": "/".join(sorted(bss.modes.elements)),
+                    "pmf": str(bss.pmf).strip(),
+                    "phy_type": str(bss.phy_type).strip(),
+                    "rates_basic": "/".join(
+                        [x for x in bss.wlanrateset.basic.split(" ")]
+                    ),
+                    "rates_data": "/".join(
+                        [x for x in bss.wlanrateset.data.split(" ")]
+                    ),
+                    "rssi": str(bss.rssi),
+                    "security": str(bss.security).strip(),
+                    "spatial_streams": str(bss.spatial_streams),
+                    "ssid": bss.ssid,
+                    "stations": str(bss.stations),
+                    "utilization": str(bss.utilization).strip(),
+                    "uptime": str(bss.uptime).strip(),
+                }
+            )
         out_results.append(
             [
                 bss.ssid.out(),
@@ -728,53 +784,6 @@ def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
             if is_caching_acknowledged:
                 out_results[-1].append(bss.apname.out())
 
-        if args.csv:
-            has_headings = False
-            csv_file_exists = os.path.exists(csv_file_name)
-            mode = "w"
-            if csv_file_exists:
-                mode = "a"
-                with open(csv_file_name, "r") as f:
-                    try:
-                        has_headings = csv.Sniffer().has_header(f.read(1024))
-                    except csv.Error:
-                        # The file seems to be empty
-                        has_headings = False
-
-            with open(csv_file_name, mode, newline="") as csvfile:
-                fieldnames = list()
-                for column in out_results[-1]:
-                    header = str(column.header)
-                    if "QBSS" in header:
-                        if "STA" in str(column.subheader):
-                            fieldnames.append("QBSS STA")
-                        if "CU" in str(column.subheader):
-                            fieldnames.append("QBSS CU")
-                    else:
-                        fieldnames.append(str(column.header))
-
-                fieldnames.insert(0, "TIMESTAMP")
-                fieldnames.insert(1, "INTERFACE MAC")
-
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                rowdata = {
-                    "TIMESTAMP": client.last_scan_time_iso,
-                    "INTERFACE MAC": client.mac,
-                }
-                for column in out_results[-1]:
-                    if "QBSS" in str(column.header):
-                        if "STA" in str(column.subheader):
-                            rowdata["QBSS STA"] = column.value
-                        if "CU" in str(column.subheader):
-                            rowdata[f"QBSS CU"] = column.value
-
-                    else:
-                        rowdata[f"{column.header}"] = column.value
-                # print(rowdata)
-                if not has_headings:
-                    writer.writeheader()
-                writer.writerow(rowdata)
-
     def get_index(key):
         for r in out_results:
             for i, x in enumerate(r):
@@ -788,10 +797,56 @@ def parse_bss_list(client, is_caching_acknowledged, csv_file_name, args):
             key=lambda x: int(x[get_index("UPTIME")].value.split("d")[0]),
             reverse=False,
         )
+        csv_out = sorted(csv_out, key=itemgetter("uptime"), reverse=False)
     else:  # sort by RSSI
         out_results = sorted(
             out_results, key=lambda x: x[get_index("RSSI")].value, reverse=False
         )
+        csv_out = sorted(csv_out, key=itemgetter("rssi"), reverse=False)
+
+    if args.json:
+        json_file_exists = os.path.exists(json_file_name)
+        if json_file_exists:
+            mode = "r+"
+        else:
+            mode = "w"
+        with open(json_file_name, mode) as file:
+            if json_file_exists:
+                file_data = json.load(file)
+                file_data["scan_data"].append(json_out)
+                file.seek(0)
+                json.dump(file_data, file, indent=args.json_indent)
+            else:
+                file_data = json.dumps(
+                    {
+                        "lswifi": {"version": f"lswifi {__version__}"},
+                        "scan_data": json_out,
+                    },
+                    indent=args.json_indent,
+                )
+                file.write(file_data)
+
+    if args.csv:
+        has_headings = False
+        csv_file_exists = os.path.exists(csv_file_name)
+        mode = "w"
+        if csv_file_exists:
+            mode = "a"
+            with open(csv_file_name, "r") as f:
+                try:
+                    has_headings = csv.Sniffer().has_header(f.read(1024))
+                except csv.Error:
+                    # The file seems to be empty
+                    has_headings = False
+
+        with open(csv_file_name, mode, newline="") as csvfile:
+            fieldnames = csv_out[-1].keys()
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if not has_headings:
+                writer.writeheader()
+                has_headings = True
+            for result in csv_out:
+                writer.writerow(result)
 
     return out_results, bss_len, bssid_list, json_names, json_out, newapnames
 

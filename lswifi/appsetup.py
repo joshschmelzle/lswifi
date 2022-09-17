@@ -56,6 +56,19 @@ def sensitivity(value):
     return display_sensitivity
 
 
+def json_indent(value):
+    """validate user provided pretty print json value is sane and between 0 and 4"""
+    try:
+        if value is None:
+            return None
+        indent_level = int(value)
+        if indent_level not in range(0, 5):
+            raise argparse.ArgumentTypeError("JSON indent level must be less than 5")
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value} not a valid JSON indent level")
+    return indent_level
+
+
 def width(value):
     """validate user provided channel bandwidth is 20, 40, 80, or 160"""
 
@@ -137,21 +150,21 @@ def setup_parser() -> argparse.ArgumentParser:
         "-i",
         "--interval",
         dest="interval",
-        metavar="interval",
-        help="set interval in seconds between scans",
+        metavar="#",
+        help="seconds between scans",
     )
     parser.add_argument(
         "-n",
         "--scans",
         dest="scans",
-        metavar="num",
+        metavar="#",
         help="set how many scans to do before exiting",
     )
     parser.add_argument(
         "--time",
         dest="time",
-        metavar="seconds",
-        help="set test duration length in seconds",
+        metavar="#",
+        help="set test in seconds to perform scans for",
     )
     parser.add_argument(
         "-ies",
@@ -311,6 +324,13 @@ def setup_parser() -> argparse.ArgumentParser:
         dest="json",
         action="store_true",
         help="output will be formatted as json",
+    )
+    parser.add_argument(
+        "--indent",
+        dest="json_indent",
+        default=None,
+        type=json_indent,
+        help="JSON output will be formatted with pretty print with provided indent level",
     )
     parser.add_argument(
         "--csv",

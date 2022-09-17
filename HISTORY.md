@@ -4,7 +4,11 @@ Release History
 0.1.29 (2022-xx-xx)
 -------------------
 
-- TBD
+- Added support for JSON output to file
+- Added support for CSV output to file
+- Changed frequency unit from MHz to GHz
+- Minor improvements like adding the MAC address of the scanning interface to debug output
+- Minor bug fixes
 
 0.1.28 (2022-08-06)
 -------------------
