@@ -7,7 +7,7 @@ Release History
 - Added support for JSON output to file
 - Added support for CSV output to file
 - Added concurrency for when multiple scanning interfaces are present
-- Changed frequency unit from MHz (2412) to GHz (2.412)
+- Changed frequency unit type from MHz (2412) to GHz (2.412)
 - Minor improvements like adding the MAC address of the scanning interface to debug output
 - Minor bug fixes
 
