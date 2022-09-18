@@ -153,10 +153,7 @@ VENDOR_SPECIFIC_DICT = {
     "00:26:86": VENDOR("Quantenna", "Quantenna Communications, Inc."),
     "00:E0:4C": VENDOR("Realtek", "Realtek Semiconductor Corp."),
     "00:16:32": VENDOR("Samsung", "Samsung Electronics Co.,Ltd"),
-    "00:10:18": VENDOR("Broadcom", "Broadcom"),
     "00:90:4C": VENDOR("Epigram", "Epigram, Inc."),
-    "00:03:7F": VENDOR("Atheros", "Atheros Communications, Inc."),
-    "00:15:6D": VENDOR("Ubiquiti", "Ubiquiti Networks Inc."),
     "00:0C:43": VENDOR("Ralink", "Ralink Technology, Corp."),
     "00:0C:E7": VENDOR("MediaTek", "MediaTek Inc."),
 }
