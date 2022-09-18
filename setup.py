@@ -74,6 +74,7 @@ setup(
         "Topic :: System :: Networking",
         "Topic :: System :: Networking :: Monitoring",
         "Environment :: Win32 (MS Windows)",
-        "Operating System :: Microsoft :: Windows :: Windows 10"
+        "Operating System :: Microsoft :: Windows :: Windows 10",
+        "Operating System :: Microsoft :: Windows :: Windows 11"
     ],
 )
