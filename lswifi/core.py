@@ -798,11 +798,13 @@ def parse_bss_list(
             reverse=False,
         )
         csv_out = sorted(csv_out, key=itemgetter("uptime"), reverse=False)
+        json_out = sorted(json_out, key=itemgetter("uptime"), reverse=False)
     else:  # sort by RSSI
         out_results = sorted(
             out_results, key=lambda x: x[get_index("RSSI")].value, reverse=False
         )
         csv_out = sorted(csv_out, key=itemgetter("rssi"), reverse=False)
+        json_out = sorted(json_out, key=itemgetter("rssi"), reverse=False)
 
     if args.json:
         json_file_exists = os.path.exists(json_file_name)
