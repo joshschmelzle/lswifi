@@ -190,21 +190,21 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-g",
-        "-2",
+        # "-2",  # numbers as args interfere with -t arg
         dest="g",
         action="store_true",
         help="display filter to limit output by 2.4 GHz band",
     )
     parser.add_argument(
         "-a",
-        "-5",
+        # "-5",  # numbers as args interfere with -t arg
         dest="a",
         action="store_true",
         help="display filter to limit output by 5 GHz band",
     )
     parser.add_argument(
         "-six",
-        "-6",
+        # "-6",  # numbers as args interfere with -t arg
         dest="six",
         action="store_true",
         help="display filter to limit output by 6 GHz band",
