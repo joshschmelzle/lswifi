@@ -105,6 +105,8 @@ class TimerEx(object):
 
 
 class Event(object):
+    """Native Wifi event class"""
+
     ns_type_to_codes_dict = {
         WLAN_NOTIFICATION_SOURCE_NONE: None,
         WLAN_NOTIFICATION_SOURCE_ONEX: ONEX_NOTIFICATION_TYPE_ENUM,
@@ -146,7 +148,7 @@ class Event(object):
                     actual.InterfaceGuid,
                 )
                 return event
-            except:
+            except Exception:
                 return None
 
     def __str__(self):
@@ -183,15 +185,15 @@ def get_interface_info(args, iface) -> str:
 
     # query interface for supported info
     params = ["current_connection", "channel_number", "statistics", "rssi"]
-    for p in params:
-        result = WLAN_API.WLAN.query_interface(iface, p)
-        interface_info[p] = result
+    for param in params:
+        result = WLAN_API.WLAN.query_interface(iface, param)
+        interface_info[param] = result
 
         if args.supported:
             if isinstance(result, tuple):
-                outstr += f"    {p}: {pprint.pformat(result, indent=4)}\n"
+                outstr += f"    {param}: {pprint.pformat(result, indent=4)}\n"
             else:
-                outstr += f"    {p}: {result}\n"
+                outstr += f"    {param}: {result}\n"
             return outstr
 
     isState = None
@@ -311,7 +313,7 @@ def get_interface_info(args, iface) -> str:
                 if key == "channel_number":
                     channel = result[0].value
 
-                    outstr += "    Channel: {}\n".format(channel)
+                    outstr += "    Channel: {0}\n".format(channel)
 
                     if args.get_current_ap and args.get_current_channel:
                         if args.raw:
@@ -363,9 +365,9 @@ class Client(object):
                 self.on_event_notification, self.client_handle
             )
             callbacks.append(self.callback)
-            self.log.debug(f"callback {self.callback} added")
+            self.log.debug("callback %s added", self.callback)
             handles.append(self.client_handle)
-            self.log.debug(f"handle {self.client_handle} added")
+            self.log.debug("handle %s added", self.client_handle)
         except Exception:
             traceback.print_exc()
             WLAN_API.WLAN.close_handle(self.client_handle)
@@ -374,12 +376,14 @@ class Client(object):
         # callbacks.remove(self.client_handle)
         if not self.is_handle_closed:
             result = WLAN_API.WLAN.close_handle(self.client_handle)
-            self.log.debug(f"handle {self.client_handle} closed with result {result}")
+            self.log.debug(
+                "handle %s closed with result %s", self.client_handle, result
+            )
             if int(result) == 0:
                 self.is_handle_closed = True
             else:
                 self.log.debug(
-                    f"problem closing {self.client_handle} with result {result}"
+                    "problem closing %s with result", self.client_handle, result
                 )
 
     def get_bss_list(self, interface) -> Union[list, None]:
@@ -395,7 +399,8 @@ class Client(object):
                 return wireless_network_bss_list
             except Exception:
                 self.log.error(
-                    f"Unexpected error when trying to get the BSS list on {interface.mac}"
+                    "Unexpected error when trying to get the BSS list on %s",
+                    interface.mac,
                 )
                 return None
         else:

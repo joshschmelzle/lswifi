@@ -156,7 +156,7 @@ def start(args, **kwargs):
                     loops_completed += 1
                     time.sleep(interval)
             else:  # we're scanning a given number of times
-                for index in range(scans):
+                for _index in range(scans):
                     asyncio.run(
                         scan(
                             clients,
@@ -231,7 +231,7 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
             futures = []
             for task in background_tasks:
                 futures.append(executor.submit(asyncio.run, task))
-            for future in concurrent.futures.as_completed(futures):
+            for _future in concurrent.futures.as_completed(futures):
                 pass
 
         clients = {
@@ -311,7 +311,7 @@ def displayEthers():
                 content = file_reader.readlines()
             content = [x.strip() for x in content]
             print("\n".join(content))
-    except:
+    except Exception:
         pass
 
 
