@@ -156,6 +156,7 @@ VENDOR_SPECIFIC_DICT = {
     "00:90:4C": VENDOR("Epigram", "Epigram, Inc."),
     "00:0C:43": VENDOR("Ralink", "Ralink Technology, Corp."),
     "00:0C:E7": VENDOR("MediaTek", "MediaTek Inc."),
+    "08:86:3B": VENDOR("Belkin", "Belkin International Inc."),
 }
 
 EXTENSION_IE_DICT = {
