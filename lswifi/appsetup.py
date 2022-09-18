@@ -16,13 +16,20 @@ from .__version__ import __version__
 
 
 class ExportAction(argparse.Action):
+    """Enable export argument
+
+    Adds support for bool or bssid
+    """
+
     def __call__(self, parser, namespace, values, option_string=None):
+        """If no values, return something arbitrary so the arg is not None."""
         if not values:
-            values = 4
+            values = 4  # arbitrary
         setattr(namespace, self.dest, values)
 
 
 def setup_logger(args) -> logging.Logger:
+    """Set up the logger"""
     default_logging = {
         "version": 1,
         "disable_existing_loggers": False,
@@ -44,7 +51,7 @@ def setup_logger(args) -> logging.Logger:
 
 
 def sensitivity(value):
-    """validate user provided sensitivity is between -1 and -100"""
+    """Validate user provided sensitivity is between -1 and -100"""
     try:
         display_sensitivity = int(value)
         if display_sensitivity not in range(-100, -1):
@@ -57,7 +64,7 @@ def sensitivity(value):
 
 
 def json_indent(value):
-    """validate user provided pretty print json value is sane and between 0 and 4"""
+    """Validate user provided pretty print json value is sane and between 0 and 4"""
     try:
         if value is None:
             return None
@@ -70,8 +77,7 @@ def json_indent(value):
 
 
 def width(value):
-    """validate user provided channel bandwidth is 20, 40, 80, or 160"""
-
+    """Validate user provided channel bandwidth is 20, 40, 80, or 160"""
     valid_channels = ["20", "40", "80", "160"]
     if value == "None":
         return None
@@ -85,7 +91,7 @@ def width(value):
 
 
 def setup_parser() -> argparse.ArgumentParser:
-    """Setup the parser for arguments passed into the module from the CLI.
+    """Sets up the parser for arguments passed into the module from the CLI.
 
     Returns:
         argparse object.
@@ -120,7 +126,7 @@ def setup_parser() -> argparse.ArgumentParser:
             Print only networks with BSSIDs that contain <mac>:
               >lswifi -bssid 06:6D:15:88:81:59
 
-            Print additional details (inc. information elements) for a particular BSSID <mac>:
+            Print additional details (inc. information elements) for a provided BSSID:
               >lswifi -ies 06:6D:15:88:81:59
               
             Print and add detected AP names column in output:
@@ -131,9 +137,9 @@ def setup_parser() -> argparse.ArgumentParser:
 
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
-             """
+"""
         ),
-        epilog=f"Made with Python by Josh Schmelzle",
+        epilog="Made with Python by Josh Schmelzle",
         fromfile_prefix_chars="@",
     )
     parser.add_argument(
@@ -146,13 +152,6 @@ def setup_parser() -> argparse.ArgumentParser:
     # parser.add_argument(
     #     "-iface", dest="iface", metavar="INTERFACE", help="set which interface to use", help=argparse.SUPPRESS
     # )
-    parser.add_argument(
-        "-i",
-        "--interval",
-        dest="interval",
-        metavar="#",
-        help="seconds between scans",
-    )
     parser.add_argument(
         "-n",
         "--scans",
@@ -167,6 +166,13 @@ def setup_parser() -> argparse.ArgumentParser:
         help="set test in seconds to perform scans for",
     )
     parser.add_argument(
+        "-i",
+        "--interval",
+        dest="interval",
+        metavar="#",
+        help="seconds between scans",
+    )
+    parser.add_argument(
         "-ies",
         type=str,
         metavar="BSSID",
@@ -176,24 +182,30 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-threshold",
         "-t",
-        metavar="dBm",
+        metavar="-82",
         dest="sensitivity",
         default="-82",
         type=sensitivity,
-        help="threshold which excludes networks with weak signal strength (-82 is default)",
+        help="threshold which excludes networks with weak signal strength from results (-82 is default)",
     )
     parser.add_argument(
         "-g",
+        "-2",
+        dest="g",
         action="store_true",
         help="display filter to limit output by 2.4 GHz band",
     )
     parser.add_argument(
         "-a",
+        "-5",
+        dest="a",
         action="store_true",
         help="display filter to limit output by 5 GHz band",
     )
     parser.add_argument(
         "-six",
+        "-6",
+        dest="six",
         action="store_true",
         help="display filter to limit output by 6 GHz band",
     )
@@ -228,7 +240,6 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds station and utilization columns to output using information from AP beacon QBSS IE",
     )
     parser.add_argument(
-        "-tpc",
         "--tpc",
         dest="tpc",
         action="store_true",
@@ -248,8 +259,8 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds beacon period column to output using information from AP beacon",
     )
     parser.add_argument(
-        "-uptime",
         "--uptime",
+        "-uptime",
         dest="uptime",
         action="store_true",
         help="sort output by access point uptime based on beacon timestamp",
@@ -328,6 +339,7 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--indent",
         dest="json_indent",
+        metavar="4",
         default=None,
         type=json_indent,
         help="JSON output will be formatted with pretty print with provided indent level",
