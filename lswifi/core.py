@@ -494,7 +494,7 @@ def parse_bss_list(
                 user_bss = args.bytes.lower()
 
             if args.export:
-                if args.export != 4:  # if lswifi -export xx:xx:xx:nn:nn:nn
+                if args.export != "all":  # if lswifi -export xx:xx:xx:nn:nn:nn
                     user_bss = args.export
                     # print(f"{bss_len} {index}")
                     # print(f"{wlanapi_bss} {user_bss}")
@@ -507,6 +507,7 @@ def parse_bss_list(
                             )
                         continue
 
+                # if lswifi -export
                 export_bss = str(bss.bssid).lower().replace(":", "-")
 
                 bsspath = export_bss + ".bss"
@@ -530,8 +531,7 @@ def parse_bss_list(
                     iesfile.close()
 
                 # print(f"{bsspath} {iespath}")
-
-                if args.export != 4:
+                if args.export != "all":
                     log.info(
                         f"found and exporting requested bssid from the scan results of {client.mac}."
                     )

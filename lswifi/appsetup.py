@@ -24,7 +24,7 @@ class ExportAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         """If no values, return something arbitrary so the arg is not None."""
         if not values:
-            values = 4  # arbitrary
+            values = "all"
         setattr(namespace, self.dest, values)
 
 
