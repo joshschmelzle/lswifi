@@ -343,8 +343,12 @@ class Client(object):
             self.log = logging.getLogger(__name__)
             self.scan_finished = False
             self.data = None
-            self.last_scan_time = None
-            self.last_scan_time_rfc3339 = None
+            now = datetime.datetime
+            self.last_scan_time_epoch = now.utcnow().timestamp()
+            self.last_scan_time_iso = (
+                now.now().astimezone().isoformat(timespec="milliseconds")
+            )
+            self.last_scan_time_utc = now.utcnow()
             self.get_bssid_args = SimpleNamespace(
                 get_current_ap=True,
                 raw=True,
@@ -452,7 +456,6 @@ class Client(object):
                     self.data = self.get_bss_list(self.iface)
                     self.scan_finished = True
                     now = datetime.datetime
-                    # self.last_scan_time = time.time()
                     self.last_scan_time_epoch = now.utcnow().timestamp()
                     self.last_scan_time_iso = (
                         now.now().astimezone().isoformat(timespec="milliseconds")
