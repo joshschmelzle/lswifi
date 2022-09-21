@@ -5,6 +5,8 @@ playground/
 todo/
 backup/
 .coverage
+lswifi_*.csv
+lswifi_*.json
 
 #visual studio
 .vs/
