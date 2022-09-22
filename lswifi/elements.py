@@ -101,7 +101,8 @@ class WirelessNetworkBss:
             self.channel_number = ChannelNumber(bss_entry)
             self.channel_number_marked = ChannelNumber(bss_entry)
             self.channel_frequency = OutObject(
-                value="{:.3f}".format(float(bss_entry.ChCenterFrequency / 1000000)),
+                # value="{:.3f}".format(float(bss_entry.ChCenterFrequency / 1000)),
+                value="{0:.0f}".format(float(bss_entry.ChCenterFrequency / 1000)),
                 header="FREQ.",
                 subheader="[GHz]",
             )
@@ -154,7 +155,17 @@ class WirelessNetworkBss:
                     WirelessNetworkBss.process_information_elements(self, bss_entry)
                 )
 
-                # do stuff now that IEs have been parsed
+                ##########################################
+                # Do stuff now that IEs have been parsed #
+                ##########################################
+
+                # convert channel frequency unit from MHz to GHz
+                # 2412 to 2.412
+                # 5825 to 5.825
+                # 6855 to 6.855
+                self.channel_frequency.value = "{0:.3f}".format(
+                    int(self.channel_frequency.value) / 1000
+                )
 
                 # if self.dtim.value:
                 #    print(f"dtim {self.dtim.value} present for {self.bssid}")
@@ -172,7 +183,7 @@ class WirelessNetworkBss:
                 )
 
             self.band = Band(int(float(self.channel_frequency.value)))
-        except Exception as error:
+        except Exception:
             self.log.error(
                 f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
             )
