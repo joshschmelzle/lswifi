@@ -8,9 +8,14 @@ Provides init functions that are used to help set up the app.
 """
 
 import argparse
+import datetime
 import logging
 import logging.config
+import os
+import sys
 import textwrap
+import time
+from pathlib import Path
 
 from .__version__ import __version__
 
@@ -25,6 +30,80 @@ class ExportAction(argparse.Action):
         """If no values, return something arbitrary so the arg is not None."""
         if not values:
             values = "all"
+        setattr(namespace, self.dest, values)
+
+
+BOOT_TIME = (
+    datetime.datetime.now()
+    .astimezone()
+    .replace(microsecond=0)
+    .isoformat()
+    .replace(":", "_")
+)
+
+
+def VerifyPath(_path, _extension):
+    # if absolute path is a directory and not a file
+    if os.path.isdir(_path):
+        print(f"{_path} is a directory not a file. exiting...")
+        sys.exit(-1)
+    # ensure we're writing to a file ending with .csv
+    if not _path.lower().endswith(_extension):
+        print(f"Exiting because file does not end with {_extension}")
+        sys.exit(-1)
+    # parent of the path exists?
+    if Path(_path).parent.absolute().exists():
+        # do we actually have write access?
+        try:
+            temp_file_path = (
+                Path(_path).parent.absolute()
+                / f"lswifi_write_test_{int(time.time() * 1000)}.tmp"
+            )
+            file_out = open(temp_file_path, "w")
+            file_out.close()
+            os.remove(temp_file_path)
+        except PermissionError:
+            if Path(_path).is_absolute():
+                print(f"Problem with write permission to {_path}. exiting...")
+            else:
+                print(
+                    f"Problem with write permission in {Path(_path).parent.absolute()} for {_path}. exiting..."
+                )
+            sys.exit(-1)
+    # does the parent directory of the path provided actually exist?
+    if Path(_path).is_absolute():
+        if not Path(_path).parent.absolute().exists():
+            print(
+                f"Parent directory at {Path(_path).parent.absolute()} does not exist. exiting..."
+            )
+            sys.exit(-1)
+
+
+class WriteToCSVAction(argparse.Action):
+    """Enable write to file arguments
+
+    Intended for CSV and JSON options
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """If no values, return something arbitrary so the arg is not None."""
+        if not values:
+            values = f"lswifi_{BOOT_TIME}.csv"
+        VerifyPath(values, ".csv")
+        setattr(namespace, self.dest, values)
+
+
+class WriteToJSONAction(argparse.Action):
+    """Enable write to file arguments
+
+    Intended for CSV and JSON options
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """If no values, return something arbitrary so the arg is not None."""
+        if not values:
+            values = f"lswifi_{BOOT_TIME}.json"
+        VerifyPath(values, ".json")
         setattr(namespace, self.dest, values)
 
 
@@ -332,8 +411,10 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--json",
+        nargs="?",
+        type=str,
         dest="json",
-        action="store_true",
+        action=WriteToJSONAction,
         help="output will be formatted as json",
     )
     parser.add_argument(
@@ -346,8 +427,10 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--csv",
+        nargs="?",
+        type=str,
         dest="csv",
-        action="store_true",
+        action=WriteToCSVAction,
         help="output will be formatted as csv",
     )
     parser.add_argument(

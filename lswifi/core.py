@@ -130,15 +130,8 @@ def start(args, **kwargs):
             csv_file_name = ""
             json_file_name = ""
             if args.csv or args.json:
-                now = (
-                    datetime.datetime.now()
-                    .astimezone()
-                    .replace(microsecond=0)
-                    .isoformat()
-                    .replace(":", "_")
-                )
-                csv_file_name = f"lswifi_{now}.csv"
-                json_file_name = f"lswifi_{now}.json"
+                csv_file_name = args.csv
+                json_file_name = args.json
 
             if timeout > 0:  # we're scanning during a given time period
                 timeout_start = time.time()
@@ -692,7 +685,7 @@ def parse_bss_list(
             json_out.append(
                 {
                     "timestamp": client.last_scan_time_iso,
-                    "interface mac": client.mac,
+                    "interface_mac": client.mac,
                     "amendments": sorted(bss.amendments.elements),
                     "apname": str(bss.apname).strip(),
                     "bssid": str(bss.bssid).strip(),
@@ -721,7 +714,7 @@ def parse_bss_list(
             csv_out.append(
                 {
                     "timestamp": client.last_scan_time_iso,
-                    "interface mac": client.mac,
+                    "interface_mac": client.mac,
                     "amendments": "/".join(sorted(bss.amendments.elements)),
                     "apname": str(bss.apname).strip(),
                     "bssid": str(bss.bssid).strip(),
@@ -836,7 +829,7 @@ def parse_bss_list(
             mode = "a"
             with open(csv_file_name, "r") as f:
                 try:
-                    has_headings = csv.Sniffer().has_header(f.read(1024))
+                    has_headings = csv.Sniffer().has_header(f.read(4096))
                 except csv.Error:
                     # The file seems to be empty
                     has_headings = False
@@ -844,6 +837,7 @@ def parse_bss_list(
         with open(csv_file_name, mode, newline="") as csvfile:
             fieldnames = csv_out[-1].keys()
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            # log.debug("does csv file likely already have headings written? %s" % ('Yes' if has_headings else 'No'))
             if not has_headings:
                 writer.writeheader()
                 has_headings = True
