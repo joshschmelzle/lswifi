@@ -1,14 +1,14 @@
 Release History
 ===============
 
-0.1.29 (2022-09-18)
+UNRELEASED 0.1.29 (2022-xx-xx)
 -------------------
 
 - Added support for JSON output to file
 - Added support for CSV output to file
 - Added concurrency for when multiple scanning interfaces are present
 - Changed frequency unit type from MHz (2412) to GHz (2.412)
-- Minor improvements like adding the MAC address of the scanning interface to debug output
+- Updated debug outputs to include MAC address of the scanning interface
 - Minor bug fixes
 
 0.1.28 (2022-08-06)
