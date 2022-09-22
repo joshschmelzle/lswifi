@@ -10,7 +10,9 @@ client side code for requesting a scan, waiting for scan complete, and getting t
 import datetime
 import functools
 import logging
+import os
 import pprint
+import sys
 import traceback
 from threading import Lock, Timer
 from types import SimpleNamespace
@@ -402,9 +404,16 @@ class Client(object):
 
                 return wireless_network_bss_list
             except Exception:
+                exception_type, exception_object, exception_traceback = sys.exc_info()
+                fname = os.path.split(exception_traceback.tb_frame.f_code.co_filename)[
+                    1
+                ]
                 self.log.error(
-                    "Unexpected error when trying to get the BSS list on %s",
+                    "unexpected error when trying to get the BSS list on interface with MAC %s",
                     interface.mac,
+                )
+                self.log.error(
+                    f"{exception_object} {exception_type} {fname}:{exception_traceback.tb_lineno}"
                 )
                 return None
         else:
