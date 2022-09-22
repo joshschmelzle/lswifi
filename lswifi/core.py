@@ -43,7 +43,7 @@ from .schemas.out import *
 
 def start(args, **kwargs):
     log = logging.getLogger(__name__)
-
+    loops_completed = 0
     is_caching_acknowledged = False
 
     if kwargs is not None:
@@ -113,7 +113,6 @@ def start(args, **kwargs):
         # TODO move other non-scanning functions here
 
         if scanning:
-            loops_completed = 0
             scans = 1
             interval = 0.1
             timeout = 0
@@ -122,7 +121,7 @@ def start(args, **kwargs):
                 log.debug(f"interval between scans is {interval}")
             if args.scans:
                 scans = int(args.scans)
-                log.debug(f"number of scans is {scans}")
+                log.debug(f"number of scans requested is {scans}")
             if args.time:
                 timeout = int(args.time)
                 log.debug(f"duration of time for recurring scans is {timeout} seconds")
@@ -171,6 +170,7 @@ def start(args, **kwargs):
                     f"total number of scans completed during this session is {loops_completed}"
                 )
         log.warning("keyboard interruption detected... stopping...")
+        sys.exit(-1)
     except asyncio.CancelledError:
         raise
     except SystemExit as error:
@@ -193,11 +193,6 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
         if iface_count > 1:
             log.info(f"starting scans on {iface_count} interfaces")
 
-        if args.csv:
-            log.info(f"exporting scans as CSV to {csv_file_name}")
-        if args.json:
-            log.info(f"exporting scans as JSON to {json_file_name}")
-
         async def scanfunc(index, client):
             log.debug(
                 f"initializing scan on {client.iface.description} {client.iface.guid_string}"
@@ -209,7 +204,7 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
             try:
                 while not client.scan_finished:
                     time.sleep(0.1)
-            except KeyboardInterrupt:
+            except Exception:
                 raise
 
             clients[index] = client
@@ -218,14 +213,15 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
             task = scanfunc(_index, client)
             background_tasks.add(task)
 
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(clients.items())
-        ) as executor:
-            futures = []
-            for task in background_tasks:
-                futures.append(executor.submit(asyncio.run, task))
-            for _future in concurrent.futures.as_completed(futures):
-                pass
+        if len(clients.items()) > 0:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=len(clients.items())
+            ) as executor:
+                futures = []
+                for task in background_tasks:
+                    futures.append(executor.submit(asyncio.run, task))
+                for _future in concurrent.futures.as_completed(futures):
+                    pass
 
         clients = {
             k: clients[k] for k in sorted(clients)
@@ -246,6 +242,7 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
                 ) = parse_bss_list(
                     client, is_caching_acknowledged, csv_file_name, json_file_name, args
                 )
+
                 if args.ies or args.bytes or args.export:
                     return
                 print_bss_list(
@@ -805,21 +802,25 @@ def parse_bss_list(
             mode = "r+"
         else:
             mode = "w"
-        with open(json_file_name, mode) as file:
-            if json_file_exists:
-                file_data = json.load(file)
-                file_data["scan_data"].append(json_out)
-                file.seek(0)
-                json.dump(file_data, file, indent=args.json_indent)
-            else:
-                file_data = json.dumps(
-                    {
-                        "lswifi": {"version": f"lswifi {__version__}"},
-                        "scan_data": json_out,
-                    },
-                    indent=args.json_indent,
-                )
-                file.write(file_data)
+        if not json_out:
+            log.info(f"nothing found to export as JSON to {json_file_name}")
+        else:
+            log.info(f"exporting scans as JSON to {json_file_name}")
+            with open(json_file_name, mode) as file:
+                if json_file_exists:
+                    file_data = json.load(file)
+                    file_data["scan_data"].append(json_out)
+                    file.seek(0)
+                    json.dump(file_data, file, indent=args.json_indent)
+                else:
+                    file_data = json.dumps(
+                        {
+                            "lswifi": {"version": f"lswifi {__version__}"},
+                            "scan_data": json_out,
+                        },
+                        indent=args.json_indent,
+                    )
+                    file.write(file_data)
 
     if args.csv:
         has_headings = False
@@ -834,15 +835,19 @@ def parse_bss_list(
                     # The file seems to be empty
                     has_headings = False
 
-        with open(csv_file_name, mode, newline="") as csvfile:
-            fieldnames = csv_out[-1].keys()
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            # log.debug("does csv file likely already have headings written? %s" % ('Yes' if has_headings else 'No'))
-            if not has_headings:
-                writer.writeheader()
-                has_headings = True
-            for result in csv_out:
-                writer.writerow(result)
+        if not csv_out:
+            log.info(f"nothing found to export as CSV to {csv_file_name}")
+        else:
+            log.info(f"exporting scans as CSV to {csv_file_name}")
+            with open(csv_file_name, mode, newline="") as csvfile:
+                fieldnames = csv_out[-1].keys()
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                # log.debug("does csv file likely already have headings written? %s" % ('Yes' if has_headings else 'No'))
+                if not has_headings:
+                    writer.writeheader()
+                    has_headings = True
+                for result in csv_out:
+                    writer.writerow(result)
 
     return out_results, bss_len, bssid_list, json_names, json_out, newapnames
 

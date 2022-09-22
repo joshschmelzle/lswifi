@@ -25,7 +25,7 @@ from ctypes import (
     c_wchar,
 )
 from enum import Enum
-from subprocess import check_output
+from subprocess import SubprocessError, check_output
 
 from .guid import GUID
 
@@ -920,8 +920,8 @@ class WirelessInterface(object):
                         f"guid {guid} maps to {self.mac} and {self.connection_name}"
                     )
                     break
-        except FileNotFoundError:
-            pass
+        except SubprocessError as error:
+            print(error)
 
     def __str__(self):
         return f"Interface: {self.__dict__}"
@@ -1569,9 +1569,9 @@ class WLAN:
         interfaces available.
         """
         ifaces = {}
-        threads = list()
-        handle = WLAN.open_handle()
         try:
+            threads = list()
+            handle = WLAN.open_handle()
             wlan_interfaces = WLAN.enumerate_interfaces(handle)
             data_type = wlan_interfaces.contents.InterfaceInfo._type_
             num = wlan_interfaces.contents.NumberOfItems
@@ -1582,29 +1582,27 @@ class WLAN:
                 ifaces[index] = WirelessInterface(info)
 
             for index, info in enumerate(wlan_interface_info_list):
-                x = threading.Thread(
+                t = threading.Thread(
                     target=WirelessInterfaceThread,
                     args=(
                         index,
                         info,
                     ),
                 )
-                threads.append(x)
-                x.start()
+                t.daemon = (
+                    True  # we want the thread to terminate if the main process ends
+                )
+                threads.append(t)
+                t.start()
 
-            for index, thread in enumerate(threads):
-                thread.join()
+            for index, t in enumerate(threads):
+                t.join()
 
             ifaces = {
                 k: ifaces[k] for k in sorted(ifaces)
             }  # sort by key (index) numerically
-
-            # for info in wlan_interface_info_list:
-            #     wlan_iface = WirelessInterface(info)
-            #     out_list.append(wlan_iface)
-        except KeyboardInterrupt:
-            log = logging.getLogger(__name__)
-            log.warning("caught KeyboardInterrupt... stopping...")
+        except Exception:
+            raise
         finally:
             WLAN.free_memory(wlan_interfaces)
             WLAN.close_handle(handle)
