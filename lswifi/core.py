@@ -162,12 +162,12 @@ def start(args, **kwargs):
                     time.sleep(interval)
 
             if loops_completed > 1:
-                log.info(f"total number of scans completed is {loops_completed}")
+                log.info(f"total number of completed scans is {loops_completed}")
     except KeyboardInterrupt:
         if not args.event_watcher:
             if loops_completed > 1:
                 log.info(
-                    f"total number of scans completed during this session is {loops_completed}"
+                    f"total number of completed scans during this session is {loops_completed}"
                 )
         log.warning("keyboard interruption detected... stopping...")
         sys.exit(-1)
