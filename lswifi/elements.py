@@ -76,7 +76,9 @@ class WirelessNetworkBss:
                 align=Alignment.RIGHT,
                 subheader="[Network Name]",
             )
-            self.bssid = BSSID(bss_entry, connected_bssid, header="BSSID")
+            self.bssid = BSSID(
+                bss_entry, connected_bssid, header="BSSID", subheader="[MAC Address]"
+            )
             self.phy_id = bss_entry.PhyId
             self.bss_type = OutObject(
                 value=WLAN_API.DOT11_BSS_TYPE_DICT[bss_entry.dot11BssType],
@@ -101,8 +103,9 @@ class WirelessNetworkBss:
             self.channel_number = ChannelNumber(bss_entry)
             self.channel_number_marked = ChannelNumber(bss_entry)
             self.channel_frequency = OutObject(
-                # value="{:.3f}".format(float(bss_entry.ChCenterFrequency / 1000)),
-                value="{0:.0f}".format(float(bss_entry.ChCenterFrequency / 1000)),
+                value="{0:.0f}".format(
+                    float(bss_entry.ChCenterFrequency / 1000)
+                ),  # initially unit is MHz but converted to GHz after IEs are parsed below
                 header="FREQ.",
                 subheader="[GHz]",
             )
