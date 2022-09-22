@@ -90,7 +90,7 @@ WLAN_API_EXISTS = True
 # load wlanapi.dll into memory
 try:
     WLAN_API = windll.LoadLibrary("wlanapi.dll")
-except OSError as error:
+except OSError:
     WLAN_API_EXISTS = False
     print("!!! wlanapi.dll not foud !!!")
 
