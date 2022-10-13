@@ -142,27 +142,51 @@ def is_two_four_band(frequency: str) -> bool:
 
 def is_five_band(frequency: str) -> bool:
     """determines if a channel frequency is in the 5.0 GHz ISM band"""
-    _frequency = int(float(frequency))
-    if __get_digit(_frequency, __num_digits(_frequency) - 1) == 5 and _frequency < 5955:
-        return True
-    else:
+    if type(frequency) == float:
+        if frequency > 5 and frequency < 5.955:
+            return True
         return False
+
+    try:
+        _frequency = int(frequency)
+        if _frequency >= 5000 and _frequency < 5955:
+            return True
+    except ValueError:
+        _frequency = float(frequency)
+        if _frequency >= 5 and _frequency < 5.955:
+            return True
+    return False
 
 
 def is_six_band(frequency: str) -> bool:
-    _frequency = int(float(frequency))
     """determines if a channel frequency is in the 5.95-7.125 GHz ISM band"""
-    if _frequency >= 5955 and _frequency < 7125:
-        return True
-    else:
+    if type(frequency) == float:
+        if frequency >= 5.955 and frequency < 7.125:
+            return True
         return False
+
+    try:
+        _frequency = int(frequency)
+        if _frequency >= 5955 and _frequency < 7125:
+            return True
+    except ValueError:
+        _frequency = float(frequency)
+        if _frequency >= 5.955 and _frequency < 7.125:
+            return True
+
+    return False
 
 
 def get_channel_number_from_frequency(frequency):
     """gets the 802.11 channel for a corresponding frequency
     in units of kilohertz (kHz). does not support FHSS."""
     try:
-        return _20MHZ_CHANNEL_LIST.get(frequency, "Unknown")
+        _frequency = frequency
+        if type(_frequency) == str:
+            _frequency = _frequency.replace(".", "", 1)
+            return _20MHZ_CHANNEL_LIST.get(_frequency, "Unknown")
+        else:
+            return _20MHZ_CHANNEL_LIST.get(str(_frequency), "Unknown")
     except KeyError:
         return "Unknown"
 

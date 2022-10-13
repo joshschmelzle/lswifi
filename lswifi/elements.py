@@ -110,7 +110,7 @@ class WirelessNetworkBss:
                 subheader="[GHz]",
             )
             # self.is_5ghz is used because sometime 2.4 GHz networks include VHT IEs
-            self.is_5ghz = is_five_band(int(float(self.channel_frequency.value)))
+            self.is_5ghz = is_five_band(int(self.channel_frequency.value) / 1000)
 
             self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
             self.wlanrateset = Rates(bss_entry)
@@ -185,7 +185,7 @@ class WirelessNetworkBss:
                     f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
                 )
 
-            self.band = Band(int(float(self.channel_frequency.value)))
+            self.band = Band(self.channel_frequency.value)
         except Exception:
             self.log.error(
                 f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"

@@ -560,6 +560,8 @@ def parse_bss_list(
         if bss.rssi.value < args.sensitivity:
             continue
 
+        # print(bss.ssid)
+
         # handle band filters
         if not args.a and not args.g and not args.six:
             pass
