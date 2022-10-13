@@ -148,7 +148,12 @@ def start(args, **kwargs):
                     loops_completed += 1
                     time.sleep(interval)
             else:  # we're scanning a given number of times
+                _first = True
                 for _index in range(scans):
+                    if _first:
+                        _first = False
+                    else:
+                        time.sleep(interval)
                     asyncio.run(
                         scan(
                             clients,
@@ -159,7 +164,6 @@ def start(args, **kwargs):
                         )
                     )
                     loops_completed += 1
-                    time.sleep(interval)
 
             if loops_completed > 1:
                 log.info(f"total number of completed scans is {loops_completed}")
