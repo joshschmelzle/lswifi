@@ -51,6 +51,54 @@ Print help information:
 
 ![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/help_menu.gif "animation showing printing help for lswifi")
 
+CLI options
+-----------
+
+```bash
+options:
+  -h, --help            show this help message and exit
+  -version, --version, -V
+                        show program's version number and exit
+  -n #, --scans #       set how many scans to do before exiting
+  --time #              set test in seconds to perform scans for
+  -i #, --interval #    seconds between scans
+  -ies [BSSID]          print extra information about information elements for a specified BSSID
+  -threshold -82, -t -82
+                        threshold which excludes networks with weak signal strength from results (-82 is default)
+  -g                    display filter to limit output by 2.4 GHz band
+  -a                    display filter to limit output by 5 GHz band
+  -six                  display filter to limit output by 6 GHz band
+  -include SSID         display filter to limit results by specified SSIDs (partial matching supported)
+  -exclude SSID         display filter to exclude results by specified SSIDs (partial matching supported)
+  -bssid BSSID          display filter to limit results by specified BSSIDs (partial matching supported)
+  --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
+  --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
+  --tpc                 adds TPC column to output using information from AP beacon 802.11h
+  --mfp, --pmf          adds Protected Management Frame column to output using information from AP beacon RSNE
+  --period              adds beacon period column to output using information from AP beacon
+  --uptime, -uptime     sort output by access point uptime based on beacon timestamp
+  --channel-width 20|40|80|160
+                        display filter to limit output by a specified channel width
+  -ethers               display ap name column and use ethers files for the names
+  --append-ethers BSSID,APNAME
+                        append BSSID and AP name to ethers file for AP names
+  --display-ethers      display the list of saved ethers; (BSSID,APNAME) mapping
+  --data-location       displays where config items are stored on the local machine
+  -ap                   print the BSSID of the connected AP
+  -channel              print the channel of the connected AP
+  -raw                  format output as the raw value for other scripts (for -ap and -channel only)
+  --get-interfaces      print current Wi-Fi status and information
+  --list-interfaces     print a list of available WLAN interfaces
+  --json [JSON]         output will be formatted as json
+  --indent 4            JSON output will be formatted with pretty print with provided indent level
+  --csv [CSV]           output will be formatted as csv
+  -export [BSSID]       export bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
+  -decode BYTEFILE      decode a raw .BSS or .IES file
+  --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
+  --watchevents         a special mode which watches for notification on a wireless interface such as connection and roaming events
+  --debug               increase verbosity in output for debugging
+```
+
 Upgrading
 ---------
 
@@ -74,6 +122,7 @@ FAQs
 
 1. What OSes and Python versions are required to run `lswifi`?
     - Windows 10+ and Python 3.7 are the minimum versions I'm willing to support (subject to change).
+    - Windows 11 and capable interface required for 6 GHz support.
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
 3. Do I need to install `lswifi` in a virtual environment (venv)?

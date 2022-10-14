@@ -1,14 +1,23 @@
 Release History
 ===============
 
-UNRELEASED 0.1.29 (2022-xx-xx)
+UNRELEASED (xxx-xx-xx)
+----------------------
+
+TBD
+
+0.1.29 (2022-10-14)
 -------------------
 
-- Added support for JSON output to file
-- Added support for CSV output to file
-- Added concurrency for when multiple scanning interfaces are present
+- Add `-n|--scans #` option to set a number of scans to perform before exit
+- Add `--time #` option to perform repeated scans for a given number of seconds
+- Add `-i|--interval #` option to set the number of seconds to wait between scans
+- Add support for JSON output to file
+- Add support for CSV output to file
+- Add support for identifying several Vendor OUIs
+- Add experimental concurrency for when multiple scanning interfaces are present
 - Changed frequency unit type from MHz (2412) to GHz (2.412)
-- Updated debug outputs to include MAC address of the scanning interface
+- Improved several debug outputs
 - Minor bug fixes
 
 0.1.28 (2022-08-06)
