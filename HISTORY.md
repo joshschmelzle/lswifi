@@ -4,7 +4,7 @@ Release History
 UNRELEASED (xxx-xx-xx)
 ----------------------
 
-TBD
+- Updates to the Vendor OUI table
 
 0.1.29 (2022-10-14)
 -------------------
