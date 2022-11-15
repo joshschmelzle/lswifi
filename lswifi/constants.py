@@ -159,6 +159,8 @@ VENDOR_SPECIFIC_DICT = {
     "08:86:3B": VENDOR("Belkin", "Belkin International Inc."),
     "00:14:6C": VENDOR("Netgear", "Netgear"),
     "F4:F5:E8": VENDOR("Google", "Google, Inc."),
+    "F8:32:E4": VENDOR("ASUS", "ASUSTek Computer Inc."),
+    "00:03:9C": VENDOR("OptiMight", "OptiMight Communications, Inc."),
 }
 
 EXTENSION_IE_DICT = {
