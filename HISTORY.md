@@ -4,7 +4,11 @@ Release History
 UNRELEASED (xxx-xx-xx)
 ----------------------
 
+0.1.30 (2022-11-15)
+-------------------
+
 - Updates to the Vendor OUI table
+- Handle traceback when running getmac.exe fails to map interface to physical address
 
 0.1.29 (2022-10-14)
 -------------------

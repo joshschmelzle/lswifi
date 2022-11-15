@@ -25,6 +25,7 @@ from ctypes import (
     c_wchar,
 )
 from enum import Enum
+from shutil import which
 from subprocess import SubprocessError, check_output
 
 from .guid import GUID
@@ -897,31 +898,40 @@ class WirelessInterface(object):
         self.guid_string = str(wlan_iface_info.InterfaceGuid)
         self.state = wlan_iface_info.isState
         self.state_string = WLAN_INTERFACE_STATE_DICT.get(self.state, 0)
+        self.mac = "unknown"
+        self.connection_name = "unknown"
         self.map_guid_to_mac_and_connection_name(self.guid, self.description)
 
     def map_guid_to_mac_and_connection_name(self, guid, description) -> None:
-        guid = str(guid)[1:-1]  # remove { } around guid
-        exe = 'getmac.exe /FO "CSV" /V'  # use getmac.exe to map interface guid to mac
-        cmd = f"{exe}"
-        try:
-            output = check_output(cmd)
-            mac = ""
-            self.log.debug(
-                "checking output from '%s' to do a lookup on given guid for matching MAC and connection name",
-                exe,
+        if which("getmac.exe"):
+            guid = str(guid)[1:-1]  # remove { } around guid
+            exe = (
+                'getmac.exe /FO "CSV" /V'  # use getmac.exe to map interface guid to mac
             )
-            for line in output.decode().splitlines():
-                if guid in line or description in line:
-                    connection = line.split(",")
-                    mac = connection[2].replace('"', "")
-                    self.mac = mac.lower().replace("-", ":")
-                    self.connection_name = connection[0].replace('"', "")
-                    self.log.debug(
-                        f"guid {guid} maps to {self.mac} and {self.connection_name}"
-                    )
-                    break
-        except SubprocessError as error:
-            print(error)
+            cmd = f"{exe}"
+            try:
+                output = check_output(cmd)
+                mac = ""
+                self.log.debug(
+                    "checking output from '%s' to do a lookup on given guid for matching MAC and connection name",
+                    exe,
+                )
+                for line in output.decode().splitlines():
+                    if guid in line or description in line:
+                        connection = line.split(",")
+                        mac = connection[2].replace('"', "")
+                        self.mac = mac.lower().replace("-", ":")
+                        self.connection_name = connection[0].replace('"', "")
+                        self.log.debug(
+                            f"guid {guid} maps to {self.mac} and {self.connection_name}"
+                        )
+                        break
+            except SubprocessError as error:
+                raise error
+        else:
+            self.log.warn(
+                f"Unable to find getmac.exe to map {self.guid} to a physical address"
+            )
 
     def __str__(self):
         return f"Interface: {self.__dict__}"
