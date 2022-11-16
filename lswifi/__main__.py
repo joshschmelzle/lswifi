@@ -2,7 +2,7 @@
 
 """
 lswifi.lswifi
-~~~~~~~~~
+~~~~~~~~~~~~~
 
 a CLI Wi-Fi scanning utility for Windows that leverages Microsofts Native Wifi wlanapi.h
 """
