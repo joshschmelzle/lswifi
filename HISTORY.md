@@ -4,6 +4,11 @@ Release History
 UNRELEASED (xxx-xx-xx)
 ----------------------
 
+0.1.31 (2022-11-16)
+-------------------
+
+- Fix traceback and decoding error when getmac.exe contains special characters
+
 0.1.30 (2022-11-15)
 -------------------
 
