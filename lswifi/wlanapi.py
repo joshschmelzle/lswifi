@@ -9,6 +9,7 @@ mostly wrapper code around Native Wifi wlanapi.h
 
 import contextlib
 import logging
+import subprocess
 import sys
 import threading
 from ctypes import (
@@ -26,7 +27,7 @@ from ctypes import (
 )
 from enum import Enum
 from shutil import which
-from subprocess import SubprocessError, check_output
+from subprocess import SubprocessError, run
 
 from .guid import GUID
 
@@ -910,13 +911,19 @@ class WirelessInterface(object):
             )
             cmd = f"{exe}"
             try:
-                output = check_output(cmd)
+                output = run(
+                    cmd,
+                    stderr=subprocess.STDOUT,
+                    stdout=subprocess.PIPE,
+                    encoding="utf-8",
+                    errors="ignore",
+                )
                 mac = ""
                 self.log.debug(
                     "checking output from '%s' to do a lookup on given guid for matching MAC and connection name",
                     exe,
                 )
-                for line in output.decode().splitlines():
+                for line in output.stdout.strip().splitlines():
                     if guid in line or description in line:
                         connection = line.split(",")
                         mac = connection[2].replace('"', "")
