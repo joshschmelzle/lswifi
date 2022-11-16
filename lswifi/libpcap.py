@@ -269,6 +269,6 @@ RADIOTAP_FIELDS_PRESENT = set_bit(RADIOTAP_FIELDS_PRESENT, 5)
 RADIOTAP_HEADER_FMT = RADIOTAP_HEADER_FMT + "I b"
 
 
-class RADIOTAP:
-    def __init__(self, channel, rssi):
-        return struct.pack(RADIO)
+# class RADIOTAP:
+#     def __init__(self, channel, rssi):
+#         return struct.pack(RADIO)
