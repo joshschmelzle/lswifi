@@ -29,7 +29,7 @@ from enum import Enum
 from shutil import which
 from subprocess import SubprocessError, run
 
-from .guid import GUID
+from lswifi.guid import GUID
 
 if sys.platform == "win32":
     from ctypes import windll
@@ -40,8 +40,8 @@ else:
 from ctypes import CFUNCTYPE, POINTER, Structure, Union, addressof, byref, pointer
 from ctypes.wintypes import BOOL, DWORD, HANDLE
 
-from .elements import WirelessNetworkBss
-from .helpers import convert_mac_address_to_string
+from lswifi.elements import WirelessNetworkBss
+from lswifi.helpers import convert_mac_address_to_string
 
 # wlantypes.h
 

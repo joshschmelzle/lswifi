@@ -29,9 +29,9 @@ if sys.version_info < (3, 7):
     sys.exit(-1)
 
 # app imports
-from . import appsetup, core
-from .__version__ import __title__
-from .constants import APNAMEACKFILE, APNAMEJSONFILE
+from lswifi import appsetup, core
+from lswifi.__version__ import __title__
+from lswifi.constants import APNAMEACKFILE, APNAMEJSONFILE
 
 
 def app_path() -> None:
