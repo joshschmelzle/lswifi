@@ -17,7 +17,7 @@ import textwrap
 import time
 from pathlib import Path
 
-from .__version__ import __version__
+from lswifi.__version__ import __version__
 
 
 class ExportAction(argparse.Action):

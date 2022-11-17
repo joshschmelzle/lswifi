@@ -22,12 +22,12 @@ from operator import itemgetter
 from time import sleep
 
 # app imports
-from . import wlanapi as WLAN_API
-from .__version__ import __title__, __version__
-from .client import Client, get_interface_info
-from .constants import APNAMEJSONFILE
-from .elements import WirelessNetworkBss
-from .helpers import (
+from lswifi import wlanapi as WLAN_API
+from lswifi.__version__ import __title__, __version__
+from lswifi.client import Client, get_interface_info
+from lswifi.constants import APNAMEJSONFILE
+from lswifi.elements import WirelessNetworkBss
+from lswifi.helpers import (
     Base64Encoder,
     format_bytes_as_hex,
     generate_pretty_separator,
@@ -38,7 +38,7 @@ from .helpers import (
     remove_control_chars,
     strip_mac_address_format,
 )
-from .schemas.out import *
+from lswifi.schemas.out import *
 
 
 def start(args, **kwargs):

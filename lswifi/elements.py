@@ -17,23 +17,27 @@ from dataclasses import dataclass
 from datetime import timedelta
 from struct import unpack_from
 
-from . import wlanapi as WLAN_API
-from .constants import *
-from .constants import _40MHZ_CHANNEL_LIST, _80MHZ_CHANNEL_LIST, _160MHZ_CHANNEL_LIST
-from .helpers import *
-from .schemas.band import *
-from .schemas.beacon import *
-from .schemas.bssid import *
-from .schemas.capabilities import *
-from .schemas.channel import *
-from .schemas.ie import *
-from .schemas.modes import *
-from .schemas.out import *
-from .schemas.phy import *
-from .schemas.pmf import *
-from .schemas.rates import *
-from .schemas.security import *
-from .schemas.signalquality import *
+from lswifi import wlanapi as WLAN_API
+from lswifi.constants import *
+from lswifi.constants import (
+    _40MHZ_CHANNEL_LIST,
+    _80MHZ_CHANNEL_LIST,
+    _160MHZ_CHANNEL_LIST,
+)
+from lswifi.helpers import *
+from lswifi.schemas.band import *
+from lswifi.schemas.beacon import *
+from lswifi.schemas.bssid import *
+from lswifi.schemas.capabilities import *
+from lswifi.schemas.channel import *
+from lswifi.schemas.ie import *
+from lswifi.schemas.modes import *
+from lswifi.schemas.out import *
+from lswifi.schemas.phy import *
+from lswifi.schemas.pmf import *
+from lswifi.schemas.rates import *
+from lswifi.schemas.security import *
+from lswifi.schemas.signalquality import *
 
 
 class WirelessNetworkBss:

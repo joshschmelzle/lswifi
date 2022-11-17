@@ -18,23 +18,7 @@ from threading import Lock, Timer
 from types import SimpleNamespace
 from typing import Union
 
-from . import wlanapi as WLAN_API
-from .wlanapi import (
-    ONEX_NOTIFICATION_TYPE_ENUM,
-    WLAN_HOSTED_NETWORK_NOTIFICATION_CODE_ENUM,
-    WLAN_NOTIFICATION_ACM_ENUM,
-    WLAN_NOTIFICATION_MSM_ENUM,
-    WLAN_NOTIFICATION_SOURCE_ACM,
-    WLAN_NOTIFICATION_SOURCE_ALL,
-    WLAN_NOTIFICATION_SOURCE_DICT,
-    WLAN_NOTIFICATION_SOURCE_HNWK,
-    WLAN_NOTIFICATION_SOURCE_IHV,
-    WLAN_NOTIFICATION_SOURCE_MSM,
-    WLAN_NOTIFICATION_SOURCE_NONE,
-    WLAN_NOTIFICATION_SOURCE_ONEX,
-    WLAN_NOTIFICATION_SOURCE_SECURITY,
-    WLANConnectionAttributes,
-)
+from lswifi import wlanapi as WLAN_API
 
 
 class TimerEx(object):
@@ -110,14 +94,14 @@ class Event(object):
     """Native Wifi event class"""
 
     ns_type_to_codes_dict = {
-        WLAN_NOTIFICATION_SOURCE_NONE: None,
-        WLAN_NOTIFICATION_SOURCE_ONEX: ONEX_NOTIFICATION_TYPE_ENUM,
-        WLAN_NOTIFICATION_SOURCE_ACM: WLAN_NOTIFICATION_ACM_ENUM,
-        WLAN_NOTIFICATION_SOURCE_MSM: WLAN_NOTIFICATION_MSM_ENUM,
-        WLAN_NOTIFICATION_SOURCE_SECURITY: None,
-        WLAN_NOTIFICATION_SOURCE_IHV: None,
-        WLAN_NOTIFICATION_SOURCE_HNWK: WLAN_HOSTED_NETWORK_NOTIFICATION_CODE_ENUM,
-        WLAN_NOTIFICATION_SOURCE_ALL: ONEX_NOTIFICATION_TYPE_ENUM,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_NONE: None,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_ONEX: WLAN_API.ONEX_NOTIFICATION_TYPE_ENUM,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_ACM: WLAN_API.WLAN_NOTIFICATION_ACM_ENUM,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_MSM: WLAN_API.WLAN_NOTIFICATION_MSM_ENUM,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_SECURITY: None,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_IHV: None,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_HNWK: WLAN_API.WLAN_HOSTED_NETWORK_NOTIFICATION_CODE_ENUM,
+        WLAN_API.WLAN_NOTIFICATION_SOURCE_ALL: WLAN_API.ONEX_NOTIFICATION_TYPE_ENUM,
     }
 
     def __init__(
@@ -131,11 +115,11 @@ class Event(object):
     @staticmethod
     def from_notification_data(notification_data):
         actual = notification_data.contents
-        if actual.NotificationSource not in WLAN_NOTIFICATION_SOURCE_DICT:
+        if actual.NotificationSource not in WLAN_API.WLAN_NOTIFICATION_SOURCE_DICT:
             return None
 
         codes = Event.ns_type_to_codes_dict.get(
-            actual.NotificationSource, WLAN_NOTIFICATION_SOURCE_NONE
+            actual.NotificationSource, WLAN_API.WLAN_NOTIFICATION_SOURCE_NONE
         )
         if codes is not None:
             try:
@@ -143,8 +127,9 @@ class Event(object):
 
                 event = Event(
                     actual,
-                    WLAN_NOTIFICATION_SOURCE_DICT.get(
-                        actual.NotificationSource, WLAN_NOTIFICATION_SOURCE_NONE
+                    WLAN_API.WLAN_NOTIFICATION_SOURCE_DICT.get(
+                        actual.NotificationSource,
+                        WLAN_API.WLAN_NOTIFICATION_SOURCE_NONE,
                     ),
                     code.name,
                     actual.InterfaceGuid,
@@ -218,7 +203,7 @@ def get_interface_info(args, iface) -> str:
         bssid = ""
         for key, result in interface_info.items():
             if key == "current_connection":
-                if isinstance(result[0], WLANConnectionAttributes):
+                if isinstance(result[0], WLAN_API.WLANConnectionAttributes):
                     connected_ssid = parse_result(
                         result=result[1],
                         data_type="wlanAssociationAttributes",

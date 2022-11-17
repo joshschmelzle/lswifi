@@ -13,7 +13,7 @@ import random
 import re
 from base64 import b64encode
 
-from .constants import _20MHZ_CHANNEL_LIST
+from lswifi.constants import _20MHZ_CHANNEL_LIST
 
 __control_chars = "".join(
     map(chr, itertools.chain(range(0x00, 0x20), range(0x7F, 0xA0)))
