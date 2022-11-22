@@ -54,7 +54,7 @@ Print help information:
 CLI options
 -----------
 
-```bash
+```ascii
 options:
   -h, --help            show this help message and exit
   -version, --version, -V
@@ -143,4 +143,4 @@ Type "help", "copyright", "credits" or "license" for more information.
 Contributing
 ------------
 
-Want to contribute? Thanks! Please take a few moments to [read this](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md).
+Want to contribute? Thanks! Please take a few moments to [read this](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md). Checkout the [authors and credits here](AUTHORS.md).

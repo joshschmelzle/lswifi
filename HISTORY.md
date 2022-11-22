@@ -4,6 +4,9 @@ Release History
 UNRELEASED (xxx-xx-xx)
 ----------------------
 
+- Improve specificity on threshold option (value from user must be from -1 to -100)
+- Add option to remove threshold filtering which excludes results with weak signals
+
 0.1.31 (2022-11-16)
 -------------------
 
