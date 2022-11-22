@@ -258,7 +258,8 @@ def setup_parser() -> argparse.ArgumentParser:
         nargs="?",
         help="print extra information about information elements for a specified BSSID",
     )
-    parser.add_argument(
+    thresholds_group = parser.add_mutually_exclusive_group()
+    thresholds_group.add_argument(
         "-threshold",
         "-t",
         metavar="-82",
@@ -266,6 +267,12 @@ def setup_parser() -> argparse.ArgumentParser:
         default="-82",
         type=sensitivity,
         help="threshold which excludes networks with weak signal strength from results (-82 is default)",
+    )
+    thresholds_group.add_argument(
+        "-all",
+        dest="all",
+        action="store_true",
+        help="remove remove threshold filtering which excludes results with weak signals",
     )
     parser.add_argument(
         "-g",

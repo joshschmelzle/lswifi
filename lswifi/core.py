@@ -561,10 +561,13 @@ def parse_bss_list(
             break
 
         # handle weakest rssi value we want to see displayed to the screen
-        if bss.rssi.value < args.sensitivity:
+        if args.all:
+            pass
+        elif bss.rssi.value < args.sensitivity:
+            log.debug(
+                f"excluding {bss.bssid} ({bss.ssid}) because bss.rssi.value {bss.rssi.value} is < {args.sensitivity}"
+            )
             continue
-
-        # print(bss.ssid)
 
         # handle band filters
         if not args.a and not args.g and not args.six:
