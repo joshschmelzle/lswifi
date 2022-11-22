@@ -113,7 +113,7 @@ class RNR_SHORT_SSID(OutObject):
     def __init__(self, shortssid=""):
         self.value = shortssid
         self.header = Header("SHORT SSID")
-        self.subheader = SubHeader("[CRC32]")
+        self.subheader = SubHeader("[CRC-32]")
 
     def __repr__(self):
         return f"OutObject({self.value},{self.header},{self.subheader})"

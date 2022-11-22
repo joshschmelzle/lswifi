@@ -1298,6 +1298,8 @@ class WirelessNetworkBss:
                 if len(buffer) >= 1:
                     # 20 mhz PSD
                     twentymhzpsd = buffer[0]
+                    # Power is expressed in terms of 0.5dBm from -64 to 63 and is encoded as 8-bit 2's compliment
+                    twentymhzpsd = twos(twentymhzpsd, 1) * 0.5
                     base_out += f"\n  20 MHz PSD: {str(twentymhzpsd)}"
                     buffer.pop(0)
                 width = "unknown"

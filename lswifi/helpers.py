@@ -11,6 +11,7 @@ import itertools
 import json
 import random
 import re
+import sys
 from base64 import b64encode
 
 from lswifi.constants import _6GHZ_20MHZ_CHANNEL_LIST, _20MHZ_CHANNEL_LIST
@@ -197,6 +198,11 @@ def get_channel_number_from_frequency(frequency):
             return _20MHZ_CHANNEL_LIST.get(str(_frequency), "Unknown")
     except KeyError:
         return "Unknown"
+
+
+def twos(val, bytes):
+    b = val.to_bytes(bytes, byteorder=sys.byteorder, signed=False)
+    return int.from_bytes(b, byteorder=sys.byteorder, signed=True)
 
 
 def get_6ghz_frequency_from_channel_number(channel_number: str) -> str:
