@@ -130,12 +130,12 @@ def setup_logger(args) -> logging.Logger:
 
 
 def sensitivity(value):
-    """Validate user provided sensitivity is between -1 and -100"""
+    """Validate user provided sensitivity is between -1 (stronger) and -100 (weaker)"""
     try:
         display_sensitivity = int(value)
-        if display_sensitivity not in range(-100, -1):
+        if display_sensitivity not in range(-100, 0):
             raise argparse.ArgumentTypeError(
-                "rssi sensitivity threshold must be between -1 and -100"
+                "rssi sensitivity threshold must be a value from -1 to -100"
             )
     except ValueError:
         raise argparse.ArgumentTypeError(f"{value} not a valid threshold")
