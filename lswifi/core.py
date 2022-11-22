@@ -252,7 +252,7 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
                 if args.ies or args.bytes or args.export:
                     return
                 if args.rnr:
-                    print_rnr_list(rnr_results)
+                    print_rnr_list(rnr_results, client.mac, args)
                 else:
                     print_bss_list(
                         out_results,
@@ -884,7 +884,13 @@ def parse_bss_list(
     )
 
 
-def print_rnr_list(rnr_results: list):
+def print_rnr_list(rnr_results: list, client_mac, args):
+    log = logging.getLogger(__name__)
+    log.info(
+        f"display filter sensitivity {args.sensitivity}; "
+        f"Reduced Neighbor Report information is from {len(rnr_results)} BSSIDs found in scan results for {client_mac}."
+    )
+
     if len(rnr_results) > 0:
         headers = []
         subheaders = []

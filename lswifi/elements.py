@@ -36,23 +36,7 @@ from lswifi.schemas.out import *
 from lswifi.schemas.phy import *
 from lswifi.schemas.pmf import *
 from lswifi.schemas.rates import *
-from lswifi.schemas.rnr import (
-    RBSSID,
-    RCHANNEL,
-    RFREQ,
-    RNR,
-    RSSID,
-    SHORTSSID,
-    TBTT,
-    CoLocatedAP,
-    DiscoveryBSSID,
-    DiscoveryRSSI,
-    Offset,
-    SameSSID,
-    TransmittedBSSID,
-    TwentyMHzPSD,
-    UPRActive,
-)
+from lswifi.schemas.rnr import *
 from lswifi.schemas.security import *
 from lswifi.schemas.signalquality import *
 
@@ -1250,6 +1234,8 @@ class WirelessNetworkBss:
                 neighbor_ap_tbtt_offset = buffer[0]
                 base_out += f"\nTBTT {tbtt_count}:"
                 tbtt_count += 1
+                if neighbor_ap_tbtt_offset == 255:
+                    neighbor_ap_tbtt_offset = "Unknown (255)"
                 base_out += f"\n  TBTT Offset: {neighbor_ap_tbtt_offset}"
                 buffer.pop(0)
                 bssid = ""
@@ -1314,12 +1300,6 @@ class WirelessNetworkBss:
                     twentymhzpsd = buffer[0]
                     base_out += f"\n  20 MHz PSD: {str(twentymhzpsd)}"
                     buffer.pop(0)
-                if same_ssid:
-                    rssid = RSSID(self.ssid.value)
-                else:
-                    rssid = RSSID()
-                rshortssid = SHORTSSID(shortssid)
-                rbssid = RBSSID(bssid)
                 width = "unknown"
                 operating_class = str(operating_class)
                 channel_number = channel_number
@@ -1331,37 +1311,44 @@ class WirelessNetworkBss:
                     width = "80"
                 if operating_class == "134":
                     width = "160"
-                rchannel = RCHANNEL(channel_number, width)
-                rfreq = RFREQ(channel_number)
-                rfreq.value = "{0:.3f}".format(
-                    float(int(rfreq.value) / 1000)
+                rnr_shortssid = RNR_SHORT_SSID(shortssid)
+                rnr_bssid = RNR_BSSID(bssid)
+                rnr_channel = RNR_CHANNEL(channel_number, width)
+                rnr_freq = RNR_FREQ(channel_number)
+                rnr_freq.value = "{0:.3f}".format(
+                    float(int(rnr_freq.value) / 1000)
                 )  # initially unit is MHz but converted to GHz after IEs are parsed below
-                rtwentymhzpsd = TwentyMHzPSD(twentymhzpsd)
-                rsamessid = SameSSID(same_ssid)
-                rtransmittedbssid = TransmittedBSSID(transmitted_bssid)
-                rupractive = UPRActive(unsolicited_probe_resp_active)
-                rtbtt = TBTT(tbtt_count - 1)
-                roffset = Offset(neighbor_ap_tbtt_offset)
-                rcolocatedap = CoLocatedAP(co_located_ap)
-                rdiscoverybssid = DiscoveryBSSID(self.bssid.value)
-                rdiscoveryrssi = DiscoveryRSSI(self.rssi.value)
-                rnr = RNR(
-                    rdiscoverybssid,
-                    rdiscoveryrssi,
-                    rssid,
-                    rshortssid,
-                    rbssid,
-                    rchannel,
-                    rfreq,
-                    rtbtt,
-                    roffset,
-                    rtwentymhzpsd,
-                    rsamessid,
-                    rtransmittedbssid,
-                    rupractive,
-                    rcolocatedap,
+                rnr_twentymhzpsd = RNR_TWENTY_MHZ_PSD(twentymhzpsd)
+                rnr_samessid = RNR_SAME_SSID(same_ssid)
+                rnr_multiplebssid = RNR_MULTIPLE_BSSID(multiple_bssid)
+                rnr_transmittedbssid = RNR_TRANSMITTED_BSSID(transmitted_bssid)
+                rnr_upractive = RNR_UPR_ACTIVE(unsolicited_probe_resp_active)
+                RNR_TBTT(tbtt_count - 1)
+                rnr_tbtt_offset = RNR_TBTT_OFFSET(neighbor_ap_tbtt_offset)
+                rnr_colocatedap = RNR_COLOCATED_AP(co_located_ap)
+                oob_bssid = OOB_BSSID(self.bssid.value)
+                oob_rssi = OOB_RSSI(self.rssi.value)
+                oob_ssid = OOB_SSID(self.ssid.value)
+                oob_channel = OOB_CHANNEL(self.channel_number.value)
+                self.rnrs.append(
+                    RNR(
+                        oob_ssid,
+                        oob_bssid,
+                        oob_rssi,
+                        oob_channel,
+                        rnr_channel,
+                        rnr_freq,
+                        rnr_tbtt_offset,
+                        rnr_bssid,
+                        rnr_shortssid,
+                        rnr_samessid,
+                        rnr_multiplebssid,
+                        rnr_transmittedbssid,
+                        rnr_upractive,
+                        rnr_colocatedap,
+                        rnr_twentymhzpsd,
+                    )
                 )
-                self.rnrs.append(rnr)
 
         return base_out
 
