@@ -1,20 +1,17 @@
-lswifi is written and maintained by Josh Schmelzle:
+# Authors
 
-Wizards
--------
+lswifi was created by Josh Schmelzle.
+
+## Maintainers
 
 - Josh Schmelzle (@joshschmelzle)
 
-Contributors
-------------
+## Contributors
 
-If you contribute code to this project, add your name below.
+- Colin Vallane (@crvallance)
 
-- Name (@handle)
-
-Credits
--------
+## Credits
 
 Thanks to many other makers contributions to open source that have inspired ideas for this project. Python, nmap, horst, tcpdump, etc.
 
-Special thanks to Helge Magnus Keck (@HelgeKeck). This project would not be where it is without him.
+Special thanks to Helge Magnus Keck (@HelgeKeck). This project would not be where it is without his initial guidance.
