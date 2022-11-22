@@ -352,6 +352,13 @@ def setup_parser() -> argparse.ArgumentParser:
         help="sort output by access point uptime based on beacon timestamp",
     )
     parser.add_argument(
+        "-rnr",
+        "--rnr",
+        dest="rnr",
+        action="store_true",
+        help="special mode to create an alternate table based on RNR results",
+    )
+    parser.add_argument(
         "--channel-width",
         dest="width",
         type=width,

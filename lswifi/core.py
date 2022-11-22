@@ -32,6 +32,7 @@ from lswifi.helpers import (
     format_bytes_as_hex,
     generate_pretty_separator,
     get_attr_max_len,
+    get_index,
     is_five_band,
     is_six_band,
     is_two_four_band,
@@ -238,6 +239,7 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
                 log.debug(f"start parsing information elements for {client.mac}")
                 (
                     out_results,
+                    rnr_results,
                     bss_len,
                     bssid_list,
                     json_names,
@@ -249,17 +251,20 @@ async def scan(clients, is_caching_acknowledged, csv_file_name, json_file_name, 
 
                 if args.ies or args.bytes or args.export:
                     return
-                print_bss_list(
-                    out_results,
-                    bss_len,
-                    client.mac,
-                    bssid_list,
-                    is_caching_acknowledged,
-                    json_names,
-                    json_out,
-                    newapnames,
-                    args,
-                )
+                if args.rnr:
+                    print_rnr_list(rnr_results)
+                else:
+                    print_bss_list(
+                        out_results,
+                        bss_len,
+                        client.mac,
+                        bssid_list,
+                        is_caching_acknowledged,
+                        json_names,
+                        json_out,
+                        newapnames,
+                        args,
+                    )
                 log.debug(f"finish parsing information elements for {client.mac}")
 
         ############################
@@ -432,6 +437,7 @@ def updateAPNames(json_names, scan_names) -> None:
 def parse_bss_list(
     client, is_caching_acknowledged, csv_file_name, json_file_name, args
 ):
+    rnr_results = []
     out_results = []
     bssid_list = []
     csv_out = []
@@ -649,6 +655,14 @@ def parse_bss_list(
         else:
             continue
 
+        if args.rnr:
+            for rnr in bss.rnrs:
+                rnr_out = []
+                for obj in rnr:
+                    rnr_out.append(obj.out())
+                rnr_results.append(rnr_out)
+            continue
+
         # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
         bssid_list.append(str(bss.bssid))
 
@@ -783,24 +797,25 @@ def parse_bss_list(
             if is_caching_acknowledged:
                 out_results[-1].append(bss.apname.out())
 
-    def get_index(key):
-        for r in out_results:
-            for i, x in enumerate(r):
-                if key in str(x.header):
-                    return i
-        return -1
+    rnr_results = sorted(
+        rnr_results,
+        key=lambda x: x[get_index("RSSI", rnr_results)].value,
+        reverse=False,
+    )
 
     if args.uptime:  # sort by uptime
         out_results = sorted(
             out_results,
-            key=lambda x: int(x[get_index("UPTIME")].value.split("d")[0]),
+            key=lambda x: int(x[get_index("UPTIME", out_results)].value.split("d")[0]),
             reverse=False,
         )
         csv_out = sorted(csv_out, key=itemgetter("uptime"), reverse=False)
         json_out = sorted(json_out, key=itemgetter("uptime"), reverse=False)
     else:  # sort by RSSI
         out_results = sorted(
-            out_results, key=lambda x: x[get_index("RSSI")].value, reverse=False
+            out_results,
+            key=lambda x: x[get_index("RSSI", out_results)].value,
+            reverse=False,
         )
         csv_out = sorted(csv_out, key=itemgetter("rssi"), reverse=False)
         json_out = sorted(json_out, key=itemgetter("rssi"), reverse=False)
@@ -858,7 +873,60 @@ def parse_bss_list(
                 for result in csv_out:
                     writer.writerow(result)
 
-    return out_results, bss_len, bssid_list, json_names, json_out, newapnames
+    return (
+        out_results,
+        rnr_results,
+        bss_len,
+        bssid_list,
+        json_names,
+        json_out,
+        newapnames,
+    )
+
+
+def print_rnr_list(rnr_results: list):
+    if len(rnr_results) > 0:
+        headers = []
+        subheaders = []
+
+        for tup in rnr_results[0]:
+            headers.append(tup.header)
+            subheaders.append(tup.subheader)
+
+        # define fun ascii border
+        decorators = ["=", "~", "+", "-"]
+        begin_upper = "-"
+        end_upper = "-"
+        out_header_decorators = ()
+
+        result = ""
+
+        # add column header and subheader
+        rnr_results.insert(0, headers)
+        rnr_results.insert(1, subheaders)
+
+        # generate fun ascii border
+        for index, _item in enumerate(rnr_results[0]):
+            max_len = max(len(x) for x in [y[index] for y in rnr_results])
+            out_header_decorators = out_header_decorators + (
+                generate_pretty_separator(max_len, decorators, begin_upper, end_upper),
+            )
+
+            arg = [y[index] for y in rnr_results][0].alignment.value
+            result += f"{{{index}:{arg}{max_len}}}  "
+
+        # add fun ascii border
+        rnr_results.insert(0, out_header_decorators)
+        rnr_results.insert(3, out_header_decorators)
+
+        for row in rnr_results:
+            rnr_results = []
+            for data in row:
+                if isinstance(data, OUT_TUPLE):
+                    rnr_results.append(f"{data.value}")
+                else:
+                    rnr_results.append(f"{data}")
+            print(result.format(*tuple(rnr_results)))
 
 
 def print_bss_list(

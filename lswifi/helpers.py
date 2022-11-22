@@ -13,7 +13,7 @@ import random
 import re
 from base64 import b64encode
 
-from lswifi.constants import _20MHZ_CHANNEL_LIST
+from lswifi.constants import _6GHZ_20MHZ_CHANNEL_LIST, _20MHZ_CHANNEL_LIST
 
 __control_chars = "".join(
     map(chr, itertools.chain(range(0x00, 0x20), range(0x7F, 0xA0)))
@@ -59,6 +59,14 @@ def get_attr_max_len(ies, attr):
         else:
             _list.append(str(getattr(ie, attr)))
     return max(len(x) for x in _list)
+
+
+def get_index(key: str, results: list):
+    for r in results:
+        for i, x in enumerate(r):
+            if key in str(x.header):
+                return i
+    return -1
 
 
 def bytes_to_int(x_bytes):
@@ -189,6 +197,21 @@ def get_channel_number_from_frequency(frequency):
             return _20MHZ_CHANNEL_LIST.get(str(_frequency), "Unknown")
     except KeyError:
         return "Unknown"
+
+
+def get_6ghz_frequency_from_channel_number(channel_number: str) -> str:
+    """gets the center frequency for a corresponding channel
+
+    Args:
+        channel_number (int): 802.11 channel number
+
+    Returns:
+        str: frequency
+    """
+    for key, value in _6GHZ_20MHZ_CHANNEL_LIST.items():
+        if channel_number == value:
+            return key
+    return "Unknown"
 
 
 class Base64Encoder(json.JSONEncoder):

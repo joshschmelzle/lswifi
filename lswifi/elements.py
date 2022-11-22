@@ -36,6 +36,23 @@ from lswifi.schemas.out import *
 from lswifi.schemas.phy import *
 from lswifi.schemas.pmf import *
 from lswifi.schemas.rates import *
+from lswifi.schemas.rnr import (
+    RBSSID,
+    RCHANNEL,
+    RFREQ,
+    RNR,
+    RSSID,
+    SHORTSSID,
+    TBTT,
+    CoLocatedAP,
+    DiscoveryBSSID,
+    DiscoveryRSSI,
+    Offset,
+    SameSSID,
+    TransmittedBSSID,
+    TwentyMHzPSD,
+    UPRActive,
+)
 from lswifi.schemas.security import *
 from lswifi.schemas.signalquality import *
 
@@ -149,6 +166,8 @@ class WirelessNetworkBss:
             self.video_acm = OutObject(header="AC_VI")
             self.besteffort_acm = OutObject(header="AC_BE")
             self.background_acm = OutObject(header="AC_BK")
+            self.has_rnr = False
+            self.rnrs = []
 
             if not is_byte_file:
                 # parse IEs
@@ -1178,6 +1197,7 @@ class WirelessNetworkBss:
         return f"AP Name: {apname}, Clients: {clients}"
 
     def __parse_reduced_neighbor_report(self, element_data):
+        self.has_rnr = True
         body = list(memoryview(element_data))
 
         # TBTT information header is body[0] and body[1]
@@ -1232,6 +1252,15 @@ class WirelessNetworkBss:
                 tbtt_count += 1
                 base_out += f"\n  TBTT Offset: {neighbor_ap_tbtt_offset}"
                 buffer.pop(0)
+                bssid = ""
+                shortssid = ""
+                same_ssid = False
+                multiple_bssid = False
+                transmitted_bssid = False
+                unsolicited_probe_resp_active = False
+                co_located_ap = False
+
+                twentymhzpsd = 0
                 if len(buffer) > 5:
                     o1, o2, o3, o4, o5, o6 = [buffer[i] for i in [0, 1, 2, 3, 4, 5]]
                     bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
@@ -1240,8 +1269,13 @@ class WirelessNetworkBss:
                         buffer.pop(0)
                 if len(buffer) > 3:
                     # short ssid
+                    shortssidtemp = []
                     for _ in range(4):
+                        shortssidtemp.append(f"{buffer[0]:02x}")
                         buffer.pop(0)
+                    shortssidtemp.reverse()  # fix endianness
+                    shortssid = f"0x{''.join(b for b in shortssidtemp)}"
+                    base_out += f", Short SSID: {shortssid}"
                 if len(buffer) >= 1:
                     # bss parameter
                     # get_bit(buffer[0], 0) b0 - oct recommended
@@ -1277,8 +1311,57 @@ class WirelessNetworkBss:
                     buffer.pop(0)
                 if len(buffer) >= 1:
                     # 20 mhz PSD
-                    base_out += f"\n  20 MHz PSD: {buffer[0]}"
+                    twentymhzpsd = buffer[0]
+                    base_out += f"\n  20 MHz PSD: {str(twentymhzpsd)}"
                     buffer.pop(0)
+                if same_ssid:
+                    rssid = RSSID(self.ssid.value)
+                else:
+                    rssid = RSSID()
+                rshortssid = SHORTSSID(shortssid)
+                rbssid = RBSSID(bssid)
+                width = "unknown"
+                operating_class = str(operating_class)
+                channel_number = channel_number
+                if operating_class == "131":
+                    width = "20"
+                if operating_class == "132":
+                    width = "40"
+                if operating_class == "133":
+                    width = "80"
+                if operating_class == "134":
+                    width = "160"
+                rchannel = RCHANNEL(channel_number, width)
+                rfreq = RFREQ(channel_number)
+                rfreq.value = "{0:.3f}".format(
+                    float(int(rfreq.value) / 1000)
+                )  # initially unit is MHz but converted to GHz after IEs are parsed below
+                rtwentymhzpsd = TwentyMHzPSD(twentymhzpsd)
+                rsamessid = SameSSID(same_ssid)
+                rtransmittedbssid = TransmittedBSSID(transmitted_bssid)
+                rupractive = UPRActive(unsolicited_probe_resp_active)
+                rtbtt = TBTT(tbtt_count - 1)
+                roffset = Offset(neighbor_ap_tbtt_offset)
+                rcolocatedap = CoLocatedAP(co_located_ap)
+                rdiscoverybssid = DiscoveryBSSID(self.bssid.value)
+                rdiscoveryrssi = DiscoveryRSSI(self.rssi.value)
+                rnr = RNR(
+                    rdiscoverybssid,
+                    rdiscoveryrssi,
+                    rssid,
+                    rshortssid,
+                    rbssid,
+                    rchannel,
+                    rfreq,
+                    rtbtt,
+                    roffset,
+                    rtwentymhzpsd,
+                    rsamessid,
+                    rtransmittedbssid,
+                    rupractive,
+                    rcolocatedap,
+                )
+                self.rnrs.append(rnr)
 
         return base_out
 
