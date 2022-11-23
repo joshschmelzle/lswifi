@@ -886,10 +886,15 @@ def parse_bss_list(
 
 def print_rnr_list(rnr_results: list, client_mac, args):
     log = logging.getLogger(__name__)
-    log.info(
-        f"display filter sensitivity {args.sensitivity}; "
-        f"Reduced Neighbor Reports found in {len(rnr_results)} BSSIDs from scan results for {client_mac}."
-    )
+    if args.all:
+        log.info(
+            f"Reduced Neighbor Reports found in {len(rnr_results)} BSSIDs from scan results for {client_mac}."
+        )
+    else:
+        log.info(
+            f"display filter sensitivity {args.sensitivity}; "
+            f"Reduced Neighbor Reports found in {len(rnr_results)} BSSIDs from scan results for {client_mac}."
+        )
 
     if len(rnr_results) > 0:
         headers = []
@@ -947,10 +952,15 @@ def print_bss_list(
     args,
 ):
     log = logging.getLogger(__name__)
-    log.info(
-        f"display filter sensitivity {args.sensitivity}; "
-        f"output includes {len(out_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
-    )
+    if args.all:
+        log.info(
+            f"output includes {len(out_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
+        )
+    else:
+        log.info(
+            f"display filter sensitivity {args.sensitivity}; "
+            f"output includes {len(out_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
+        )
 
     if len(out_results) > 0:
 
