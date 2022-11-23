@@ -1,5 +1,4 @@
 ![pypi-badge](https://img.shields.io/pypi/v/lswifi) ![pypi-monthly-downloads](https://img.shields.io/pypi/dm/lswifi) ![pypi-format](https://img.shields.io/pypi/format/lswifi) ![pypi-implementation](https://img.shields.io/pypi/implementation/lswifi) ![pypi-version](https://img.shields.io/pypi/pyversions/lswifi) ![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
-</p>
 
 lswifi: a CLI-centric Wi-Fi scanning tool for Windows
 =====================================================
@@ -126,17 +125,17 @@ Upgrading
 Here is how to upgrade `lswifi` using `pip3` when there is a new version available:
 
 ```bash
-❯ where.exe pip3
+> where.exe pip3
 C:\Users\jsz\AppData\Local\Programs\Python\Python311\Scripts\pip3.exe
 C:\Users\jsz\AppData\Local\Programs\Python\Python310\Scripts\pip3.exe
 
-❯ pip3 install --upgrade lswifi
+> pip3 install --upgrade lswifi
 ```
 
 Check the version installed:
 
 ```bash
-❯ lswifi -v
+> lswifi -v
 ```
 
 FAQs
@@ -155,7 +154,7 @@ FAQs
    - Here is an example for how to find the Scripts directory:
 
 ```bash
-❯ python
+> python
 Python 3.11.0 (main, Oct 24 2022, 18:26:48) [MSC v.1933 64 bit (AMD64)] on win32
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import os,sys
