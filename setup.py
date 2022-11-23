@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+
 try:
     from setuptools import find_packages, setup
 except:
@@ -67,6 +68,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Intended Audience :: Information Technology",
         "Intended Audience :: System Administrators",
         "Intended Audience :: Telecommunications Industry",
@@ -75,6 +77,6 @@ setup(
         "Topic :: System :: Networking :: Monitoring",
         "Environment :: Win32 (MS Windows)",
         "Operating System :: Microsoft :: Windows :: Windows 10",
-        "Operating System :: Microsoft :: Windows :: Windows 11"
+        "Operating System :: Microsoft :: Windows :: Windows 11",
     ],
 )

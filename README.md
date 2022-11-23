@@ -1,7 +1,7 @@
-![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
+![pypi-badge](https://img.shields.io/pypi/v/lswifi) ![pypi-monthly-downloads](https://img.shields.io/pypi/dm/lswifi) ![pypi-format](https://img.shields.io/pypi/format/lswifi) ![pypi-implementation](https://img.shields.io/pypi/implementation/lswifi) ![pypi-version](https://img.shields.io/pypi/pyversions/lswifi) ![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
 
 lswifi: a CLI-centric Wi-Fi scanning tool for Windows
-===============================================
+=====================================================
 
 `lswifi` is a CLI-centric Wi-Fi scanning tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh show wlan networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, parsing 802.11 feature set, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
 
@@ -51,10 +51,28 @@ Print help information:
 
 ![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/help_menu.gif "animation showing printing help for lswifi")
 
+Print and add detected AP names column in output:
+
+``` {.sourceCode .bash}
+> lswifi --ap-names
+```
+
+Print an alternative table for BSSes which contain Reduced Neighbor Reports:
+
+``` {.sourceCode .bash}
+> lswifi -rnr
+```
+
+Watch event notifications (inc. roaming, connection, scanning, etc.):
+
+``` {.sourceCode .bash}
+> lswifi --watchevents
+```
+
 CLI options
 -----------
 
-```bash
+```ascii
 options:
   -h, --help            show this help message and exit
   -version, --version, -V
@@ -65,6 +83,7 @@ options:
   -ies [BSSID]          print extra information about information elements for a specified BSSID
   -threshold -82, -t -82
                         threshold which excludes networks with weak signal strength from results (-82 is default)
+  -all                  remove threshold filtering which excludes results with weaker signal
   -g                    display filter to limit output by 2.4 GHz band
   -a                    display filter to limit output by 5 GHz band
   -six                  display filter to limit output by 6 GHz band
@@ -77,6 +96,7 @@ options:
   --mfp, --pmf          adds Protected Management Frame column to output using information from AP beacon RSNE
   --period              adds beacon period column to output using information from AP beacon
   --uptime, -uptime     sort output by access point uptime based on beacon timestamp
+  -rnr, --rnr           special mode to create an alternate table based on RNR results
   --channel-width 20|40|80|160
                         display filter to limit output by a specified channel width
   -ethers               display ap name column and use ethers files for the names
@@ -105,16 +125,17 @@ Upgrading
 Here is how to upgrade `lswifi` using `pip3` when there is a new version available:
 
 ```bash
-PS C:\Users\josh> where.exe pip3
-C:\Users\josh\AppData\Local\Programs\Python\Python310\Scripts\pip3.exe
+> where.exe pip3
+C:\Users\jsz\AppData\Local\Programs\Python\Python311\Scripts\pip3.exe
+C:\Users\jsz\AppData\Local\Programs\Python\Python310\Scripts\pip3.exe
 
-PS C:\Users\josh> pip3 install --upgrade lswifi
+> pip3 install --upgrade lswifi
 ```
 
 Check the version installed:
 
 ```bash
-PS C:\Users\josh> lswifi -v
+> lswifi -v
 ```
 
 FAQs
@@ -126,21 +147,22 @@ FAQs
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
 3. Do I need to install `lswifi` in a virtual environment (venv)?
-   - Optional and not necessary. `lswifi` currently has zero third party dependencies.
-4. When I run `lswifi` from my Windows terminal I get an error that says `'lswifi' is not recognized as an internal or external command operable program or batch file.`?
-   - Make sure the Scripts directory is included in the PATH environment variable and `lswifi.exe` exists in said folder.
+   - Only if you want to. Installing in a venv is optional and not necessary. `lswifi` currently has zero dependencies outside of the stdlib.
+4. When I try to run `lswifi` from my Windows terminal I see an error that says `'lswifi' is not recognized as an internal or external command operable program or batch file.`?
+   - Either `lswifi` is not installed, or the Python Scripts directory is not in the PATH environment variable.
+   - To fix ensure the Scripts directory is included in the [PATH environment variable](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables) and `lswifi.exe` exists in said folder.
    - Here is an example for how to find the Scripts directory:
 
 ```bash
-C:\Users\josh>python
-Python 3.10.4 (tags/v3.10.4:9d38120, Mar 23 2022, 23:13:41) [MSC v.1929 64 bit (AMD64)] on win32
+> python
+Python 3.11.0 (main, Oct 24 2022, 18:26:48) [MSC v.1933 64 bit (AMD64)] on win32
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import os,sys
 >>> os.path.join(sys.prefix, 'Scripts')
-'C:\\Users\\josh\\AppData\\Local\\Programs\\Python\\Python310\\Scripts'
+'C:\\Users\\josh\\AppData\\Local\\Programs\\Python\\Python311\\Scripts'
 ```
 
 Contributing
 ------------
 
-Want to contribute? Thanks! Please take a few moments to [read this](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md).
+Want to contribute? Thanks! Please take a few moments to [read this](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md). Checkout the [authors and credits here](AUTHORS.md).

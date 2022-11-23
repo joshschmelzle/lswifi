@@ -130,12 +130,12 @@ def setup_logger(args) -> logging.Logger:
 
 
 def sensitivity(value):
-    """Validate user provided sensitivity is between -1 and -100"""
+    """Validate user provided sensitivity is between -1 (stronger) and -100 (weaker)"""
     try:
         display_sensitivity = int(value)
-        if display_sensitivity not in range(-100, -1):
+        if display_sensitivity not in range(-100, 0):
             raise argparse.ArgumentTypeError(
-                "rssi sensitivity threshold must be between -1 and -100"
+                "rssi sensitivity threshold must be a value from -1 to -100"
             )
     except ValueError:
         raise argparse.ArgumentTypeError(f"{value} not a valid threshold")
@@ -216,6 +216,9 @@ def setup_parser() -> argparse.ArgumentParser:
 
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
+            
+            Print a table for BSSes which contain Reduced Neighbor Reports:
+              >lswifi -rnr
 """
         ),
         epilog="Made with Python by Josh Schmelzle",
@@ -258,7 +261,8 @@ def setup_parser() -> argparse.ArgumentParser:
         nargs="?",
         help="print extra information about information elements for a specified BSSID",
     )
-    parser.add_argument(
+    thresholds_group = parser.add_mutually_exclusive_group()
+    thresholds_group.add_argument(
         "-threshold",
         "-t",
         metavar="-82",
@@ -266,6 +270,12 @@ def setup_parser() -> argparse.ArgumentParser:
         default="-82",
         type=sensitivity,
         help="threshold which excludes networks with weak signal strength from results (-82 is default)",
+    )
+    thresholds_group.add_argument(
+        "-all",
+        dest="all",
+        action="store_true",
+        help="remove threshold filtering which excludes results with weaker signal",
     )
     parser.add_argument(
         "-g",
@@ -290,12 +300,14 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-include",
+        "-inc",
         dest="include",
         metavar="SSID",
         help="display filter to limit results by specified SSIDs (partial matching supported)",
     )
     parser.add_argument(
         "-exclude",
+        "-exc",
         dest="exclude",
         metavar="SSID",
         help="display filter to exclude results by specified SSIDs (partial matching supported)",
@@ -343,6 +355,13 @@ def setup_parser() -> argparse.ArgumentParser:
         dest="uptime",
         action="store_true",
         help="sort output by access point uptime based on beacon timestamp",
+    )
+    parser.add_argument(
+        "-rnr",
+        "--rnr",
+        dest="rnr",
+        action="store_true",
+        help="special mode to create an alternate table based on RNR results",
     )
     parser.add_argument(
         "--channel-width",
@@ -435,6 +454,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-export",
+        "-exp",
         nargs="?",
         type=str,
         metavar="BSSID",
