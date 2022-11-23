@@ -216,6 +216,9 @@ def setup_parser() -> argparse.ArgumentParser:
 
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
+            
+            Print a table for BSSes which contain Reduced Neighbor Reports:
+              >lswifi -rnr
 """
         ),
         epilog="Made with Python by Josh Schmelzle",
@@ -272,7 +275,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "-all",
         dest="all",
         action="store_true",
-        help="remove remove threshold filtering which excludes results with weak signals",
+        help="remove threshold filtering which excludes results with weaker signal",
     )
     parser.add_argument(
         "-g",
@@ -297,12 +300,14 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-include",
+        "-inc",
         dest="include",
         metavar="SSID",
         help="display filter to limit results by specified SSIDs (partial matching supported)",
     )
     parser.add_argument(
         "-exclude",
+        "-exc",
         dest="exclude",
         metavar="SSID",
         help="display filter to exclude results by specified SSIDs (partial matching supported)",
@@ -449,6 +454,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-export",
+        "-exp",
         nargs="?",
         type=str,
         metavar="BSSID",

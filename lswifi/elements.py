@@ -1109,8 +1109,9 @@ class WirelessNetworkBss:
                 element_data,
                 format_bytes_as_hex(element_data),
             )
+
         self.log.debug(
-            f"Undecoded IE ({element_id}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+            f"No parser built for IE {element_id} detected from {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
         )
         return WLAN_API.InformationElement(
             element_id,
