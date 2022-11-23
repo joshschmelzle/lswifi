@@ -4,6 +4,9 @@ Release History
 UNRELEASED (xxx-xx-xx)
 ----------------------
 
+0.1.32 (2022-11-22)
+-------------------
+
 - Improve specificity on threshold option (value from user must be from -1 to -100)
 - Add `-all` option to remove threshold filtering which excludes results with weak signals
 - Add `-rnr` option to display an alternate set of columns based on information from the Reduced Neighbor Report IE.
