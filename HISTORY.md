@@ -4,6 +4,8 @@ Release History
 UNRELEASED (xxx-xx-xx)
 ----------------------
 
+- Print warning if no interfaces are detected
+
 0.1.32 (2022-11-22)
 -------------------
 

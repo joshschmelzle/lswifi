@@ -61,6 +61,10 @@ def start(args, **kwargs):
         for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
             clients[index] = Client(args, iface)
 
+        if len(clients) == 0:
+            log.error(f"no wireless interfaces found")
+            sys.exit(-1)
+
         if args.list_interfaces:
             print(f"There are {len(clients)} interfaces on this system:")
             for _index, client in clients.items():
@@ -100,7 +104,6 @@ def start(args, **kwargs):
         #     ):
         #         scanning = False
         #         print(get_interface_info(args, interface))
-
         for _index, client in clients.items():
             if (
                 args.get_interface_info
@@ -483,6 +486,7 @@ def parse_bss_list(
     newapnames = {}
 
     bss_len = len(wireless_network_bss_list)
+
     # WirelessNetworkBss object
     for index, bss in enumerate(wireless_network_bss_list):
         if args.ies or args.bytes or args.export:
