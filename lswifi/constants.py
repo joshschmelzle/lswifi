@@ -40,7 +40,7 @@ AKM_SUITE_DICT = {
     5: ".1X-SHA256",  # WPA3 - Enterprise aka 802.1X with SHA256
     6: "PSK",
     7: "TDLS",
-    8: "SAE",
+    8: "SAE",  # SAE with p256 (HMAC-SHA-256)
     9: "FT-SAE",
     10: "APPeerKey",
     11: ".1X-SuiteB-SHA256",
@@ -54,8 +54,8 @@ AKM_SUITE_DICT = {
     19: "FT-PSK-SHA384",
     20: "PSK-SHA384",
     22: "FT-1X-SHA384",
-    24: "SAE-HMAC",  # SAE with HMAC (SHA-256, SHA-384, SHA-512)
-    25: "FT-SAE-HMAC",
+    24: "SAE",  # SAE with p256 (HMAC-SHA-256), p384 (HMAC-SHA-384), or p521 (HMAC-SHA-521)
+    25: "FT-SAE",
 }
 
 INTERWORKING_NETWORK_TYPE = {
