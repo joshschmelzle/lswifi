@@ -46,6 +46,7 @@ IDE
 ---
 
 If you need an IDE recommendation, use Visual Studio Code (VSC). Otherwise, use what makes you happy.
+
 ### Python and VSCode
 
 If you use VSC, you should use Python and Pylance extensions.

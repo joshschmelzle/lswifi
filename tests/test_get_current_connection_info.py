@@ -1,16 +1,18 @@
 import sys
 
 # wlanapi is actually in a different directory. by default when python runs this script it doesn't know about the other one.
-sys.path.insert(0, "C:\\Users\\josh\\dev\\python\\lswifi\\lswifi")
+
+sys.path.insert(0, "../lswifi/")
 import ast
 
-import wlanapi
+
+from lswifi import wlanapi as WLAN_API
 
 
 def func_a(bool):
-    interfaces = wlanapi.get_interfaces()
+    interfaces = WLAN_API.get_interfaces()
     for interface in interfaces:
-        result_tuple = wlanapi.query_interface(interface, "current_connection")
+        result_tuple = WLAN_API.query_interface(interface, "current_connection")
         out = ast.literal_eval((str(result_tuple).split(",", 1)[1][:-1].strip()))
         if bool:
             print("func_a() x 1:")
@@ -21,9 +23,9 @@ def func_a(bool):
 
 
 def func_b(bool):
-    interfaces = wlanapi.get_interfaces()
+    interfaces = WLAN_API.get_interfaces()
     for interface in interfaces:
-        result_tuple = wlanapi.query_interface(interface, "current_connection")
+        result_tuple = WLAN_API.query_interface(interface, "current_connection")
         out = result_tuple[1]["wlanAssociationAttributes"]["dot11Bssid"]
         if bool:
             print("func_b() x 1:")

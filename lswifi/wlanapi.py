@@ -1360,7 +1360,7 @@ class WLANGetNetworkBSSListError(Error):
         self.message = message
 
 
-class WirelessNetwork(object):
+class WirelessNetwork:
     def __init__(self, wireless_network):
         self.ssid = wireless_network.dot11Ssid.SSID[:DOT11_SSID_MAX_LENGTH]
         self.profile_name = wireless_network.ProfileName
@@ -1392,19 +1392,6 @@ class WirelessNetwork(object):
         result += f"Cipher: {self.cipher}\n"
         result += f"Flags: {self.flags}\n"
         return result
-
-
-def zzWlanGetAvailableNetworkList(clientHandle, interfaceGuid):
-    """The WlanGetAvailableNetworkList function retrieves the list of available networks on a wireless LAN interface.
-
-    DWORD WlanGetAvailableNetworkList(
-      HANDLE                       hClientHandle,
-      const GUID                   *pInterfaceGuid,
-      DWORD                        dwFlags,
-      PVOID                        pReserved,
-      PWLAN_AVAILABLE_NETWORK_LIST *ppAvailableNetworkList
-    );
-    """
 
 
 class WLAN:

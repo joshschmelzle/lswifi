@@ -1,5 +1,0 @@
-tox
-coverage-badge
-black
-mypy
-isort

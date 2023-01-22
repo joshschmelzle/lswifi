@@ -201,6 +201,10 @@ def get_channel_number_from_frequency(frequency):
 
 
 def twos(val, bytes):
+    """Two's complement with built-in functions for byte manipulation.
+    twos(int('11111111', 2), 1)  # -> -1
+    twos(int('01111111', 2), 1)  # -> 127
+    """
     b = val.to_bytes(bytes, byteorder=sys.byteorder, signed=False)
     return int.from_bytes(b, byteorder=sys.byteorder, signed=True)
 

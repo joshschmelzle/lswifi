@@ -196,16 +196,17 @@ def setup_parser() -> argparse.ArgumentParser:
               >lswifi -a
               >lswifi -six
 
-            Print the BSSID of the connected AP:
+            Print the BSSID or channel of the connected AP:
               >lswifi -ap
-
-            Print the channel of the connected AP:
               >lswifi -channel
+              >lswifi -ap -channel
+              >lswifi -ap -channel -raw
 
-            Print only networks with BSSIDs that contain <mac>:
+            Print only networks with BSSIDs that contain <mac> (supports partial match):
               >lswifi -bssid 06:6D:15:88:81:59
+              >lswifi -bssid 06:6D:15
 
-            Print additional details (inc. information elements) for a provided BSSID:
+            Print additional details (inc. information elements) for a provided BSSID (<mac> must be exact match):
               >lswifi -ies 06:6D:15:88:81:59
               
             Print and add detected AP names column in output:
@@ -217,8 +218,11 @@ def setup_parser() -> argparse.ArgumentParser:
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
             
-            Print a table for BSSes which contain Reduced Neighbor Reports:
+            Print a special table for BSSes which contain Reduced Neighbor Reports:
               >lswifi -rnr
+              
+            Print multiple columns:
+              >lswifi --ap-names --qbss --tpc --pmf
 """
         ),
         epilog="Made with Python by Josh Schmelzle",
@@ -375,7 +379,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "-ethers",
         dest="ethers",
         action="store_true",
-        help="display ap name column and use ethers files for the names",
+        help="adds an ap name column to output and use an ethers file for the ap names",
     )
     parser.add_argument(
         "--append-ethers",
@@ -483,7 +487,7 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--debug",
         action="store_const",
-        help="increase verbosity in output for debugging",
+        help="increase verbosity for debugging",
         const=logging.DEBUG,
         default=logging.INFO,
     )
