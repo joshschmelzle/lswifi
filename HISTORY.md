@@ -8,6 +8,7 @@ UNRELEASED (xxx-xx-xx)
 - Only wrap lines with text exceeding window size
 - Fix crash when decoding raw byte file with RNR IE present
 - Fix crash when decoding raw byte file with an IE without a parser
+- Begin adding support for 802.11be (EHT) / Wi-Fi 7
 
 0.1.32 (2022-11-22)
 -------------------

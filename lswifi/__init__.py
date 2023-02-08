@@ -6,4 +6,4 @@
 # | \__ \\ V  V /| |  _| |
 # |_|___/ \_/\_/ |_|_| |_|
 
-""" a CLI Wi-Fi scanner for Windows """
+""" a CLI-centric Wi-Fi scanning tool for Windows """

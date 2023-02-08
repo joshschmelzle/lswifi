@@ -75,6 +75,7 @@ class WirelessNetworkBss:
                 "latin-1"
             )
         try:
+            # print("LEN: {}, SSID: {}".format(len(_ssid), _ssid))
             self.ssid = OutObject(
                 value=_ssid,
                 header="SSID",
@@ -1917,9 +1918,10 @@ class WirelessNetworkBss:
         if oui3 in VENDOR_SPECIFIC_DICT:
             vendor = VENDOR_SPECIFIC_DICT[oui3].friendly
             return f"OUI: {oui3} ({vendor})"
-        self.log.debug(
-            f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
-        )
+        if self is not None:
+            self.log.debug(
+                f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+            )
         return f"OUI: {oui}"
 
     def __parse_extension_tag_element(self, element_data):
@@ -2212,6 +2214,24 @@ class WirelessNetworkBss:
                     self.modes.append("ax")
 
         if eid_ext == 59:  # HE 6 GHz Band Capabilities
+            pass
+
+        if eid_ext == 106:  # BE EHT Operation
+            if self is not None:
+                self.phy_type.name = "BE"
+                if "be" not in self.modes:
+                    self.modes.append("be")
+
+        if eid_ext == 107:  # BE Multi-Link
+            pass
+
+        if eid_ext == 108:  # BE EHT Capabilities
+            pass
+
+        if eid_ext == 110:  # BE Multi-Link Traffic Indication
+            pass
+
+        if eid_ext == 113:  # BE QoS Characteristics
             pass
 
         return ext_tag_name, out

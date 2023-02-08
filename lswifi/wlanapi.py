@@ -194,13 +194,14 @@ typedef enum _DOT11_PHY_TYPE {
   dot11_phy_type_vht         = 8,
   dot11_phy_type_dmg         = 9,
   dot11_phy_type_he          = 10,
+  dot11_phy_type_eht         = 11,
   dot11_phy_type_IHV_start   = 0x80000000,
   dot11_phy_type_IHV_end     = 0xffffffff
 } DOT11_PHY_TYPE, *PDOT11_PHY_TYPE;
 """
 DOT11_PHY_TYPE = c_uint
 DOT11_PHY_TYPE_DICT = {
-    0: "unknown",  # Specifies an unknown or uninitialized PHY type.
+    0: "UNKNOWN",  # Specifies an unknown or uninitialized PHY type.
     1: "FHSS",  # Specifies a frequency-hopping spread-spectrum (FHSS) PHY.
     2: "DSSS",  # Specifies a direct sequence spread spectrum (DSSS) PHY.
     3: "IR baseband",  # Specifies an infrared (IR) baseband PHY.
@@ -211,6 +212,7 @@ DOT11_PHY_TYPE_DICT = {
     8: "VHT",  # Specifies a very high-throughput (VHT) 802.11ac PHY.
     9: "DMG",  # Specifies a Directional Multi-Gigabit (DMG) 802.11ad PHY.
     10: "HE",  # Specifies a High Efficiency (HE) 802.11ax PHY.
+    11: "BE",  # Specifies an extremely high-throughput (EHT) 802.11be PHY.
     0x80000000: "dot11_phy_type_IHV_start",  # should this be 2147483648?
     0xFFFFFFFF: "dot11_phy_type_IHV_end",  # should this be 4294967295?
 }
