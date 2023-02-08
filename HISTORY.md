@@ -5,6 +5,9 @@ UNRELEASED (xxx-xx-xx)
 ----------------------
 
 - Print warning if no interfaces are detected
+- Only wrap lines with text exceeding window size
+- Fix crash when decoding raw byte file with RNR IE present
+- Fix crash when decoding raw byte file with an IE without a parser
 
 0.1.32 (2022-11-22)
 -------------------
