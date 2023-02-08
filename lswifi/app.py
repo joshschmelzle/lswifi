@@ -934,7 +934,11 @@ class lswifi:
             rnr_results.insert(1, subheaders)
 
             # generate fun ascii border
+
+            rnr_results_len = len(rnr_results[0]) - 1
             for index, _item in enumerate(rnr_results[0]):
+                if index == rnr_results_len:
+                    max_len = len(_item)
                 max_len = max(len(x) for x in [y[index] for y in rnr_results])
                 out_header_decorators = out_header_decorators + (
                     generate_pretty_separator(
@@ -942,8 +946,12 @@ class lswifi:
                     ),
                 )
 
-                arg = [y[index] for y in rnr_results][0].alignment.value
-                result += f"{{{index}:{arg}{max_len}}}  "
+                align = [y[index] for y in rnr_results][0].alignment.value
+
+                if index == rnr_results_len:
+                    result += f"{{{index}}}"
+                else:
+                    result += f"{{{index}:{align}{max_len}}}  "
 
             # add fun ascii border
             rnr_results.insert(0, out_header_decorators)
@@ -960,7 +968,7 @@ class lswifi:
 
     def print_bss_list(
         self,
-        out_results,
+        scan_results,
         bss_len,
         client_mac,
         bssid_list,
@@ -973,30 +981,30 @@ class lswifi:
         log = logging.getLogger(__name__)
         if args.all:
             log.info(
-                f"output includes {len(out_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
+                f"output includes {len(scan_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
             )
         else:
             log.info(
                 f"display filter sensitivity {args.sensitivity}; "
-                f"output includes {len(out_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
+                f"output includes {len(scan_results)} of {bss_len} BSSIDs detected in scan results for {client_mac}."
             )
 
-        if len(out_results) > 0:
+        if len(scan_results) > 0:
 
             connected = False
             headers = []
             subheaders = []
 
             # check for substring that indicates the scanning interface is also connected to a BSSID found in results
-            for row in out_results:
-                for data in row:
+            for result in scan_results:
+                for data in result:
                     if "(*)" in str(data):
                         connected = True
 
-            for tup in out_results[0]:
+            for tup in scan_results[0]:
                 headers.append(tup.header)
 
-            for tup in out_results[0]:
+            for tup in scan_results[0]:
                 if "BSSID" in tup.header.value:
                     if connected:
                         tup.subheader = SubHeader("(*): connected")
@@ -1013,15 +1021,21 @@ class lswifi:
             end_lower = "-"
             out_subheader_decorators = ()
 
-            result = ""
+            result_indexes_string = ""
 
             # add column header and subheader
-            out_results.insert(0, headers)
-            out_results.insert(1, subheaders)
+            scan_results.insert(0, headers)
+            scan_results.insert(1, subheaders)
 
             # generate fun ascii border
-            for index, item in enumerate(out_results[0]):
-                max_len = max(len(x) for x in [y[index] for y in out_results])
+
+            scan_results_len = len(scan_results[0]) - 1
+            for index, _item in enumerate(scan_results[0]):
+                # print(index, item)
+                if index == scan_results_len:
+                    max_len = len(_item)
+                else:
+                    max_len = max(len(x) for x in [y[index] for y in scan_results])
                 out_header_decorators = out_header_decorators + (
                     generate_pretty_separator(
                         max_len, header_decorators, begin_upper, end_upper
@@ -1033,23 +1047,30 @@ class lswifi:
                     ),
                 )
 
-                arg = [y[index] for y in out_results][0].alignment.value
-                result += f"{{{index}:{arg}{max_len}}}  "
+                if index == scan_results_len:
+                    result_indexes_string += f"{{{index}}}"
+                else:
+                    align = [y[index] for y in scan_results][0].alignment.value
+                    result_indexes_string += f"{{{index}:{align}{max_len}}}  "
 
             # add fun ascii border
-            out_results.insert(0, out_header_decorators)
-            out_results.insert(3, out_subheader_decorators)
+            scan_results.insert(0, out_header_decorators)
+            scan_results.insert(3, out_subheader_decorators)
 
             # print results
             if not args.json:
-                for row in out_results:
-                    out_results = []
-                    for data in row:
+                for result in scan_results:
+                    scan_results = []
+                    for data in result:
                         if isinstance(data, OUT_TUPLE):
-                            out_results.append(f"{data.value}")
+                            scan_results.append(f"{data.value}")
                         else:
-                            out_results.append(f"{data}")
-                    print(result.format(*tuple(out_results)))
+                            scan_results.append(f"{data}")
+
+                    # print(type(result_indexes_string))
+                    # print(result_indexes_string)
+                    # print(scan_results)
+                    print(result_indexes_string.format(*tuple(scan_results)))
             else:
                 print(json.dumps(json_out))
 
@@ -1085,19 +1106,19 @@ class lswifi:
                 length_len = get_attr_max_len(ies, "length")
                 id_len = get_attr_max_len(ies, "eid")
                 names_len = get_attr_max_len(ies, "name")
-                decoded_len = get_attr_max_len(ies, "decoded")
-                get_attr_max_len(ies, "pbody")
+                data_len = get_attr_max_len(ies, "pbody")
+                get_attr_max_len(ies, "decoded")
 
-                out += "{0:<{length_len}}  {1:<{id_len}}  {2:<{names_len}}  {3:<{decoded_len}}  {4:<1}\n".format(
+                out += "{0:<{length_len}}  {1:<{id_len}}  {2:<{names_len}}  {3:<{data_len}}  {4}\n".format(
                     "Length",
                     "ID",
                     "Information Element",
+                    "Raw Data",
                     "Decoded",
-                    "Data",
                     length_len=length_len,
+                    data_len=data_len,
                     id_len=id_len,
                     names_len=names_len,
-                    decoded_len=decoded_len,
                 )
 
                 for ie in ies:
@@ -1109,16 +1130,16 @@ class lswifi:
                     # for _decimal in ie.body:
                     #    _hex = _hex + "{:02x} ".format(_decimal)
                     # _hex = _hex + "{}".format(hex(_decimal)[2:])
-                    out += "{0:<{length_len}}  {1:<{id_len}}  {2:<{names_len}}  {3:<{decoded_len}}  {4:<1}\n".format(
+                    out += "{0:<{length_len}}  {1:<{id_len}}  {2:<{names_len}}  {3:<{data_len}}  {4}\n".format(
                         ie.length,
                         ie.eid,
                         ie.name,
-                        ie.decoded,
                         ie.pbody,
+                        ie.decoded,
                         length_len=length_len,
+                        data_len=data_len,
                         id_len=id_len,
                         names_len=names_len,
-                        decoded_len=decoded_len,
                     )
                 print(out)
                 return
