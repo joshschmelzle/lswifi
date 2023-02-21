@@ -1,8 +1,8 @@
 Release History
 ===============
 
-UNRELEASED (xxx-xx-xx)
-----------------------
+0.1.33 (2023-02-21)
+-------------------
 
 - Print warning if no interfaces are detected
 - Only wrap lines with text exceeding window size
