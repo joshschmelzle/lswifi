@@ -1,9 +1,9 @@
-![pypi-badge](https://img.shields.io/pypi/v/lswifi) ![pypi-monthly-downloads](https://img.shields.io/pypi/dm/lswifi) ![pypi-format](https://img.shields.io/pypi/format/lswifi) ![pypi-implementation](https://img.shields.io/pypi/implementation/lswifi) ![pypi-version](https://img.shields.io/pypi/pyversions/lswifi) ![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
+![pypi-badge](https://img.shields.io/pypi/v/lswifi) ![pypi-format](https://img.shields.io/pypi/format/lswifi) ![pypi-implementation](https://img.shields.io/pypi/implementation/lswifi) ![pypi-version](https://img.shields.io/pypi/pyversions/lswifi) ![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
 
 lswifi: a CLI-centric Wi-Fi scanning tool for Windows
 =====================================================
 
-`lswifi` is a CLI-centric Wi-Fi scanning tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh show wlan networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, parsing 802.11 feature set, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
+`lswifi` is a CLI-centric Wi-Fi scanning tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh show wlan networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, parsing 802.11 feature set, looking at 6 GHz Reduced Neighbor Reports, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
 
 Installation
 ------------
@@ -29,13 +29,13 @@ Output nearby Wi-Fi networks that have a detected signal of `-60 dBm` or stronge
 > lswifi -t -60
 ```
 
-Output only networks that match `my_ssid`:
+Output only networks that match `my_ssid` (partial match support):
 
 ``` {.sourceCode .bash}
 > lswifi -include my_ssid
 ```
 
-Output verbose information (including Information Elements) for BSSID `00:00:00:00:00:00`:
+Output verbose information (including Information Elements) for BSSID `00:00:00:00:00:00` (exact match):
 
 ``` {.sourceCode .bash}
 > lswifi -ies 00:00:00:00:00:00
@@ -57,7 +57,13 @@ Print and add detected AP names column in output:
 > lswifi --ap-names
 ```
 
-Print an alternative table for BSSes which contain Reduced Neighbor Reports:
+Print and add detected AP names and QBSS column in output (try adding --mfp or --tpc too!):
+
+``` {.sourceCode .bash}
+> lswifi --ap-names --qbss
+```
+
+Print an alternative table for BSSes which may contain 6 GHz Reduced Neighbor Reports:
 
 ``` {.sourceCode .bash}
 > lswifi -rnr
@@ -142,8 +148,8 @@ FAQs
 ----
 
 1. What OSes and Python versions are required to run `lswifi`?
-    - Windows 10+ and Python 3.7 are the minimum versions I'm willing to support (subject to change).
-    - Windows 11 and capable interface required for 6 GHz support.
+    - Windows 10+ and Python 3.7 are the current minimum versions we're willing to support (subject to change).
+    - Windows 11 and capable interface required for 6 GHz support. Don't have 6 GHz capable interface? Try `lswifi -rnr` with multi-band 6 GHz APs nearby.
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
 3. Do I need to install `lswifi` in a virtual environment (venv)?
@@ -159,7 +165,7 @@ Python 3.11.0 (main, Oct 24 2022, 18:26:48) [MSC v.1933 64 bit (AMD64)] on win32
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import os,sys
 >>> os.path.join(sys.prefix, 'Scripts')
-'C:\\Users\\josh\\AppData\\Local\\Programs\\Python\\Python311\\Scripts'
+'C:\\Users\\jsz\\AppData\\Local\\Programs\\Python\\Python311\\Scripts'
 ```
 
 Contributing

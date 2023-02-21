@@ -64,8 +64,8 @@ class OOB_CHANNEL(OutObject):
 
     def __init__(self, rssi=""):
         self.value = rssi
-        self.header = Header("CHANNEL")
-        self.subheader = SubHeader("")
+        self.header = Header("DISCOVERY")
+        self.subheader = SubHeader("CHANNEL")
 
     def __repr__(self):
         return f"OutObject({self.value},{self.header},{self.subheader})"

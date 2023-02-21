@@ -33,20 +33,29 @@ CIPHER_SUITE_DICT = {
 
 AKM_SUITE_DICT = {
     0: "Reserved",
-    1: "802.1X",
+    1: ".1X",  # WPA2-Enterprise aka 802.1X with SHA1
     2: "PSK",
-    3: "FT-802.1X",
+    3: "FT-.1X",  # WPA2-Enterprise
     4: "FT-PSK",
-    5: "802.1X-SHA-256",  # WPA3 - Enterprise (Non-CNSA)
-    6: "PSK",
-    7: "TDLS",
-    8: "SAE",
+    5: ".1X-SHA256",  # WPA3 - Enterprise aka 802.1X with SHA256
+    6: "PSK-SHA256",
+    7: "TDLS-SHA256",
+    8: "SAE",  # SAE with p256 (HMAC-SHA-256)
     9: "FT-SAE",
     10: "APPeerKey",
-    11: "802.1X-Suite-B-SHA-256",
-    12: "802.1X-SHA-384",  # WPA3 - Enterprise (CNSA)
-    13: "FT-802.1X-SHA-384",
+    11: ".1X-SuiteB-SHA256",
+    12: ".1X-SHA384",  # WPA3 - Enterprise 192-bit aka 802.1X with SHA384
+    13: "FT-.1X-SHA384",
+    14: "FILS-SHA256",
+    15: "FILS-SHA384",
+    16: "FT-FILS-SHA256",
+    17: "FT-FILS-SHA384",
     18: "OWE",
+    19: "FT-PSK-SHA384",
+    20: "PSK-SHA384",
+    22: ".1X-SHA384-FT",
+    24: "SAE",  # SAE with p256 (HMAC-SHA-256), p384 (HMAC-SHA-384), or p521 (HMAC-SHA-521)
+    25: "FT-SAE",
 }
 
 INTERWORKING_NETWORK_TYPE = {
@@ -180,6 +189,12 @@ EXTENSION_IE_DICT = {
     58: "(58) Short SSID List",
     59: "(59) HE 6 GHz Band Capabilities",
     60: "(60) UL MU Power Capabilities",
+    106: "(106) EHT Operation",  # P802.11be_D2.3
+    107: "(107) Multi-Link",  # P802.11be_D2.3
+    108: "(108) EHT Capabilities",  # P802.11be_D2.3
+    109: "(109) TID-To-Link Mapping",  # P802.11be_D2.3
+    110: "(110) Multi-Link Traffic Indication",  # P802.11be_D2.3
+    113: "(113) QoS Characteristics",  # P802.11be_D2.3
 }
 
 
@@ -432,4 +447,73 @@ _6GHZ_20MHZ_CHANNEL_LIST = {
     "7075": "225",
     "7095": "229",
     "7115": "233",
+}
+
+_6GHZ_40MHZ_CHANNEL_LIST = {
+    "5965": "3",
+    "6005": "11",
+    "6045": "19",
+    "6085": "27",
+    "6125": "35",
+    "6165": "43",
+    "6205": "51",
+    "6245": "59",
+    "6285": "67",
+    "6325": "75",
+    "6365": "83",
+    "6405": "91",
+    "6445": "99",
+    "6485": "107",
+    "6525": "115",
+    "6565": "123",
+    "6605": "131",
+    "6645": "139",
+    "6685": "147",
+    "6725": "155",
+    "6765": "163",
+    "6805": "171",
+    "6845": "179",
+    "6885": "187",
+    "6925": "195",
+    "6965": "203",
+    "7005": "211",
+    "7045": "219",
+    "7085": "227",
+}
+
+_6GHZ_80MHZ_CHANNEL_LIST = {
+    "5985": "7",
+    "6065": "23",
+    "6145": "39",
+    "6225": "55",
+    "6305": "71",
+    "6385": "87",
+    "6465": "103",
+    "6545": "119",
+    "6625": "135",
+    "6705": "151",
+    "6785": "167",
+    "6865": "183",
+    "6945": "199",
+    "7025": "215",
+}
+
+_6GHZ_160MHZ_CHANNEL_LIST = {
+    "6025": "15",
+    "6185": "47",
+    "6345": "79",
+    "6505": "111",
+    "6665": "143",
+    "6825": "175",
+    "6985": "207",
+}
+
+# Based on P802.11be_D2.3
+_6GHZ_320MHZ_CHANNEL_LIST = {
+    "6105": "31",
+    "6265": "63",
+    "6425": "95",
+    "6585": "127",
+    "6745": "159",
+    "6905": "191",
 }

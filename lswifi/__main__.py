@@ -29,7 +29,7 @@ if sys.version_info < (3, 7):
     sys.exit(-1)
 
 # app imports
-from lswifi import appsetup, core
+from lswifi import app, appsetup
 from lswifi.__version__ import __title__
 from lswifi.constants import APNAMEACKFILE, APNAMEJSONFILE
 
@@ -59,7 +59,7 @@ def main():
             f"is there a stored acknowledgement for caching apnames on local machine? {'Yes' if is_apname_ack_stored else 'No'}"
         )
 
-    core.start(args, storedack=is_apname_ack_stored)
+    app.run(args, storedack=is_apname_ack_stored)
 
 
 def user_ack_apnames_disclaimer() -> bool:
@@ -79,35 +79,42 @@ def user_ack_apnames_disclaimer() -> bool:
         return True
     else:
         print(
-            "---\n"
-            "What?\n"
-            "  - This feature locally caches BSSIDs and any detected corresponding AP names.\n"
-            "  - Caching this information helps to more consistently provide AP names in output.\n"
+            "Running lswifi with --ap-names will cache detected AP names.\n\n"
             "Why?\n"
             "  - AP names are typically identified in beacon frames.\n"
-            "  - Dwell time (during a scan) varies per channel and can be shorter than the standard beacon interval.\n"
-            "  - Retrieved scan results are a combination of beacons, probe responses, and sometimes a merge of both.\n"
-            "  - This means results for a given BSSID might be from a beacon in one scan and a probe response in another.\n"
+            "  - The frame types in the scan results vary.\n"
+            "  - Given data for a BSSID can be from a beacon or probe response.\n"
+            "  - This is because a scan might not dwell on a channel long enough to hear a beacon.\n"
+            "  - Dwell time varies per channel and can be shorter than the standard beacon interval.\n\n"
             "Where?\n"
-            "  - Any data collected is stored and read from a JSON file on your local device here:\n\n"
+            "  - Cached data is stored and read from a JSON file on your device here:\n\n"
             f"{apnames}\n"
-            "---\n"
         )
-        text = input("Do you want to enable this feature? yes/no: ")
+        try:
+            text = input(
+                "Please acknowledge storage and caching of AP names to enable feature (yes/no): "
+            )
+        except KeyboardInterrupt:
+            print("\n\nDetected KeyboardInterrupt... Exiting...")
+            sys.exit(-1)
         if "y" in text.lower()[:1]:
             with open(ack, "w") as file:
                 pass  # we only need a placeholder file
             print(
-                "---\n"
-                "This feature has been enabled and your response stored here: \n\n"
+                "\nAP name caching is now enabled and we've recorded your response here: \n\n"
                 f"{ack}\n\n"
-                "Want to disable this feature? Delete the file above\n"
-                "---"
+                "If you'd like to disable this feature delete the file.\n"
             )
             return True
         else:
             return False
 
 
-if __name__ == "__main__":
-    main()
+def init() -> None:
+    """Handle main init."""
+    if __name__ == "__main__":
+        main()
+        sys.exit(0)
+
+
+init()

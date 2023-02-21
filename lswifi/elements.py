@@ -75,6 +75,7 @@ class WirelessNetworkBss:
                 "latin-1"
             )
         try:
+            # print("LEN: {}, SSID: {}".format(len(_ssid), _ssid))
             self.ssid = OutObject(
                 value=_ssid,
                 header="SSID",
@@ -428,13 +429,11 @@ class WirelessNetworkBss:
             eid_len = get_attr_max_len(self.information_elements, "eid")
             length_len = get_attr_max_len(self.information_elements, "length")
             names_len = get_attr_max_len(self.information_elements, "name")
-            decoded_len = get_attr_max_len(self.information_elements, "decoded")
-            if decoded_len < len("DECODED"):
-                decoded_len = len("DECODED")
+            get_attr_max_len(self.information_elements, "decoded")
             if length_len < len("SIZE"):
                 length_len = len("SIZE")
             # pbody_len = get_attr_max_len(self.information_elements, "pbody")
-            out += "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3:<{decoded_len}}\n".format(
+            out += "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3}\n".format(
                 "SIZE",
                 "ID",
                 f"{len(self.ie_numbers)} ELEMENTS ({self.ie_size} bytes)",
@@ -442,32 +441,30 @@ class WirelessNetworkBss:
                 length_len=length_len,
                 eid_len=eid_len,
                 names_len=names_len,
-                decoded_len=decoded_len,
             )
             for ie in self.information_elements:
-                out += "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3:<{decoded_len}}\n".format(
-                    ie.length,
-                    ie.eid,
-                    ie.name,
-                    ie.decoded,  # ie.pbody and ie.body
-                    length_len=length_len,
-                    eid_len=eid_len,
-                    names_len=names_len,
-                    decoded_len=decoded_len,
+                out += (
+                    "{0:<{length_len}}  {1:<{eid_len}}  {2:<{names_len}}  {3}\n".format(
+                        ie.length,
+                        ie.eid,
+                        ie.name,
+                        ie.decoded,  # ie.pbody and ie.body
+                        length_len=length_len,
+                        eid_len=eid_len,
+                        names_len=names_len,
+                    )
                 )
-            # out += "{0:<{names_len}}  {1:<{decoded_len}}\n".format(
+            # out += "{0:<{names_len}}  {1}}\n".format(
             #    "INFORMATION ELEMENT",
             #    "DECODED",
-            #    names_len=names_len,
-            #    decoded_len=decoded_len,
+            #    names_len=names_len
             # )
 
             # for ie in self.information_elements:
-            #    out += "{0:<{names_len}}  {1:<{decoded_len}}\n".format(
+            #    out += "{0:<{names_len}}  {1}}\n".format(
             #        ie.name,
             #        ie.decoded,
-            #        names_len=names_len,
-            #        decoded_len=decoded_len,
+            #        names_len=names_len
             #    )
         return out
 
@@ -499,6 +496,7 @@ class WirelessNetworkBss:
         if parsed_ie:
             decoded_list = parsed_ie.decoded.splitlines()  # split("\n")
             if len(decoded_list) > 1:
+                decoded_list_len = len(decoded_list) - 1
                 for index, information_element in enumerate(decoded_list):
                     if index == 0:
                         information_elements.append(
@@ -512,11 +510,22 @@ class WirelessNetworkBss:
                             )
                         )
                     else:
-                        information_elements.append(
-                            WLAN_API.InformationElement(
-                                "", "", "", information_element, "", ""
+                        if index == decoded_list_len:
+                            information_elements.append(
+                                WLAN_API.InformationElement(
+                                    "", "", "", information_element, "", ""
+                                )
                             )
-                        )
+                            # add a blank line
+                            information_elements.append(
+                                WLAN_API.InformationElement("", "", "", "", "", "")
+                            )
+                        else:
+                            information_elements.append(
+                                WLAN_API.InformationElement(
+                                    "", "", "", information_element, "", ""
+                                )
+                            )
             else:
                 information_elements.append(
                     WLAN_API.InformationElement(
@@ -1110,9 +1119,10 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
-        self.log.debug(
-            f"No parser built for IE {element_id} detected from {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
-        )
+        if self is not None:
+            self.log.debug(
+                f"No parser built for IE {element_id} detected from {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+            )
         return WLAN_API.InformationElement(
             element_id,
             WirelessNetworkBss.get_eid_name(element_id),
@@ -1182,7 +1192,8 @@ class WirelessNetworkBss:
         return f"AP Name: {apname}, Clients: {clients}"
 
     def __parse_reduced_neighbor_report(self, element_data):
-        self.has_rnr = True
+        if self is not None:
+            self.has_rnr = True
         body = list(memoryview(element_data))
 
         # TBTT information header is body[0] and body[1]
@@ -1329,29 +1340,36 @@ class WirelessNetworkBss:
                 RNR_TBTT(tbtt_count - 1)
                 rnr_tbtt_offset = RNR_TBTT_OFFSET(neighbor_ap_tbtt_offset)
                 rnr_colocatedap = RNR_COLOCATED_AP(co_located_ap)
-                oob_bssid = OOB_BSSID(self.bssid.value)
-                oob_rssi = OOB_RSSI(self.rssi.value)
-                oob_ssid = OOB_SSID(self.ssid.value)
-                oob_channel = OOB_CHANNEL(self.channel_number.value)
-                self.rnrs.append(
-                    RNR(
-                        oob_ssid,
-                        oob_bssid,
-                        oob_rssi,
-                        oob_channel,
-                        rnr_channel,
-                        rnr_freq,
-                        rnr_tbtt_offset,
-                        rnr_bssid,
-                        rnr_shortssid,
-                        rnr_samessid,
-                        rnr_multiplebssid,
-                        rnr_transmittedbssid,
-                        rnr_upractive,
-                        rnr_colocatedap,
-                        rnr_twentymhzpsd,
+                if self is not None:
+                    oob_bssid = OOB_BSSID(self.bssid.value)
+                    oob_rssi = OOB_RSSI(self.rssi.value)
+                    oob_ssid = OOB_SSID(self.ssid.value)
+                    oob_channel = OOB_CHANNEL(self.channel_number.value)
+                else:
+                    oob_bssid = OOB_BSSID("unknown")
+                    oob_rssi = OOB_RSSI("unknown")
+                    oob_ssid = OOB_SSID("unknown")
+                    oob_channel = OOB_CHANNEL("unknown")
+                if self is not None:
+                    self.rnrs.append(
+                        RNR(
+                            oob_ssid,
+                            oob_bssid,
+                            oob_rssi,
+                            oob_channel,
+                            rnr_channel,
+                            rnr_freq,
+                            rnr_tbtt_offset,
+                            rnr_bssid,
+                            rnr_shortssid,
+                            rnr_samessid,
+                            rnr_multiplebssid,
+                            rnr_transmittedbssid,
+                            rnr_upractive,
+                            rnr_colocatedap,
+                            rnr_twentymhzpsd,
+                        )
                     )
-                )
 
         return base_out
 
@@ -1900,9 +1918,10 @@ class WirelessNetworkBss:
         if oui3 in VENDOR_SPECIFIC_DICT:
             vendor = VENDOR_SPECIFIC_DICT[oui3].friendly
             return f"OUI: {oui3} ({vendor})"
-        self.log.debug(
-            f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
-        )
+        if self is not None:
+            self.log.debug(
+                f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+            )
         return f"OUI: {oui}"
 
     def __parse_extension_tag_element(self, element_data):
@@ -2195,6 +2214,24 @@ class WirelessNetworkBss:
                     self.modes.append("ax")
 
         if eid_ext == 59:  # HE 6 GHz Band Capabilities
+            pass
+
+        if eid_ext == 106:  # BE EHT Operation
+            if self is not None:
+                self.phy_type.name = "BE"
+                if "be" not in self.modes:
+                    self.modes.append("be")
+
+        if eid_ext == 107:  # BE Multi-Link
+            pass
+
+        if eid_ext == 108:  # BE EHT Capabilities
+            pass
+
+        if eid_ext == 110:  # BE Multi-Link Traffic Indication
+            pass
+
+        if eid_ext == 113:  # BE QoS Characteristics
             pass
 
         return ext_tag_name, out
