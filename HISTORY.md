@@ -10,6 +10,7 @@ UNRELEASED (xxx-xx-xx)
 - Fix crash when decoding raw byte file with an IE without a parser
 - Improve --watchevent output with RSSI values where possible for certain events
 - Begin adding support for 802.11be (EHT) / Wi-Fi 7
+- Print warning if the scan fails
 
 0.1.32 (2022-11-22)
 -------------------

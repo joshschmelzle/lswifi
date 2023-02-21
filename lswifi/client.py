@@ -343,7 +343,7 @@ class Client(object):
                 get_current_channel=False,
                 supported=False,
             )
-            self.timeout_interval = 4.0
+            self.timeout_interval = 5.0
             self.client_handle = WLAN_API.WLAN.open_handle()
             # self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
             self.scan_timer = TimerEx(self.timeout_interval, self.scan_timeout)
@@ -463,6 +463,11 @@ class Client(object):
 
                 if str(wlan_event).strip() == "scan_complete":
                     self.scan_timer.cancel()
+
+                if str(wlan_event).strip() == "scan_fail":
+                    self.log.warning(
+                        f"({self.mac}), scan fail! persistent problem? reset the WLAN interface and try again ..."
+                    )
 
                 # if the list is updated, grab the results
                 if str(wlan_event).strip() == "scan_list_refresh":
