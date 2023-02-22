@@ -427,6 +427,9 @@ class Client(object):
                         "authenticating",
                         "connected",
                         "connection_complete",
+                        "roaming_start",
+                        "roaming_end",
+                        
                     ]:
                         self.data = self.get_bss_list(self.iface)
                         bssid_data = None

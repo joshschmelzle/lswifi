@@ -4,6 +4,11 @@ Release History
 UNRELEASED
 ----------
 
+0.1.34 (2023-02-22)
+-------------------
+
+- Improve --watchevent output by adding BSSID and RSSI to roaming start and roaming end events  
+
 0.1.33 (2023-02-21)
 -------------------
 
