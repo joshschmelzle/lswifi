@@ -8,6 +8,8 @@ lswifi: a CLI-centric Wi-Fi scanning tool for Windows
 Installation
 ------------
 
+Note: The Python Scripts directory must be added to the PATH environment variable.
+
 ``` {.sourceCode .bash}
 > python -m pip install lswifi
 ```
@@ -128,20 +130,44 @@ options:
 Upgrading
 ---------
 
-Here is how to upgrade `lswifi` using `pip3` when there is a new version available:
+Here is how to upgrade `lswifi` using `pip3` when there is a new version available.
+
+First check where and if the executable exists: 
 
 ```bash
 > where.exe pip3
 C:\Users\jsz\AppData\Local\Programs\Python\Python311\Scripts\pip3.exe
 C:\Users\jsz\AppData\Local\Programs\Python\Python310\Scripts\pip3.exe
 
+# OR
+
+> where.exe python
+C:\Users\jsz\AppData\Local\Programs\Python\Python311\python.exe
+C:\Users\jsz\AppData\Local\Programs\Python\Python310\python.exe
+C:\Users\jsz\AppData\Local\Microsoft\WindowsApps\python.exe
+C:\msys64\mingw64\bin\python.exe
+```
+
+Let's install and upgrade lswifi to the latest version available:
+
+```bash
 > pip3 install --upgrade lswifi
+
+# OR
+
+> python -m pip install -U lswifi
 ```
 
 Check the version installed:
 
 ```bash
 > lswifi -v
+```
+
+Looking to install a specific version of lswifi?
+
+```bash
+python -m pip install lswifi==0.1.33
 ```
 
 FAQs
@@ -157,7 +183,7 @@ FAQs
 4. When I try to run `lswifi` from my Windows terminal I see an error that says `'lswifi' is not recognized as an internal or external command operable program or batch file.`?
    - Either `lswifi` is not installed, or the Python Scripts directory is not in the PATH environment variable.
    - To fix ensure the Scripts directory is included in the [PATH environment variable](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables) and `lswifi.exe` exists in said folder.
-   - Here is an example for how to find the Scripts directory:
+   - Here is an example for how to find the Scripts directory (this directory needs to be on the PATH):
 
 ```bash
 > python
@@ -171,4 +197,4 @@ Type "help", "copyright", "credits" or "license" for more information.
 Contributing
 ------------
 
-Want to contribute? Thanks! Please take a few moments to [read this](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md). Checkout the [authors and credits here](AUTHORS.md).
+Want to contribute? Thanks! Please take a few moments to [read our contributing notes](https://github.com/joshschmelzle/lswifi/blob/main/CONTRIBUTING.md) and check out the [authors and credits here](https://github.com/joshschmelzle/lswifi/blob/main/AUTHORS.md).

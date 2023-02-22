@@ -15,6 +15,7 @@ UNRELEASED
 - Improve --watchevent output with RSSI values where possible for certain events
 - Begin adding support for 802.11be (EHT) / Wi-Fi 7
 - 802.1X becomes .1X to conserve whitespace in Security column
+- Increase scan timeout interval from 4 seconds to 5
 
 0.1.32 (2022-11-22)
 -------------------
