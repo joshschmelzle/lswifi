@@ -1,16 +1,20 @@
 Release History
 ===============
 
+UNRELEASED
+----------
+
 0.1.33 (2023-02-21)
 -------------------
 
 - Print warning if no interfaces are detected
+- Print warning if the scan fails
 - Only wrap lines with text exceeding window size
 - Fix crash when decoding raw byte file with RNR IE present
 - Fix crash when decoding raw byte file with an IE without a parser
 - Improve --watchevent output with RSSI values where possible for certain events
 - Begin adding support for 802.11be (EHT) / Wi-Fi 7
-- Print warning if the scan fails
+- 802.1X becomes .1X to conserve whitespace in Security column
 
 0.1.32 (2022-11-22)
 -------------------
