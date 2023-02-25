@@ -150,7 +150,7 @@ IE_DICT = {
 VENDOR = namedtuple("VENDOR", "friendly company")
 
 VENDOR_SPECIFIC_DICT = {
-    "00:0B:86": VENDOR("Aruba", "Aruba Networks Inc."),
+    "00:0B:86": VENDOR("Aruba", "HPE Aruba Networking"),
     "00:50:F2": VENDOR("Microsoft", "Microsoft Corporation"),
     "00:03:7F": VENDOR("Atheros", "Atheros Communications Inc."),
     "00:10:18": VENDOR("Broadcom", "Broadcom"),
@@ -170,6 +170,8 @@ VENDOR_SPECIFIC_DICT = {
     "F4:F5:E8": VENDOR("Google", "Google, Inc."),
     "F8:32:E4": VENDOR("ASUS", "ASUSTek Computer Inc."),
     "00:03:9C": VENDOR("OptiMight", "OptiMight Communications, Inc."),
+    "50:6F:9A": VENDOR("Wi-Fi Alliance", "Wi-Fi Alliance"),
+    "00:11:74": VENDOR("Mojo", "Mojo Networks, Inc."),
 }
 
 EXTENSION_IE_DICT = {
