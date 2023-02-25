@@ -16,13 +16,13 @@ import sys
 if sys.platform == "win32":
     pass
 else:
-    print(f"{os.path.basename(__file__)} only works on win32... exiting...")
+    print(f"lswifi only works on win32... exiting...")
     sys.exit(-1)
 
 # hard set no support for Python versions < 3.7
 if sys.version_info < (3, 7):
     print(
-        f"{os.path.basename(__file__)} requires Python 3.7+. "
+        f"lswifi requires Python 3.7+. "
         f"your active Python version is {platform.python_version()}. "
         f"exiting..."
     )
