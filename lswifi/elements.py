@@ -195,9 +195,11 @@ class WirelessNetworkBss:
 
             self.band = Band(self.channel_frequency.value)
         except Exception:
-            self.log.error(
-                f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
-            )
+            if self.bssid:
+                print(self.bssid)
+                self.log.error(
+                    f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
+                )
             exception_type, exception_object, exception_traceback = sys.exc_info()
             fname = os.path.split(exception_traceback.tb_frame.f_code.co_filename)[1]
             self.log.error(
@@ -1525,17 +1527,19 @@ class WirelessNetworkBss:
         if "00:11:74" in oui:  # Arista / Mojo
             out = f"OUI: {oui} (Arista (Mojo))"
             if vendor_oui_type == 0:
-                subtype = memoryview_body[:1]
+                subtype = memoryview_body[4]
                 if subtype == 6:  # AP name
                     apname = remove_control_chars(
-                        "".join([chr(i) for i in memoryview_body[2:]])
+                        "".join([chr(i) for i in memoryview_body[6:]])
                     )
                     if self is not None:
                         self.apname.value = apname
-                    out = f", Subtype: {subtype}, AP Name: {apname}"
+                    out += f", Subtype: {subtype}, AP Name: {apname}"
                 else:
-                    out = f", Subtype: {subtype}"
-                return out
+                    out += f", Subtype: {subtype}"
+            else:
+                out += f", Vender OUI Type: {vendor_oui_type}"
+            return out
         if "00:40:96" in oui:  # Cisco
             if vendor_oui_type == 0:
                 out = "Cisco Aironet (0)"
