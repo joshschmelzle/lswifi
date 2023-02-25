@@ -13,6 +13,7 @@ import logging
 import os
 import pprint
 import sys
+import time
 import traceback
 from threading import Lock, Timer
 from types import SimpleNamespace
@@ -331,6 +332,7 @@ class Client(object):
             self.scan_finished = False
             self.data = None
             now = datetime.datetime
+            self.last_event = ""
             self.last_scan_time_epoch = now.utcnow().timestamp()
             self.last_scan_time_iso = (
                 now.now().astimezone().isoformat(timespec="milliseconds")
@@ -352,6 +354,7 @@ class Client(object):
             self.mac = iface.mac
             # self.first_event = True
             self.is_handle_closed = False
+            self.oldepoch = time.time()
             self.callback = self.register_notification(
                 self.on_event_notification, self.client_handle
             )
@@ -404,6 +407,9 @@ class Client(object):
         else:
             return None
 
+    def seconds_passed(self, oldepoch, seconds) -> bool:
+        return time.time() - oldepoch >= seconds
+
     def on_event_notification(self, wlan_event, iface_guid) -> None:
         if self.iface.guid_string == str(iface_guid):
             pass
@@ -417,48 +423,77 @@ class Client(object):
             if self.args.event_watcher:
                 # if str(wlan_event).strip() in ["interface_removal", "interface_arrival"]:
                 # if we want verbose info printed to the terminal
-                if self.args.debug:
-                    if str(wlan_event).strip() in [
-                        "scan_list_refresh",
-                        "scan_complete",
-                        "signal_quality_change",
-                        "associating",
-                        "associated",
-                        "authenticating",
-                        "connected",
-                        "connection_complete",
-                        "roaming_start",
-                        "roaming_end",
-                        
-                    ]:
-                        self.data = self.get_bss_list(self.iface)
-                        bssid_data = None
-                        if self.data is not None:
-                            for bss in self.data:
-                                if bssid == str(bss.bssid):
-                                    bssid_data = bss
-                                    break
-                            rssi = ""
-                            if bssid_data:
-                                rssi = bssid_data.rssi
-                            extra = ""
+                squelch = False
+                if str(wlan_event).strip() in [
+                    "disconnected",
+                    "profile_unblocked",
+                    "radio_state_change",
+                    "end",
+                    "profile_change",
+                ]:
+                    if self.last_event == str(wlan_event).strip():
+                        if self.seconds_passed(self.oldepoch, 5):
+                            pass
+                        else:
+                            squelch = True
+                    self.oldepoch = time.time()
 
-                            if str(wlan_event).strip() in [
-                                "scan_list_refresh",
-                                "scan_complete",
-                            ]:
-                                extra = f", scan: ({len(self.data)} BSSIDs found)"
+                self.last_event = str(wlan_event).strip()
+                if str(wlan_event).strip() in [
+                    "scan_list_refresh",
+                    "scan_complete",
+                    "signal_quality_change",
+                    "associating",
+                    "associated",
+                    "authenticating",
+                    "connected",
+                    "connection_complete",
+                    "connection_start",
+                    "roaming_start",
+                    "roaming_end",
+                ]:
+                    self.data = self.get_bss_list(self.iface)
+                    bssid_data = None
+                    if self.data is not None:
+                        for bss in self.data:
+                            if bssid == str(bss.bssid):
+                                bssid_data = bss
+                                break
+                        rssi = ""
+                        freq = ""
+                        if bssid_data:
+                            rssi = bssid_data.rssi
+                            freq = bssid_data.channel_frequency
+                        extra = ""
+                        ssid = ""
+
+                        if bssid_data:
+                            ssid = bssid_data.ssid
+
+                        if str(wlan_event).strip() in [
+                            "scan_list_refresh",
+                            "scan_complete",
+                        ]:
+                            extra = f", scan: ({len(self.data)} BSSIDs found)"
+                        if not bssid:
+                            self.log.info(f"({self.mac}), event: ({wlan_event})")
+                        elif bssid == "00:00:00:00:00:00":
                             self.log.info(
-                                f"({self.mac}), bssid: ({bssid}), rssi: ({rssi}), event: ({wlan_event}){extra}"
+                                f"({self.mac}), bssid: ({bssid}), event: ({wlan_event}){extra}"
                             )
-                    else:
-                        self.log.info(
-                            f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
-                        )
+                        else:
+                            # print(bssid_data)ho
+                            self.log.info(
+                                f"({self.mac}), bssid: ({bssid}), freq: ({freq}), ssid: ({ssid}), rssi: ({rssi}), event: ({wlan_event}){extra}"
+                            )
                 else:
-                    self.log.info(
-                        f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
-                    )
+                    if not squelch:
+                        if bssid:
+                            self.log.info(
+                                f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
+                            )
+                        else:
+                            self.log.info(f"({self.mac}), event: ({wlan_event})")
 
             # if we're not watching for events and we want to return scan results
             if not self.args.event_watcher:
@@ -474,7 +509,6 @@ class Client(object):
 
                 # if the list is updated, grab the results
                 if str(wlan_event).strip() == "scan_list_refresh":
-
                     self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(self.iface)
                     self.scan_finished = True

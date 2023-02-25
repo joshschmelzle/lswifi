@@ -1464,7 +1464,7 @@ class WirelessNetworkBss:
             out += f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
             return out
         if "00:0b:86" in oui:  # Aruba
-            out = f"OUI: 00:0b:86 (Aruba, a HPE Company)"
+            out = f"OUI: 00:0b:86 (HPE Aruba Networking)"
             if vendor_oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
                 if oui_subtype == 3:  # AP Name
@@ -1522,6 +1522,20 @@ class WirelessNetworkBss:
             if self is not None:
                 self.apname.value = apname
             return out
+        if "00:11:74" in oui:  # Arista / Mojo
+            out = f"OUI: {oui} (Arista (Mojo))"
+            if vendor_oui_type == 0:
+                subtype = memoryview_body[:1]
+                if subtype == 6:  # AP name
+                    apname = remove_control_chars(
+                        "".join([chr(i) for i in memoryview_body[2:]])
+                    )
+                    if self is not None:
+                        self.apname.value = apname
+                    out = f", Subtype: {subtype}, AP Name: {apname}"
+                else:
+                    out = f", Subtype: {subtype}"
+                return out
         if "00:40:96" in oui:  # Cisco
             if vendor_oui_type == 0:
                 out = "Cisco Aironet (0)"
@@ -1869,7 +1883,7 @@ class WirelessNetworkBss:
                             2,
                         )
 
-                        CWmin = 2 ** ECWmin - 1
+                        CWmin = 2**ECWmin - 1
 
                         ECWmax4 = get_bit(memview_body[1], 4)
                         ECWmax5 = get_bit(memview_body[1], 5)
@@ -1883,7 +1897,7 @@ class WirelessNetworkBss:
                             2,
                         )
 
-                        CWmax = 2 ** ECWmax - 1
+                        CWmax = 2**ECWmax - 1
 
                         element_body[1]
                         TXOP_LIMIT = int.from_bytes(
@@ -2071,7 +2085,6 @@ class WirelessNetworkBss:
             one_sixty_mhz_ss = 0
 
             if onesixty_in_5g_and_6g:
-
                 max_mcs = nss_map(he_mcs_oct3, 0, 1)
                 if max_mcs < 3:
                     one_sixty_mhz_ss += 1

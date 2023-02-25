@@ -990,7 +990,6 @@ class lswifi:
             )
 
         if len(scan_results) > 0:
-
             connected = False
             headers = []
             subheaders = []
