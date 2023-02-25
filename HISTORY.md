@@ -4,6 +4,12 @@ Release History
 UNRELEASED
 ----------
 
+0.1.35 (2023-02-25)
+-------------------
+
+- Improve --watchevent output
+- Add another vendor for AP name parsing
+
 0.1.34 (2023-02-22)
 -------------------
 
