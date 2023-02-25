@@ -9,6 +9,7 @@ UNRELEASED
 
 - Improve --watchevent output
 - Add another vendor for AP name parsing
+- Minor cosmetic changes
 
 0.1.34 (2023-02-22)
 -------------------
