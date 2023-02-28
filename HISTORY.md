@@ -4,6 +4,8 @@ Release History
 UNRELEASED
 ----------
 
+- Update 00:0F:AC:1 mapping from FT-.1X to FT-.1X-SHA256 per IEEE 802.11-2020
+
 0.1.35 (2023-02-25)
 -------------------
 
