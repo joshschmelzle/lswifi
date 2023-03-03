@@ -8,7 +8,7 @@ lswifi was created by Josh Schmelzle.
 
 ## Contributors
 
-- Colin Vallane (@crvallance)
+- Colin Vallance (@crvallance)
 
 ## Credits
 
