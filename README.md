@@ -1,6 +1,9 @@
 ![pypi-badge](https://img.shields.io/pypi/v/lswifi) ![pypi-format](https://img.shields.io/pypi/format/lswifi) ![pypi-implementation](https://img.shields.io/pypi/implementation/lswifi) ![pypi-version](https://img.shields.io/pypi/pyversions/lswifi) ![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
 
-<img src="https://github.com/joshschmelzle/lswifi/blob/main/docs/lswifi_orange_crop.png" width="400">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/joshschmelzle/lswifi/blob/main/docs/lswifi_pink_crop.png">
+  <img alt="Text changing depending on mode. Light: 'So light!' Dark: 'So dark!'" src="https://github.com/joshschmelzle/lswifi/blob/main/docs/lswifi_orange_crop.png#gh-light-mode-only"">
+</picture>
 
 lswifi: a CLI-centric Wi-Fi scanning tool for Windows
 =====================================================
