@@ -35,7 +35,7 @@ AKM_SUITE_DICT = {
     0: "Reserved",
     1: ".1X",  # WPA2-Enterprise aka 802.1X with SHA1
     2: "PSK",
-    3: "FT-.1X",  # WPA2-Enterprise
+    3: "FT-.1X-SHA256",  # FT 802.1X with SHA256
     4: "FT-PSK",
     5: ".1X-SHA256",  # WPA3 - Enterprise aka 802.1X with SHA256
     6: "PSK-SHA256",
