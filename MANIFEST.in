@@ -1,2 +1,2 @@
-include README.md LICENSE
+include README-PYPI.md LICENSE
 graft requirements

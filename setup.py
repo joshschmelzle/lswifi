@@ -32,7 +32,7 @@ with open(os.path.join(here, "lswifi", "__version__.py"), "r", "utf-8") as f:
     exec(f.read(), about)  # nosec
 
 try:
-    with open("README.md", "r") as f:
+    with open("README-PYPI.md", "r") as f:
         readme = f.read()
 except FileNotFoundError:
     readme = about["__description__"]
