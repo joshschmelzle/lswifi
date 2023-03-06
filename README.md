@@ -1,7 +1,9 @@
 ![pypi-badge](https://img.shields.io/pypi/v/lswifi) ![pypi-format](https://img.shields.io/pypi/format/lswifi) ![pypi-implementation](https://img.shields.io/pypi/implementation/lswifi) ![pypi-version](https://img.shields.io/pypi/pyversions/lswifi) ![coverage-badge](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/coverage.svg) [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/joshschmelzle/lswifi/blob/main/CODE_OF_CONDUCT.md)
 
-lswifi: a CLI-centric Wi-Fi scanning tool for Windows
-=====================================================
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/joshschmelzle/lswifi/blob/main/docs/lswifi_pink_crop.png" width="400">
+  <img src="https://github.com/joshschmelzle/lswifi/blob/main/docs/lswifi_orange_crop.png" width="400">
+</picture>
 
 `lswifi` is a CLI-centric Wi-Fi scanning tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh show wlan networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, parsing 802.11 feature set, looking at 6 GHz Reduced Neighbor Reports, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
 
@@ -179,7 +181,7 @@ FAQs
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
 3. Do I need to install `lswifi` in a virtual environment (venv)?
-   - Only if you want to. Installing in a venv is optional and not necessary. `lswifi` currently has zero dependencies outside of the stdlib.
+   - Only if you want to. Installing in a venv is optional and not necessary. `lswifi` currently has zero dependencies outside of the included standard library with Python.
 4. When I try to run `lswifi` from my Windows terminal I see an error that says `'lswifi' is not recognized as an internal or external command operable program or batch file.`?
    - Either `lswifi` is not installed, or the Python Scripts directory is not in the PATH environment variable.
    - To fix ensure the Scripts directory is included in the [PATH environment variable](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables) and `lswifi.exe` exists in said folder.
