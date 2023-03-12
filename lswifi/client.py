@@ -447,6 +447,8 @@ class Client(object):
                     "associated",
                     "authenticating",
                     "connected",
+                    "OneXNotificationTypeResultUpdate",
+                    "OneXNotificationTypeAuthRestarted",
                     "connection_complete",
                     "connection_start",
                     "roaming_start",

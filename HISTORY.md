@@ -4,6 +4,11 @@ Release History
 UNRELEASED
 ----------
 
+0.1.37 (2023-XX-XX)
+-------------------
+
+- Improve --watchevent output for .1X networks
+
 0.1.36 (2023-03-06)
 -------------------
 
