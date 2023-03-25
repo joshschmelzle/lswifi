@@ -20,6 +20,7 @@ from types import SimpleNamespace
 from typing import Union
 
 from lswifi import wlanapi as WLAN_API
+from lswifi.log import message as syslog
 
 
 class TimerEx(object):
@@ -432,7 +433,7 @@ class Client(object):
                     "profile_change",
                 ]:
                     if self.last_event == str(wlan_event).strip():
-                        if self.seconds_passed(self.oldepoch, 5):
+                        if self.seconds_passed(self.oldepoch, 2):
                             pass
                         else:
                             squelch = True
@@ -478,24 +479,34 @@ class Client(object):
                         ]:
                             extra = f", scan: ({len(self.data)} BSSIDs found)"
                         if not bssid:
-                            self.log.info(f"({self.mac}), event: ({wlan_event})")
+                            msg = f"({self.mac}), event: ({wlan_event})"
+                            self.log.info(msg)
+                            if self.args.syslog:
+                                syslog(msg, "INFO")
                         elif bssid == "00:00:00:00:00:00":
-                            self.log.info(
-                                f"({self.mac}), bssid: ({bssid}), event: ({wlan_event}){extra}"
-                            )
+                            msg = f"({self.mac}), bssid: ({bssid}), event: ({wlan_event}){extra}"
+                            self.log.info(msg)
+                            if self.args.syslog:
+                                syslog(msg, "INFO")
                         else:
-                            # print(bssid_data)ho
-                            self.log.info(
-                                f"({self.mac}), bssid: ({bssid}), freq: ({freq}), ssid: ({ssid}), rssi: ({rssi}), event: ({wlan_event}){extra}"
-                            )
+                            msg = f"({self.mac}), bssid: ({bssid}), freq: ({freq}), ssid: ({ssid}), rssi: ({rssi}), event: ({wlan_event}){extra}"
+                            self.log.info(msg)
+                            if self.args.syslog:
+                                syslog(msg, "INFO")
                 else:
                     if not squelch:
                         if bssid:
-                            self.log.info(
+                            msg = (
                                 f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
                             )
+                            self.log.info(msg)
+                            if self.args.syslog:
+                                syslog(msg, "INFO")
                         else:
-                            self.log.info(f"({self.mac}), event: ({wlan_event})")
+                            msg = f"({self.mac}), event: ({wlan_event})"
+                            self.log.info(msg)
+                            if self.args.syslog:
+                                syslog(msg, "INFO")
 
             # if we're not watching for events and we want to return scan results
             if not self.args.event_watcher:

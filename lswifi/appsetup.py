@@ -9,6 +9,7 @@ Provides init functions that are used to help set up the app.
 
 import argparse
 import datetime
+import ipaddress
 import logging
 import logging.config
 import os
@@ -17,6 +18,7 @@ import textwrap
 import time
 from pathlib import Path
 
+from lswifi import log
 from lswifi.__version__ import __version__
 
 
@@ -167,6 +169,21 @@ def width(value):
             f"channel width {width} not valid. must use one of these: {', '.join(valid_channels)}"
         )
     return width
+
+
+def ip(value):
+    """Validate user provided IP is actually an IP address"""
+    if value == "None":
+        return None
+    try:
+        servers = []
+        for ip in value.split(","):
+            ipaddress.ip_address(value)
+            servers.append(ip)
+        log.SYSLOG_SERVERS = servers
+        return servers  # return something so the arg is not None
+    except ValueError:
+        raise argparse.ArgumentTypeError("IP address {} is not valid".format(value))
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -515,6 +532,13 @@ def setup_parser() -> argparse.ArgumentParser:
         "--watchevents",
         dest="event_watcher",
         action="store_true",
+        help="a special mode which watches for notification on a wireless interface such as connection and roaming events",
+    )
+    parser.add_argument(
+        "--syslog",
+        metavar="<server IP>",
+        type=ip,
+        dest="syslog",
         help="a special mode which watches for notification on a wireless interface such as connection and roaming events",
     )
     parser.add_argument(

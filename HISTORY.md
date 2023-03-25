@@ -8,6 +8,7 @@ UNRELEASED
 -------------------
 
 - Improve --watchevent output for .1X networks
+- Syslog for --watchevent output with --syslog <server ip>
 
 0.1.36 (2023-03-06)
 -------------------
