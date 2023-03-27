@@ -171,14 +171,14 @@ def width(value):
     return width
 
 
-def ip(value):
+def syslog_ip(value):
     """Validate user provided IP is actually an IP address"""
     if value == "None":
         return None
     try:
         servers = []
         for ip in value.split(","):
-            ipaddress.ip_address(value)
+            ipaddress.ip_address(ip)
             servers.append(ip)
         log.SYSLOG_SERVERS = servers
         return servers  # return something so the arg is not None
@@ -537,7 +537,7 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--syslog",
         metavar="<server IP>",
-        type=ip,
+        type=syslog_ip,
         dest="syslog",
         help="a special mode which watches for notification on a wireless interface such as connection and roaming events",
     )
