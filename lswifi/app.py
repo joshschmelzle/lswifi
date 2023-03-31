@@ -57,8 +57,18 @@ class lswifi:
                     if value:
                         is_caching_acknowledged = value
 
+        watching_events = True
         try:
             clients = {}
+            if args.event_watcher:
+                while watching_events:
+                    for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
+                        if "disabled" not in iface.mac:
+                            if iface.mac not in clients.keys():
+                                client = Client(args, iface)
+                                clients[iface.mac] = client
+                    sleep(2)
+
             for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
                 clients[index] = Client(args, iface)
 
@@ -77,10 +87,6 @@ class lswifi:
                         f"    State: {client.iface.state_string}\n"
                     )
                 sys.exit(0)
-
-            if args.event_watcher:
-                while True:
-                    sleep(5)
 
             if args.append:
                 self.appendEthers(args.append)

@@ -7,8 +7,8 @@ lswifi.syslog
 define syslog bits
 """
 
-from datetime import datetime
 import socket
+from datetime import datetime
 
 SYSLOG_SERVERS = []
 
