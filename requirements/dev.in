@@ -1,8 +1,11 @@
 -r tests.in
 -r typing.in
+-r style.in
+-r format.in
 pip-tools
 pre-commit
 tox
+pyinstaller
 
 # The following packages are considered to be unsafe in a requirements file:
 # pip

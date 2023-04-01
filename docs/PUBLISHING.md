@@ -1,6 +1,24 @@
 Publishing and Distribution
 ===========================
 
+Building an exe with PyInstaller
+--------------------------------
+
+Create venv if not exists:
+
+```bash
+python -m venv venv
+```
+
+Activate venv, install requires, del dist, and run PyInstaller:
+
+```bash
+.\venv\scripts\activate.ps1
+python -m pip install -r .\requirements\dev.in
+del .\dist\ -r
+python -m PyInstaller --onefile --name "lswifi" ".\lswifi\__main__.py"
+```
+
 Building and uploading to PyPi
 ------------------------------
 

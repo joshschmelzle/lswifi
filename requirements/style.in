@@ -1,16 +1,11 @@
 flake8
 flake8-alfred
-flake8-annotations-coverage
 flake8-blind-except
 flake8-bugbear
 flake8-builtins
-flake8-comprehensions
-flake8-docstrings
-flake8-eradicate
 flake8-fixme
 flake8-logging-format
 flake8-requirements
 flake8-string-format
-flake8-type-annotations
 flake8-variables-names
-flake8-2020
+flake8-simplify
