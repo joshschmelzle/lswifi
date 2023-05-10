@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from typing import Union
 
 from lswifi import wlanapi as WLAN_API
-from lswifi.log import message as syslog
+from lswifi.slog import message as syslog
 
 
 class TimerEx(object):

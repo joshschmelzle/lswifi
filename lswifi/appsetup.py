@@ -18,7 +18,7 @@ import textwrap
 import time
 from pathlib import Path
 
-from lswifi import log
+from lswifi import slog
 from lswifi.__version__ import __version__
 
 
@@ -180,7 +180,7 @@ def syslog_ip(value):
         for ip in value.split(","):
             ipaddress.ip_address(ip)
             servers.append(ip)
-        log.SYSLOG_SERVERS = servers
+        slog.SYSLOG_SERVERS = servers
         return servers  # return something so the arg is not None
     except ValueError:
         raise argparse.ArgumentTypeError("IP address {} is not valid".format(value))

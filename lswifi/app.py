@@ -527,9 +527,6 @@ class lswifi:
                     export_bss = str(bss.bssid).lower().replace(":", "-")
 
                     bsspath = export_bss + ".bss"
-                    # print(f"{os.path.join(exportpath, bss)}")
-                    # print(f"{type(bss.bssbytes.send())}")
-                    # print(f"{bss.bssbytes.send()}")
                     bssfile = open(os.path.join(exportpath, bsspath), "wb")
                     try:
                         bssfile.write(bss.bssbytes.send())
