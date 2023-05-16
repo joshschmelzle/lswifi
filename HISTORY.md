@@ -9,6 +9,7 @@ UNRELEASED
 
 - Improve --watchevent output for .1X networks
 - Syslog for --watchevent output with --syslog <server ip>
+- Add vendor OUIs
 
 0.1.36 (2023-03-06)
 -------------------

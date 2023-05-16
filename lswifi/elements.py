@@ -1935,10 +1935,10 @@ class WirelessNetworkBss:
 
         if oui3 in VENDOR_SPECIFIC_DICT:
             vendor = VENDOR_SPECIFIC_DICT[oui3].friendly
-            return f"OUI: {oui3} ({vendor})"
+            return f"Vendor OUI: {oui3} ({vendor}) - {' '.join(d.hex() for d in element_body[3:])}"
         if self is not None:
             self.log.debug(
-                f"Unknown vendor OUI ({oui}) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
+                f"Unknown vendor OUI ({oui}) in vendor specific IE (221) detected on {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
             )
         return f"OUI: {oui}"
 

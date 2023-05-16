@@ -172,6 +172,7 @@ VENDOR_SPECIFIC_DICT = {
     "00:03:9C": VENDOR("OptiMight", "OptiMight Communications, Inc."),
     "50:6F:9A": VENDOR("Wi-Fi Alliance", "Wi-Fi Alliance"),
     "00:11:74": VENDOR("Mojo", "Mojo Networks, Inc."),
+    "04:22:34": VENDOR("Wireless Standard Extensions", " Wireless Standard Extensions"),
 }
 
 EXTENSION_IE_DICT = {
