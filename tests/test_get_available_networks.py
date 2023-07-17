@@ -23,7 +23,7 @@ if WLAN_API.WLAN_API_EXISTS:
     for _idx, interface in interfaces.items():
         WLAN_API.WLAN.scan(interface.guid)
         time.sleep(0.1)
-        available_networks = WLAN_API.WLAN.get_wireless_network_bss_list(interface)
+        available_networks = WLAN_API.WLAN.get_wireless_network_bss_list(interface, is_bytes_arg=False)
         is_first_avail = True
         output = []
         for avail in available_networks:

@@ -338,18 +338,19 @@ class Client(object):
                 now.now().astimezone().isoformat(timespec="milliseconds")
             )
             self.last_scan_time_utc = now.utcnow()
+            self.args = args
             self.get_bssid_args = SimpleNamespace(
                 get_current_ap=True,
                 raw=True,
                 event_watcher=True,
                 get_current_channel=False,
                 supported=False,
+                is_bytes_arg=self.args.bytes,
             )
             self.timeout_interval = 5.0
             self.client_handle = WLAN_API.WLAN.open_handle()
             # self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
             self.scan_timer = TimerEx(self.timeout_interval, self.scan_timeout)
-            self.args = args
             self.iface = iface
             self.mac = iface.mac
             # self.first_event = True
@@ -380,11 +381,11 @@ class Client(object):
                     "problem closing %s with result", self.client_handle, result
                 )
 
-    def get_bss_list(self, interface) -> Union[list, None]:
+    def get_bss_list(self, interface, is_bytes_arg) -> Union[list, None]:
         if interface:
             try:
                 wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
-                    interface
+                    interface, is_bytes_arg=is_bytes_arg
                 )
 
                 if len(wireless_network_bss_list) == 0:
@@ -454,7 +455,7 @@ class Client(object):
                     "roaming_start",
                     "roaming_end",
                 ]:
-                    self.data = self.get_bss_list(self.iface)
+                    self.data = self.get_bss_list(self.iface, self.args.bytes)
                     bssid_data = None
                     if self.data is not None:
                         for bss in self.data:
@@ -512,7 +513,9 @@ class Client(object):
                 # if the list is updated, grab the results
                 if str(wlan_event).strip() == "scan_list_refresh":
                     self.log.debug(f"({self.mac}), start get_bss_list...")
-                    self.data = self.get_bss_list(self.iface)
+                    self.data = self.get_bss_list(
+                        self.iface, is_bytes_arg=self.args.bytes
+                    )
                     self.scan_finished = True
                     now = datetime.datetime
                     self.last_scan_time_epoch = now.utcnow().timestamp()
@@ -565,6 +568,6 @@ class Client(object):
             f"timeout interval ({self.timeout_interval} seconds) for {self.mac} exceeded..."
         )
         self.log.debug(f"({self.mac}), start get_bss_list...")
-        self.data = self.get_bss_list(self.iface)
+        self.data = self.get_bss_list(self.iface, self.args.is_bytes_arg)
         self.log.debug(f"({self.mac}), finish get_bss_list...")
         self.scan_finished = True
