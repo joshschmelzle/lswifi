@@ -42,7 +42,13 @@ from lswifi.schemas.signalquality import *
 
 
 class WirelessNetworkBss:
-    def __init__(self, bss_entry, connected_bssid=None, is_byte_file=False):
+    def __init__(
+        self,
+        bss_entry,
+        connected_bssid=None,
+        is_byte_input_file=False,
+        is_bytes_arg=False,
+    ):
         """
         bss_entry:
         ("dot11Ssid", Dot11SSID),
@@ -65,7 +71,7 @@ class WirelessNetworkBss:
         """
         # init values before parsing IEs
         self.log = logging.getLogger(__name__)
-        self.is_byte_file = is_byte_file
+        self.is_byte_file = is_byte_input_file
         try:
             _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
                 "utf-8"
@@ -153,8 +159,7 @@ class WirelessNetworkBss:
             self.background_acm = OutObject(header="AC_BK")
             self.has_rnr = False
             self.rnrs = []
-
-            if not is_byte_file:
+            if not is_byte_input_file:
                 # parse IEs
                 self.raw_information_elements = self._get_information_elements_buffer(
                     bss_entry
@@ -162,36 +167,40 @@ class WirelessNetworkBss:
                 self.iesbytes = bytearray(self.raw_information_elements)
                 # self.iesbytes = [c for c in self.raw_information_elements]
 
-                self.information_elements = (
-                    WirelessNetworkBss.process_information_elements(self, bss_entry)
-                )
+                # if we're going to print out bytes we don't want to process yet as we could have a malformed IE that needs to be decoded and handled correctly
+                if not is_bytes_arg:
+                    self.information_elements = (
+                        WirelessNetworkBss.process_information_elements(self, bss_entry)
+                    )
 
-                ##########################################
-                # Do stuff now that IEs have been parsed #
-                ##########################################
+                    ##########################################
+                    # Do stuff now that IEs have been parsed #
+                    ##########################################
 
-                # convert channel frequency unit from MHz to GHz
-                # 2412 to 2.412
-                # 5825 to 5.825
-                # 6855 to 6.855
-                self.channel_frequency.value = "{0:.3f}".format(
-                    int(self.channel_frequency.value) / 1000
-                )
+                    # convert channel frequency unit from MHz to GHz
+                    # 2412 to 2.412
+                    # 5825 to 5.825
+                    # 6855 to 6.855
+                    self.channel_frequency.value = "{0:.3f}".format(
+                        int(self.channel_frequency.value) / 1000
+                    )
 
-                # if self.dtim.value:
-                #    print(f"dtim {self.dtim.value} present for {self.bssid}")
-                # else:
-                #    print(f"dtim not present for {self.bssid}")
-                self.ie_rates.value = self.parse_rates(self.ie_rates)
-                if len(self.channel_number_marked) == 1:
-                    self.channel_number_marked.value = f"  {self.channel_number_marked}"
-                if len(self.channel_number_marked) == 2:
-                    self.channel_number_marked.value = f" {self.channel_number_marked}"
-                # if len(self.channel_number) == 3:
-                #    pass
-                self.channel_number_marked.value = (
-                    f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
-                )
+                    # if self.dtim.value:
+                    #    print(f"dtim {self.dtim.value} present for {self.bssid}")
+                    # else:
+                    #    print(f"dtim not present for {self.bssid}")
+                    self.ie_rates.value = self.parse_rates(self.ie_rates)
+                    if len(self.channel_number_marked) == 1:
+                        self.channel_number_marked.value = (
+                            f"  {self.channel_number_marked}"
+                        )
+                    if len(self.channel_number_marked) == 2:
+                        self.channel_number_marked.value = (
+                            f" {self.channel_number_marked}"
+                        )
+                    # if len(self.channel_number) == 3:
+                    #    pass
+                    self.channel_number_marked.value = f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
 
             self.band = Band(self.channel_frequency.value)
         except Exception:
@@ -541,6 +550,9 @@ class WirelessNetworkBss:
                 )
 
     def process_information_elements(self, bss_entry):
+        self.log.debug(
+            "Processing information elements for BSSID {}".format(self.bssid)
+        )
         # ctypes
         bss_entry_pointer = addressof(bss_entry)
         ie_offset = bss_entry.IeOffset

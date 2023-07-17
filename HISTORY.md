@@ -4,12 +4,21 @@ Release History
 UNRELEASED
 ----------
 
-0.1.37 (2023-XX-XX)
+0.1.38 (XXXX-XX-XX)
+-------------------
+
+- TBD
+
+RELEASED
+--------
+
+0.1.37 (2023-07-17)
 -------------------
 
 - Improve --watchevent output for .1X networks
 - Syslog for --watchevent output with --syslog <server ip>
-- Add vendor OUIs
+- Add to vendor OUIs hash
+- Don't parse IEs if we are printing bytes to screen
 
 0.1.36 (2023-03-06)
 -------------------

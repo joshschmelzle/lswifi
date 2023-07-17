@@ -224,12 +224,12 @@ class lswifi:
                         time.sleep(0.1)
                 except Exception:
                     raise
-
                 clients[index] = client
 
             for _index, client in clients.items():
                 task = scanfunc(_index, client)
                 background_tasks.add(task)
+                log.debug(f"added background task for {client}")
 
             if len(clients.items()) > 0:
                 with concurrent.futures.ThreadPoolExecutor(
@@ -240,16 +240,13 @@ class lswifi:
                         futures.append(executor.submit(asyncio.run, task))
                     for _future in concurrent.futures.as_completed(futures):
                         pass
-
             clients = {
                 k: clients[k] for k in sorted(clients)
             }  # sort by key (index) numerically
-
             for _idx, client in clients.items():
                 if client.data is None:
                     log.warning(f"no scan data for {client.mac}")
                 else:
-                    log.debug(f"start parsing information elements for {client.mac}")
                     (
                         out_results,
                         rnr_results,
@@ -499,33 +496,64 @@ class lswifi:
 
         bss_len = len(wireless_network_bss_list)
 
-        # WirelessNetworkBss object
-        for index, bss in enumerate(wireless_network_bss_list):
-            if args.ies or args.bytes or args.export:
-                wlanapi_bss = str(bss.bssid).lower()  # TODO EXTRACT INTO HELPER
-
-                if args.ies:
-                    user_bss = args.ies.lower()
+        if args.bytes:
+            for index, bss in enumerate(wireless_network_bss_list):
+                wlanapi_bss = str(bss.bssid).lower()
                 if args.bytes:
                     user_bss = args.bytes.lower()
+                if wlanapi_bss != user_bss:
+                    # print("{} {}".format(wlanapi_bss, user_bss))
+                    continue
+                print(f"bss bytes:\n{bss.bssbytes.send()}\n\n)")
+                print(f"bss octets:\n{format_bytes_as_hex(bss.bssbytes.send())}\n")
+                print("bss base64:")
+                bssb64 = str(
+                    json.dumps(bss.bssbytes.send(), cls=Base64Encoder)
+                ).replace('"', "")
+                print(f"{bssb64}\n")
+                print(f"ies bytes:\n{bytes(bss.iesbytes)}\n")
+                print(f"ies octets:\n{format_bytes_as_hex(bss.iesbytes)}\n")
+                # iesb64 = str(base64.b64encode(bss.iesbytes)).replace("'","").replace("b","")
+                iesb64 = str(
+                    json.dumps(bytes(bss.iesbytes), cls=Base64Encoder)
+                ).replace('"', "")
+                print(f"ies base64:\n{iesb64}\n")
+        else:
+            # WirelessNetworkBss object
+            for index, bss in enumerate(wireless_network_bss_list):
+                if args.ies or args.export:
+                    wlanapi_bss = str(bss.bssid).lower()
+                    if args.ies:
+                        user_bss = args.ies.lower()
+                    if args.bytes:
+                        user_bss = args.bytes.lower()
 
-                if args.export:
-                    if args.export != "all":  # if lswifi -export xx:xx:xx:nn:nn:nn
-                        user_bss = args.export
-                        # print(f"{bss_len} {index}")
-                        # print(f"{wlanapi_bss} {user_bss}")
+                    if args.export:
+                        if args.export != "all":  # if lswifi -export xx:xx:xx:nn:nn:nn
+                            user_bss = args.export
+                            # print(f"{bss_len} {index}")
+                            # print(f"{wlanapi_bss} {user_bss}")
 
-                        if wlanapi_bss != user_bss:
-                            # print("{} {}".format(wlanapi_bss, user_bss))
-                            if bss_len == (index + 1):
-                                print(
-                                    f"no match for {args.export} found in scan results. please try again ..."
-                                )
-                            continue
+                            if wlanapi_bss != user_bss:
+                                # print("{} {}".format(wlanapi_bss, user_bss))
+                                if bss_len == (index + 1):
+                                    print(
+                                        f"no match for {args.export} found in scan results. please try again ..."
+                                    )
+                                continue
 
-                    # if lswifi -export
-                    export_bss = str(bss.bssid).lower().replace(":", "-")
+                        # if lswifi -export
+                        export_bss = str(bss.bssid).lower().replace(":", "-")
 
+                        bsspath = export_bss + ".bss"
+                        # print(f"{os.path.join(exportpath, bss)}")
+                        # print(f"{type(bss.bssbytes.send())}")
+                        # print(f"{bss.bssbytes.send()}")
+                        bssfile = open(os.path.join(exportpath, bsspath), "wb")
+                        try:
+                            bssfile.write(bss.bssbytes.send())
+                        finally:
+                            bssfile.close()
                     bsspath = export_bss + ".bss"
                     bssfile = open(os.path.join(exportpath, bsspath), "wb")
                     try:
@@ -533,288 +561,280 @@ class lswifi:
                     finally:
                         bssfile.close()
 
-                    iespath = export_bss + ".ies"
-                    # print(f"{os.path.join(exportpath, ies)}")
-                    # print(f"{type(bss.iesbytes)}")
-                    # print(f"{bss.iesbytes}")
-                    iesfile = open(os.path.join(exportpath, iespath), "wb")
-                    try:
-                        iesfile.write(bss.iesbytes)
-                    finally:
-                        iesfile.close()
+                        iespath = export_bss + ".ies"
+                        # print(f"{os.path.join(exportpath, ies)}")
+                        # print(f"{type(bss.iesbytes)}")
+                        # print(f"{bss.iesbytes}")
+                        iesfile = open(os.path.join(exportpath, iespath), "wb")
+                        try:
+                            iesfile.write(bss.iesbytes)
+                        finally:
+                            iesfile.close()
 
-                    # print(f"{bsspath} {iespath}")
-                    if args.export != "all":
+                        # print(f"{bsspath} {iespath}")
+                        if args.export != "all":
+                            log.info(
+                                f"found and exporting requested bssid from the scan results of {client.mac}."
+                            )
+                            print(
+                                f"raw byte files for {args.export} exported to {exportpath}"
+                            )
+                            break
+                        elif (bss_len - 1) == index:
+                            log.info(
+                                f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
+                            )
+                            print(f"files exported to {exportpath}")
+
+                        continue
+
+                    # compare if bss from list is the same as the one the user wants details for
+                    if wlanapi_bss != user_bss:
+                        # print("{} {}".format(wlanapi_bss, user_bss))
+                        continue
+                    if args.ies:
                         log.info(
-                            f"found and exporting requested bssid from the scan results of {client.mac}."
+                            f"found requested bssid in the scan results from {client.mac}."
                         )
-                        print(
-                            f"raw byte files for {args.export} exported to {exportpath}"
-                        )
-                        break
-                    elif (bss_len - 1) == index:
-                        log.info(
-                            f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
-                        )
-                        print(f"files exported to {exportpath}")
+                        print(bss)
+                    break
 
-                    continue
-
-                # compare if bss from list is the same as the one the user wants details for
-                if wlanapi_bss != user_bss:
-                    # print("{} {}".format(wlanapi_bss, user_bss))
-                    continue
-                if args.ies:
-                    log.info(
-                        f"found requested bssid in the scan results from {client.mac}."
+                # handle weakest rssi value we want to see displayed to the screen
+                if args.all:
+                    pass
+                elif bss.rssi.value < args.sensitivity:
+                    log.debug(
+                        f"excluding {bss.bssid} ({bss.ssid}) because bss.rssi.value {bss.rssi.value} is < {args.sensitivity}"
                     )
-                    print(bss)
-                if args.bytes:
-                    print("bss.bssbytes.send():")
-                    print(f"{bss.bssbytes.send()}\n")
-                    print("base64 encoded (bss.bssbytes.send()):")
-                    print(f"{json.dumps(bss.bssbytes.send(), cls=Base64Encoder)}\n")
-                    print(
-                        f"decoded as ISO-8859-1: \n {(bss.bssbytes.send()).decode(encoding='ISO-8859-1')}\n"
-                    )
-                    print(f"bss octets:\n{format_bytes_as_hex(bss.bssbytes.send())}\n")
-                    print(f"ies octets:\n{format_bytes_as_hex(bss.iesbytes)}\n")
-                break
-
-            # handle weakest rssi value we want to see displayed to the screen
-            if args.all:
-                pass
-            elif bss.rssi.value < args.sensitivity:
-                log.debug(
-                    f"excluding {bss.bssid} ({bss.ssid}) because bss.rssi.value {bss.rssi.value} is < {args.sensitivity}"
-                )
-                continue
-
-            # handle band filters
-            if not args.a and not args.g and not args.six:
-                pass
-            else:
-                # handle a band filter
-                if args.a and args.g and not args.six:
-                    if is_two_four_band(bss.channel_frequency.value):
-                        pass
-                    if is_five_band(bss.channel_frequency.value):
-                        pass
-                    if is_six_band(bss.channel_frequency.value):
-                        continue
-                if args.a and args.six and not args.g:
-                    if is_two_four_band(bss.channel_frequency.value):
-                        continue
-                    if is_five_band(bss.channel_frequency.value):
-                        pass
-                    if is_six_band(bss.channel_frequency.value):
-                        pass
-                if args.a and not args.six and not args.g:
-                    if is_two_four_band(bss.channel_frequency.value):
-                        continue
-                    if is_five_band(bss.channel_frequency.value):
-                        pass
-                    if is_six_band(bss.channel_frequency.value):
-                        continue
-                # handle g band filter
-                if args.g and args.six and not args.a:
-                    if is_two_four_band(bss.channel_frequency.value):
-                        pass
-                    if is_five_band(bss.channel_frequency.value):
-                        continue
-                    if is_six_band(bss.channel_frequency.value):
-                        pass
-                if args.g and not args.six and not args.a:
-                    if is_two_four_band(bss.channel_frequency.value):
-                        pass
-                    if is_five_band(bss.channel_frequency.value):
-                        continue
-                    if is_six_band(bss.channel_frequency.value):
-                        continue
-                # handle six band filter
-                if args.six and not args.a and not args.g:
-                    if is_two_four_band(bss.channel_frequency.value):
-                        continue
-                    if is_five_band(bss.channel_frequency.value):
-                        continue
-                    if is_six_band(bss.channel_frequency.value):
-                        pass
-
-            # handle width filter
-            if args.width is not None:
-                if args.width not in str(bss.channel_width):
                     continue
 
-            # handle hidden ssid, and handle ssid filter
-            if args.include is None:
-                pass
-            elif args.include in str(bss.ssid):
-                pass
-            else:
-                continue
+                # handle band filters
+                if not args.a and not args.g and not args.six:
+                    pass
+                else:
+                    # handle a band filter
+                    if args.a and args.g and not args.six:
+                        if is_two_four_band(bss.channel_frequency.value):
+                            pass
+                        if is_five_band(bss.channel_frequency.value):
+                            pass
+                        if is_six_band(bss.channel_frequency.value):
+                            continue
+                    if args.a and args.six and not args.g:
+                        if is_two_four_band(bss.channel_frequency.value):
+                            continue
+                        if is_five_band(bss.channel_frequency.value):
+                            pass
+                        if is_six_band(bss.channel_frequency.value):
+                            pass
+                    if args.a and not args.six and not args.g:
+                        if is_two_four_band(bss.channel_frequency.value):
+                            continue
+                        if is_five_band(bss.channel_frequency.value):
+                            pass
+                        if is_six_band(bss.channel_frequency.value):
+                            continue
+                    # handle g band filter
+                    if args.g and args.six and not args.a:
+                        if is_two_four_band(bss.channel_frequency.value):
+                            pass
+                        if is_five_band(bss.channel_frequency.value):
+                            continue
+                        if is_six_band(bss.channel_frequency.value):
+                            pass
+                    if args.g and not args.six and not args.a:
+                        if is_two_four_band(bss.channel_frequency.value):
+                            pass
+                        if is_five_band(bss.channel_frequency.value):
+                            continue
+                        if is_six_band(bss.channel_frequency.value):
+                            continue
+                    # handle six band filter
+                    if args.six and not args.a and not args.g:
+                        if is_two_four_band(bss.channel_frequency.value):
+                            continue
+                        if is_five_band(bss.channel_frequency.value):
+                            continue
+                        if is_six_band(bss.channel_frequency.value):
+                            pass
 
-            # handle exclude filter
-            if args.exclude:
-                if args.exclude in str(bss.ssid):
+                # handle width filter
+                if args.width is not None:
+                    if args.width not in str(bss.channel_width):
+                        continue
+
+                # handle hidden ssid, and handle ssid filter
+                if args.include is None:
+                    pass
+                elif args.include in str(bss.ssid):
+                    pass
+                else:
                     continue
 
-            # directed scan on BSSID or OUI
-            if args.bssid is not None:
-                input_mac = strip_mac_address_format(args.bssid)
-                bss_mac = strip_mac_address_format(str(bss.bssid))
-            # print("{} {}".format(input_mac, bss_mac))
-            if args.bssid is None:
-                pass
-            elif input_mac in bss_mac:
-                pass
-            else:
-                continue
+                # handle exclude filter
+                if args.exclude:
+                    if args.exclude in str(bss.ssid):
+                        continue
 
-            if args.rnr:
-                for rnr in bss.rnrs:
-                    rnr_out = []
-                    for obj in rnr:
-                        rnr_out.append(obj.out())
-                    rnr_results.append(rnr_out)
-                continue
+                # directed scan on BSSID or OUI
+                if args.bssid is not None:
+                    input_mac = strip_mac_address_format(args.bssid)
+                    bss_mac = strip_mac_address_format(str(bss.bssid))
+                # print("{} {}".format(input_mac, bss_mac))
+                if args.bssid is None:
+                    pass
+                elif input_mac in bss_mac:
+                    pass
+                else:
+                    continue
 
-            # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
-            bssid_list.append(str(bss.bssid))
+                if args.rnr:
+                    for rnr in bss.rnrs:
+                        rnr_out = []
+                        for obj in rnr:
+                            rnr_out.append(obj.out())
+                        rnr_results.append(rnr_out)
+                    continue
 
-            if args.ethers:
-                if bss.bssid.value in ethers:
-                    bss.apname.value = ethers[bss.bssid.value]
-            elif args.apnames:
-                if is_caching_acknowledged:
-                    scan_bssid = bss.bssid.value
-                    scan_apname = remove_control_chars(bss.apname.value)
+                # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
+                bssid_list.append(str(bss.bssid))
 
-                    if (
-                        json_names.get(scan_bssid) is not None
-                    ):  # if bssid is in json dict
-                        cachedAP = json_names[scan_bssid]
-                        bss.apname.value = cachedAP  # start with cached
+                if args.ethers:
+                    if bss.bssid.value in ethers:
+                        bss.apname.value = ethers[bss.bssid.value]
+                elif args.apnames:
+                    if is_caching_acknowledged:
+                        scan_bssid = bss.bssid.value
+                        scan_apname = remove_control_chars(bss.apname.value)
+
                         if (
-                            scan_apname != ""
-                        ):  # if current AP name is not an empty string
+                            json_names.get(scan_bssid) is not None
+                        ):  # if bssid is in json dict
+                            cachedAP = json_names[scan_bssid]
+                            bss.apname.value = cachedAP  # start with cached
                             if (
-                                scan_apname != cachedAP
-                            ):  # if current AP doesn't match whats in the json
-                                newapnames[
-                                    scan_bssid
-                                ] = scan_apname  # then 1) update new hash table with current AP name
-                                bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
-                        log.debug(
-                            f"BSSID from scan: {scan_bssid}, Name from cache: {cachedAP}, Name from scanned {scan_apname}"
-                        )
-                    elif scan_apname != "":  # working with new AP name
-                        newapnames[
-                            scan_bssid
-                        ] = scan_apname  # then 1) update new hash table with new AP name
+                                scan_apname != ""
+                            ):  # if current AP name is not an empty string
+                                if (
+                                    scan_apname != cachedAP
+                                ):  # if current AP doesn't match whats in the json
+                                    newapnames[
+                                        scan_bssid
+                                    ] = scan_apname  # then 1) update new hash table with current AP name
+                                    bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
+                            log.debug(
+                                f"BSSID from scan: {scan_bssid}, Name from cache: {cachedAP}, Name from scanned {scan_apname}"
+                            )
+                        elif scan_apname != "":  # working with new AP name
+                            newapnames[
+                                scan_bssid
+                            ] = scan_apname  # then 1) update new hash table with new AP name
 
-            # bss.element.out() contains a tuple with the following values
-            #   1. value, 2. header and alignment (left, center, right), 3. subheader
+                # bss.element.out() contains a tuple with the following values
+                #   1. value, 2. header and alignment (left, center, right), 3. subheader
 
-            if bss.bssid.connected:
-                if not args.json and not args.csv:
-                    # if "(*)" not in bss.bssid.value:
-                    bss.bssid.value += "(*)"
+                if bss.bssid.connected:
+                    if not args.json and not args.csv:
+                        # if "(*)" not in bss.bssid.value:
+                        bss.bssid.value += "(*)"
 
-            if args.json:
-                json_out.append(
-                    {
-                        "timestamp": client.last_scan_time_iso,
-                        "interface_mac": client.mac,
-                        "amendments": sorted(bss.amendments.elements),
-                        "apname": str(bss.apname).strip(),
-                        "bssid": str(bss.bssid).strip(),
-                        "bss_type": str(bss.bss_type).strip(),
-                        "channel_frequency": str(bss.channel_frequency).strip(),
-                        "channel_number": str(bss.channel_number).strip(),
-                        "channel_width": str(bss.channel_width).strip(),
-                        "connected": bss.bssid.connected,
-                        "ies": sorted(bss.ie_numbers.elements),
-                        "ies_extension": sorted(bss.exie_numbers.elements),
-                        "modes": sorted(bss.modes.elements),
-                        "pmf": str(bss.pmf).strip(),
-                        "phy_type": str(bss.phy_type).strip(),
-                        "rates_basic": [x for x in bss.wlanrateset.basic.split(" ")],
-                        "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
-                        "rssi": str(bss.rssi),
-                        "security": str(bss.security).strip(),
-                        "spatial_streams": str(bss.spatial_streams),
-                        "ssid": str(bss.ssid),
-                        "stations": str(bss.stations),
-                        "uptime": str(bss.uptime).strip(),
-                        "utilization": str(bss.utilization).strip(),
-                    }
+                if args.json:
+                    json_out.append(
+                        {
+                            "timestamp": client.last_scan_time_iso,
+                            "interface_mac": client.mac,
+                            "amendments": sorted(bss.amendments.elements),
+                            "apname": str(bss.apname).strip(),
+                            "bssid": str(bss.bssid).strip(),
+                            "bss_type": str(bss.bss_type).strip(),
+                            "channel_frequency": str(bss.channel_frequency).strip(),
+                            "channel_number": str(bss.channel_number).strip(),
+                            "channel_width": str(bss.channel_width).strip(),
+                            "connected": bss.bssid.connected,
+                            "ies": sorted(bss.ie_numbers.elements),
+                            "ies_extension": sorted(bss.exie_numbers.elements),
+                            "modes": sorted(bss.modes.elements),
+                            "pmf": str(bss.pmf).strip(),
+                            "phy_type": str(bss.phy_type).strip(),
+                            "rates_basic": [
+                                x for x in bss.wlanrateset.basic.split(" ")
+                            ],
+                            "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
+                            "rssi": str(bss.rssi),
+                            "security": str(bss.security).strip(),
+                            "spatial_streams": str(bss.spatial_streams),
+                            "ssid": str(bss.ssid),
+                            "stations": str(bss.stations),
+                            "uptime": str(bss.uptime).strip(),
+                            "utilization": str(bss.utilization).strip(),
+                        }
+                    )
+                if args.csv:
+                    csv_out.append(
+                        {
+                            "timestamp": client.last_scan_time_iso,
+                            "interface_mac": client.mac,
+                            "amendments": "/".join(sorted(bss.amendments.elements)),
+                            "apname": str(bss.apname).strip(),
+                            "bssid": str(bss.bssid).strip(),
+                            "bss_type": str(bss.bss_type).strip(),
+                            "channel_frequency": str(bss.channel_frequency).strip(),
+                            "channel_number": str(bss.channel_number).strip(),
+                            "channel_width": str(bss.channel_width).strip(),
+                            "connected": bss.bssid.connected,
+                            "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
+                            "ies_extension": "/".join(
+                                map(str, sorted(bss.exie_numbers.elements))
+                            ),
+                            "modes": "/".join(sorted(bss.modes.elements)),
+                            "pmf": str(bss.pmf).strip(),
+                            "phy_type": str(bss.phy_type).strip(),
+                            "rates_basic": "/".join(
+                                [x for x in bss.wlanrateset.basic.split(" ")]
+                            ),
+                            "rates_data": "/".join(
+                                [x for x in bss.wlanrateset.data.split(" ")]
+                            ),
+                            "rssi": str(bss.rssi),
+                            "security": str(bss.security).strip(),
+                            "spatial_streams": str(bss.spatial_streams),
+                            "ssid": bss.ssid,
+                            "stations": str(bss.stations),
+                            "utilization": str(bss.utilization).strip(),
+                            "uptime": str(bss.uptime).strip(),
+                        }
+                    )
+                out_results.append(
+                    [
+                        bss.ssid.out(),
+                        bss.bssid.out(),
+                        bss.rssi.out(),
+                        bss.phy_type.out(),
+                        bss.channel_number_marked.out(),
+                        bss.channel_frequency.out(),
+                        bss.spatial_streams.out(),
+                        bss.security.out(),
+                        bss.amendments.out(),
+                        bss.uptime.out(),
+                    ]
                 )
-            if args.csv:
-                csv_out.append(
-                    {
-                        "timestamp": client.last_scan_time_iso,
-                        "interface_mac": client.mac,
-                        "amendments": "/".join(sorted(bss.amendments.elements)),
-                        "apname": str(bss.apname).strip(),
-                        "bssid": str(bss.bssid).strip(),
-                        "bss_type": str(bss.bss_type).strip(),
-                        "channel_frequency": str(bss.channel_frequency).strip(),
-                        "channel_number": str(bss.channel_number).strip(),
-                        "channel_width": str(bss.channel_width).strip(),
-                        "connected": bss.bssid.connected,
-                        "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
-                        "ies_extension": "/".join(
-                            map(str, sorted(bss.exie_numbers.elements))
-                        ),
-                        "modes": "/".join(sorted(bss.modes.elements)),
-                        "pmf": str(bss.pmf).strip(),
-                        "phy_type": str(bss.phy_type).strip(),
-                        "rates_basic": "/".join(
-                            [x for x in bss.wlanrateset.basic.split(" ")]
-                        ),
-                        "rates_data": "/".join(
-                            [x for x in bss.wlanrateset.data.split(" ")]
-                        ),
-                        "rssi": str(bss.rssi),
-                        "security": str(bss.security).strip(),
-                        "spatial_streams": str(bss.spatial_streams),
-                        "ssid": bss.ssid,
-                        "stations": str(bss.stations),
-                        "utilization": str(bss.utilization).strip(),
-                        "uptime": str(bss.uptime).strip(),
-                    }
-                )
-            out_results.append(
-                [
-                    bss.ssid.out(),
-                    bss.bssid.out(),
-                    bss.rssi.out(),
-                    bss.phy_type.out(),
-                    bss.channel_number_marked.out(),
-                    bss.channel_frequency.out(),
-                    bss.spatial_streams.out(),
-                    bss.security.out(),
-                    bss.amendments.out(),
-                    bss.uptime.out(),
-                ]
-            )
 
-            if args.pmf:
-                out_results[-1].insert(len(out_results[-1]) - 1, bss.pmf.out())
+                if args.pmf:
+                    out_results[-1].insert(len(out_results[-1]) - 1, bss.pmf.out())
 
-            if args.period:
-                out_results[-1].append(bss.beacon_interval.out())
+                if args.period:
+                    out_results[-1].append(bss.beacon_interval.out())
 
-            if args.tpc:
-                out_results[-1].append(bss.transmit_power.out())
+                if args.tpc:
+                    out_results[-1].append(bss.transmit_power.out())
 
-            if args.qbss:
-                out_results[-1].append(bss.stations.out())
-                out_results[-1].append(bss.utilization.out())
+                if args.qbss:
+                    out_results[-1].append(bss.stations.out())
+                    out_results[-1].append(bss.utilization.out())
 
-            if args.apnames or args.ethers:
-                if is_caching_acknowledged:
-                    out_results[-1].append(bss.apname.out())
+                if args.apnames or args.ethers:
+                    if is_caching_acknowledged:
+                        out_results[-1].append(bss.apname.out())
 
         rnr_results = sorted(
             rnr_results,
@@ -1159,7 +1179,7 @@ class lswifi:
                         "Decoded BSS Information (NOTE: this is missing information found in .ies file):"
                     )
                     bss_entry = WLAN_API.WLANBSSEntry.from_buffer(_bytearray)
-                    data = WirelessNetworkBss(bss_entry, is_byte_file=True)
+                    data = WirelessNetworkBss(bss_entry, is_byte_input_file=True)
                     print(data)
                 finally:
                     fh.close()

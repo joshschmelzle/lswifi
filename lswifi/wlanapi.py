@@ -1615,7 +1615,7 @@ class WLAN:
         return ifaces
 
     @staticmethod
-    def get_wireless_network_bss_list(interface) -> list:
+    def get_wireless_network_bss_list(interface, is_bytes_arg) -> list:
         """Returns a list of WirelessNetworkBss objects based on the wireless
         networks available.
         """
@@ -1635,9 +1635,15 @@ class WLAN:
 
             for bss_entry in bss_entries_list:
                 if connected_bssid:
-                    networks.append(WirelessNetworkBss(bss_entry, connected_bssid))
+                    networks.append(
+                        WirelessNetworkBss(
+                            bss_entry, connected_bssid, is_bytes_arg=is_bytes_arg
+                        )
+                    )
                 else:
-                    networks.append(WirelessNetworkBss(bss_entry))
+                    networks.append(
+                        WirelessNetworkBss(bss_entry, is_bytes_arg=is_bytes_arg)
+                    )
 
         if bss_list is not None:
             # print("if get_wireless_network_bss_list bss_list is not None")
