@@ -8,6 +8,7 @@ UNRELEASED
 -------------------
 
 - Improve --watchevent output for .1X networks
+- Add Espressif Inc. to vendor hash
 
 0.1.36 (2023-03-06)
 -------------------
