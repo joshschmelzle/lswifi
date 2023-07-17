@@ -382,11 +382,11 @@ class Client(object):
                     "problem closing %s with result", self.client_handle, result
                 )
 
-    def get_bss_list(self, interface, is_bytes_arg) -> Union[list, None]:
+    def get_bss_list(self, interface, bytes=False) -> Union[list, None]:
         if interface:
             try:
                 wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
-                    interface, is_bytes_arg=is_bytes_arg
+                    interface, is_bytes_arg=bytes
                 )
 
                 if len(wireless_network_bss_list) == 0:
@@ -456,7 +456,7 @@ class Client(object):
                     "roaming_start",
                     "roaming_end",
                 ]:
-                    self.data = self.get_bss_list(self.iface, self.args.bytes)
+                    self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
                     bssid_data = None
                     if self.data is not None:
                         for bss in self.data:
@@ -525,7 +525,7 @@ class Client(object):
                 if str(wlan_event).strip() == "scan_list_refresh":
                     self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(
-                        self.iface, is_bytes_arg=self.args.bytes
+                        self.iface, bytes=self.args.bytes
                     )
                     self.scan_finished = True
                     now = datetime.datetime
@@ -579,6 +579,6 @@ class Client(object):
             f"timeout interval ({self.timeout_interval} seconds) for {self.mac} exceeded..."
         )
         self.log.debug(f"({self.mac}), start get_bss_list...")
-        self.data = self.get_bss_list(self.iface, self.args.is_bytes_arg)
+        self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
         self.log.debug(f"({self.mac}), finish get_bss_list...")
         self.scan_finished = True
