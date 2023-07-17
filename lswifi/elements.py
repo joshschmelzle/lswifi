@@ -1343,9 +1343,11 @@ class WirelessNetworkBss:
                 rnr_bssid = RNR_BSSID(bssid)
                 rnr_channel = RNR_CHANNEL(channel_number, width)
                 rnr_freq = RNR_FREQ(channel_number)
-                rnr_freq.value = "{0:.3f}".format(
-                    float(int(rnr_freq.value) / 1000)
-                )  # initially unit is MHz but converted to GHz after IEs are parsed below
+                try:
+                    rnr_freq.value = "{0:.3f}".format(float(int(rnr_freq.value) / 1000))
+                except ValueError:
+                    rnr_freq.value = "0.000"
+                # initially unit is MHz but converted to GHz after IEs are parsed below
                 rnr_twentymhzpsd = RNR_TWENTY_MHZ_PSD(twentymhzpsd)
                 rnr_samessid = RNR_SAME_SSID(same_ssid)
                 rnr_multiplebssid = RNR_MULTIPLE_BSSID(multiple_bssid)
