@@ -539,7 +539,7 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="<server IP>",
         type=syslog_ip,
         dest="syslog",
-        help="a special mode which watches for notification on a wireless interface such as connection and roaming events",
+        help="syslogs events from --watchevents to a remote syslog server",
     )
     parser.add_argument(
         "--debug",

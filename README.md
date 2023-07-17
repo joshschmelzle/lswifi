@@ -97,8 +97,10 @@ options:
   -g                    display filter to limit output by 2.4 GHz band
   -a                    display filter to limit output by 5 GHz band
   -six                  display filter to limit output by 6 GHz band
-  -include SSID         display filter to limit results by specified SSIDs (partial matching supported)
-  -exclude SSID         display filter to exclude results by specified SSIDs (partial matching supported)
+  -include SSID, -inc SSID
+                        display filter to limit results by specified SSIDs (partial matching supported)
+  -exclude SSID, -exc SSID
+                        display filter to exclude results by specified SSIDs (partial matching supported)
   -bssid BSSID          display filter to limit results by specified BSSIDs (partial matching supported)
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
@@ -109,7 +111,7 @@ options:
   -rnr, --rnr           special mode to create an alternate table based on RNR results
   --channel-width 20|40|80|160
                         display filter to limit output by a specified channel width
-  -ethers               display ap name column and use ethers files for the names
+  -ethers               adds an ap name column to output and use an ethers file for the ap names
   --append-ethers BSSID,APNAME
                         append BSSID and AP name to ethers file for AP names
   --display-ethers      display the list of saved ethers; (BSSID,APNAME) mapping
@@ -122,11 +124,14 @@ options:
   --json [JSON]         output will be formatted as json
   --indent 4            JSON output will be formatted with pretty print with provided indent level
   --csv [CSV]           output will be formatted as csv
-  -export [BSSID]       export bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
+  -export [BSSID], -exp [BSSID]
+                        export bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac        
+                        address of the BSSID as argument.
   -decode BYTEFILE      decode a raw .BSS or .IES file
   --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
   --watchevents         a special mode which watches for notification on a wireless interface such as connection and roaming events
-  --debug               increase verbosity in output for debugging
+  --syslog <server IP>  syslogs events from --watchevents to a remote syslog server
+  --debug               increase verbosity for debugging
 ```
 
 Upgrading
