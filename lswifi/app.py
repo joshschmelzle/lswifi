@@ -527,7 +527,6 @@ class lswifi:
                         user_bss = args.ies.lower()
                     if args.bytes:
                         user_bss = args.bytes.lower()
-
                     if args.export:
                         if args.export != "all":  # if lswifi -export xx:xx:xx:nn:nn:nn
                             user_bss = args.export
@@ -554,39 +553,40 @@ class lswifi:
                             bssfile.write(bss.bssbytes.send())
                         finally:
                             bssfile.close()
-                    bsspath = export_bss + ".bss"
-                    bssfile = open(os.path.join(exportpath, bsspath), "wb")
-                    try:
-                        bssfile.write(bss.bssbytes.send())
-                    finally:
-                        bssfile.close()
-
-                        iespath = export_bss + ".ies"
-                        # print(f"{os.path.join(exportpath, ies)}")
-                        # print(f"{type(bss.iesbytes)}")
-                        # print(f"{bss.iesbytes}")
-                        iesfile = open(os.path.join(exportpath, iespath), "wb")
+                            
+                        bsspath = export_bss + ".bss"
+                        bssfile = open(os.path.join(exportpath, bsspath), "wb")
                         try:
-                            iesfile.write(bss.iesbytes)
+                            bssfile.write(bss.bssbytes.send())
                         finally:
-                            iesfile.close()
+                            bssfile.close()
 
-                        # print(f"{bsspath} {iespath}")
-                        if args.export != "all":
-                            log.info(
-                                f"found and exporting requested bssid from the scan results of {client.mac}."
-                            )
-                            print(
-                                f"raw byte files for {args.export} exported to {exportpath}"
-                            )
-                            break
-                        elif (bss_len - 1) == index:
-                            log.info(
-                                f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
-                            )
-                            print(f"files exported to {exportpath}")
+                            iespath = export_bss + ".ies"
+                            # print(f"{os.path.join(exportpath, ies)}")
+                            # print(f"{type(bss.iesbytes)}")
+                            # print(f"{bss.iesbytes}")
+                            iesfile = open(os.path.join(exportpath, iespath), "wb")
+                            try:
+                                iesfile.write(bss.iesbytes)
+                            finally:
+                                iesfile.close()
 
-                        continue
+                            # print(f"{bsspath} {iespath}")
+                            if args.export != "all":
+                                log.info(
+                                    f"found and exporting requested bssid from the scan results of {client.mac}."
+                                )
+                                print(
+                                    f"raw byte files for {args.export} exported to {exportpath}"
+                                )
+                                break
+                            elif (bss_len - 1) == index:
+                                log.info(
+                                    f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
+                                )
+                                print(f"files exported to {exportpath}")
+
+                            continue
 
                     # compare if bss from list is the same as the one the user wants details for
                     if wlanapi_bss != user_bss:
