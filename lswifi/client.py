@@ -308,19 +308,19 @@ def get_interface_info(args, iface) -> str:
                         if args.raw:
                             return f"{bssid}, {channel}"
                         else:
-                            return f"Interface: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel}"
+                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel}"
 
                     if args.get_current_ap:
                         if args.raw:
                             return bssid
                         else:
-                            return f"Interface: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}"
+                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}"
 
                     if args.get_current_channel:
                         if args.raw:
                             return channel
                         else:
-                            return f"Interface: {iface.connection_name}, MAC: {iface.mac}. Channel: {channel}"
+                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, CHANNEL: {channel}"
         return outstr
     else:
         return ""
