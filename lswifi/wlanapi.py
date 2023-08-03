@@ -1575,6 +1575,8 @@ class WLAN:
         interfaces available.
         """
         ifaces = {}
+        wlan_interfaces = None
+        handle = None
         try:
             threads = list()
             handle = WLAN.open_handle()
@@ -1610,8 +1612,10 @@ class WLAN:
         except Exception:
             raise
         finally:
-            WLAN.free_memory(wlan_interfaces)
-            WLAN.close_handle(handle)
+            if wlan_interfaces:
+                WLAN.free_memory(wlan_interfaces)
+            if handle:
+                WLAN.close_handle(handle)
         return ifaces
 
     @staticmethod

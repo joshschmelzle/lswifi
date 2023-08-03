@@ -60,17 +60,20 @@ class lswifi:
         watching_events = True
         try:
             clients = {}
-            if args.event_watcher:
-                while watching_events:
-                    for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
-                        if "disabled" not in iface.mac:
-                            if iface.mac not in clients.keys():
-                                client = Client(args, iface)
-                                clients[iface.mac] = client
-                    sleep(2)
+            try:
+                if args.event_watcher:
+                    while watching_events:
+                        for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
+                            if "disabled" not in iface.mac:
+                                if iface.mac not in clients.keys():
+                                    client = Client(args, iface)
+                                    clients[iface.mac] = client
+                        sleep(2)
 
-            for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
-                clients[index] = Client(args, iface)
+                for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
+                    clients[index] = Client(args, iface)
+            except Exception as error:
+                log.error("%s" % error)
 
             if len(clients) == 0:
                 log.error(f"no wireless interfaces found")
