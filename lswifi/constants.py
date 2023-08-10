@@ -174,6 +174,11 @@ VENDOR_SPECIFIC_DICT = {
     "00:11:74": VENDOR("Mojo", "Mojo Networks, Inc."),
     "04:22:34": VENDOR("Wireless Standard Extensions", " Wireless Standard Extensions"),
     "18:FE:34": VENDOR("Espressif", "Espressif Inc."),
+    "00:50:43": VENDOR("Marvel", "Marvell Semiconductor Inc."),
+    "00:0F:7D": VENDOR("Xirrus", "Xirrus"),
+    "00:18:0A": VENDOR("Cisco Meraki", "Cisco Meraki"),
+    "00:20:91": VENDOR("J125, NSA", "J125, National Security Agency"),
+    "00:0C:42": VENDOR("Routerboard.com", "Routerboard.com"),
 }
 
 EXTENSION_IE_DICT = {

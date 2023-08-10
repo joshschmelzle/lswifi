@@ -7,7 +7,7 @@ UNRELEASED
 0.1.39 (XXXX-XX-XX)
 -------------------
 
-- TBD
+- Update vendor OUIs hash
 
 RELEASED
 --------
