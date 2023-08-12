@@ -179,6 +179,10 @@ VENDOR_SPECIFIC_DICT = {
     "00:18:0A": VENDOR("Cisco Meraki", "Cisco Meraki"),
     "00:20:91": VENDOR("J125, NSA", "J125, National Security Agency"),
     "00:0C:42": VENDOR("Routerboard.com", "Routerboard.com"),
+<<<<<<< HEAD
+=======
+    "00:1F:41": VENDOR("Ruckus", "Ruckus Wireless"),
+>>>>>>> main
 }
 
 EXTENSION_IE_DICT = {
