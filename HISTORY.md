@@ -4,13 +4,18 @@ Release History
 UNRELEASED
 ----------
 
-0.1.39 (XXXX-XX-XX)
+0.1.40 (XXXX-XX-XX)
 -------------------
 
 - Update vendor OUIs hash
 
 RELEASED
 --------
+
+0.1.39 (2023-08-17)
+-------------------
+
+- Update vendor OUIs hash
 
 0.1.38 (2023-07-18)
 -------------------
