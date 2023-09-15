@@ -46,6 +46,8 @@ class PHYType:
         self.value = value
 
     def get_amendment(self):
+        if self.value == "EHT":
+            return "be"
         if self.value == "HE":
             return "ax"
         if self.value == "VHT":
@@ -64,6 +66,8 @@ class PHYType:
         """
         https://www.wi-fi.org/discover-wi-fi/wi-fi-certified-6
         """
+        if self.value == "EHT":
+            return "7"
         if self.value == "HE":
             return "6"
         if self.value == "VHT":

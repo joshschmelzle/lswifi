@@ -63,7 +63,10 @@ class lswifi:
             try:
                 if args.event_watcher:
                     while watching_events:
-                        for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
+                        for (
+                            index,
+                            iface,
+                        ) in WLAN_API.WLAN.get_wireless_interfaces().items():
                             if "disabled" not in iface.mac:
                                 if iface.mac not in clients.keys():
                                     client = Client(args, iface)
@@ -556,7 +559,7 @@ class lswifi:
                             bssfile.write(bss.bssbytes.send())
                         finally:
                             bssfile.close()
-                            
+
                         bsspath = export_bss + ".bss"
                         bssfile = open(os.path.join(exportpath, bsspath), "wb")
                         try:

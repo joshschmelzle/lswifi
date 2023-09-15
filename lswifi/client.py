@@ -524,9 +524,7 @@ class Client(object):
                 # if the list is updated, grab the results
                 if str(wlan_event).strip() == "scan_list_refresh":
                     self.log.debug(f"({self.mac}), start get_bss_list...")
-                    self.data = self.get_bss_list(
-                        self.iface, bytes=self.args.bytes
-                    )
+                    self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
                     self.scan_finished = True
                     now = datetime.datetime
                     self.last_scan_time_epoch = now.utcnow().timestamp()

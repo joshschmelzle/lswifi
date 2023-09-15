@@ -4,13 +4,19 @@ Release History
 UNRELEASED
 ----------
 
-0.1.40 (XXXX-XX-XX)
+0.1.41 (xxxx/xx/xx)
 -------------------
 
-- Update vendor OUIs hash
+- TBD
 
 RELEASED
 --------
+
+0.1.40 (2023/09/15)
+-------------------
+
+- Update vendor OUIs hash
+- Fix Wi-Fi 7 PHY detection
 
 0.1.39 (2023-08-17)
 -------------------

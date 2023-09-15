@@ -2249,7 +2249,7 @@ class WirelessNetworkBss:
 
         if eid_ext == 106:  # BE EHT Operation
             if self is not None:
-                self.phy_type.name = "BE"
+                self.phy_type.name = "EHT"
                 if "be" not in self.modes:
                     self.modes.append("be")
 
