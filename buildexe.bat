@@ -1,0 +1,1 @@
+python -m PyInstaller --onefile --name "lswifi" ".\lswifi\__main__.py"
