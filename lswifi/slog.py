@@ -42,4 +42,7 @@ def message(message, level):
                     + ", Client: "
                     + message
                 )
-                SYSLOG_SOCKET.sendto(bytes(line_to_send, "utf-8"), (ip, 514))
+                try:
+                    SYSLOG_SOCKET.sendto(bytes(line_to_send, "utf-8"), (ip, 514))
+                except socket.error:
+                    pass
