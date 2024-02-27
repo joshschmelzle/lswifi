@@ -23,7 +23,7 @@ CIPHER_SUITE_DICT = {
     7: "Group addressed traffic not allowed",
     8: "GCMP-128",
     9: "GCMP-256",  # WPA3-Enterprise 00-0F-AC:9 / WPA3-Personal 00-0F-AC:9
-    10: "CMAC-256",
+    10: "CCMP-256",
     11: "BIP-GMAC-128",
     12: "BIP-GMAC-256",
     13: "BIP-CMAC-256",
