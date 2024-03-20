@@ -5,15 +5,13 @@
 #    pip-compile '.\requirements\format.in'
 #
 autoflake==2.0.2
-    # via -r .\requirements\format.in
-black==23.3.0
-    # via -r .\requirements\format.in
+    # via -r format.in
+black==24.3.0
+    # via -r format.in
 click==8.1.3
     # via black
-colorama==0.4.6
-    # via click
 isort==5.12.0
-    # via -r .\requirements\format.in
+    # via -r format.in
 mypy-extensions==1.0.0
     # via black
 packaging==23.0
@@ -28,3 +26,5 @@ tomli==2.0.1
     # via
     #   autoflake
     #   black
+typing-extensions==4.10.0
+    # via black
