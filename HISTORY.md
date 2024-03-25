@@ -4,6 +4,12 @@ Release History
 RELEASED
 --------
 
+0.1.42 (2024/03/25)
+-------------------
+
+- Fix MAC address detection for certain WLAN interfaces
+- Fix 320 MHz channel detection in 6 GHz for Wi-Fi 7
+
 0.1.41 (2023/09/22)
 -------------------
 
