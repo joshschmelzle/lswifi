@@ -210,6 +210,9 @@ EXTENSION_IE_DICT = {
     109: "(109) TID-To-Link Mapping",  # P802.11be_D2.3
     110: "(110) Multi-Link Traffic Indication",  # P802.11be_D2.3
     113: "(113) QoS Characteristics",  # P802.11be_D2.3
+    133: "(133) MLO Link Info",  # P802.11be_D5.0
+    134: "(134) AID Bitmap",  # P802.11be_D5.0
+    135: "(135) Bandwidth Indication",  # P802.11be_D5.0
 }
 
 
