@@ -724,17 +724,17 @@ class lswifi:
                                 if (
                                     scan_apname != cachedAP
                                 ):  # if current AP doesn't match whats in the json
-                                    newapnames[
-                                        scan_bssid
-                                    ] = scan_apname  # then 1) update new hash table with current AP name
+                                    newapnames[scan_bssid] = (
+                                        scan_apname  # then 1) update new hash table with current AP name
+                                    )
                                     bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
                             log.debug(
                                 f"BSSID from scan: {scan_bssid}, Name from cache: {cachedAP}, Name from scanned {scan_apname}"
                             )
                         elif scan_apname != "":  # working with new AP name
-                            newapnames[
-                                scan_bssid
-                            ] = scan_apname  # then 1) update new hash table with new AP name
+                            newapnames[scan_bssid] = (
+                                scan_apname  # then 1) update new hash table with new AP name
+                            )
 
                 # bss.element.out() contains a tuple with the following values
                 #   1. value, 2. header and alignment (left, center, right), 3. subheader
