@@ -9,6 +9,7 @@ mostly wrapper code around Native Wifi wlanapi.h
 
 import contextlib
 import logging
+import re
 import subprocess
 import sys
 import threading
@@ -891,6 +892,26 @@ class InformationElement(
         )
 
 
+class NetshWifiInterface:
+    def __init__(
+        self,
+        name,
+        description,
+        guid,
+        physical_address,
+        interface_type,
+        state,
+        primary_interface=None,
+    ):
+        self.name = name
+        self.description = description
+        self.guid = guid
+        self.physical_address = physical_address
+        self.interface_type = interface_type
+        self.state = state
+        self.primary_interface = primary_interface
+
+
 class WirelessInterface(object):
     """Data class for the wireless interface"""
 
@@ -905,32 +926,69 @@ class WirelessInterface(object):
         self.connection_name = "unknown"
         self.map_guid_to_mac_and_connection_name(self.guid, self.description)
 
+    def create_netsh_interface(self, info):
+        name = info.get("Name")
+        description = info.get("Description")
+        guid = info.get("GUID")
+        physical_address = info.get("Physical address")
+        interface_type = info.get("Interface type")
+        state = info.get("State")
+        primary_interface = info.get("Primary interface")
+        return NetshWifiInterface(
+            name,
+            description,
+            guid,
+            physical_address,
+            interface_type,
+            state,
+            primary_interface,
+        )
+
+    def parse_netsh_interfaces(self, output):
+        interfaces = []
+        interface_info = {}
+        lines = output.split("\n")
+        seen = False
+        for index, line in enumerate(lines):
+            match = re.match(r"^\s*([^:]+)\s*:\s*(.*)", line)
+            if match:
+                if "name" in line.lower():
+                    if not seen:
+                        interface_info = {}
+                        seen = True
+                    else:
+                        interfaces.append(self.create_netsh_interface(interface_info))
+                        interface_info = {}
+                        seen = False
+                key, value = match.groups()
+                interface_info[key.strip()] = value.strip()
+            if index == len(lines) - 1:
+                interfaces.append(self.create_netsh_interface(interface_info))
+        return interfaces
+
     def map_guid_to_mac_and_connection_name(self, guid, description) -> None:
-        if which("getmac.exe"):
+        if which("netsh.exe"):
             guid = str(guid)[1:-1]  # remove { } around guid
-            exe = (
-                'getmac.exe /FO "CSV" /V'  # use getmac.exe to map interface guid to mac
-            )
-            cmd = f"{exe}"
+            cmd = "netsh wlan show interfaces"  # use netsh wlan show interfaces to map interface guid to mac
             try:
-                output = run(
+                cp = run(
                     cmd,
                     stderr=subprocess.STDOUT,
                     stdout=subprocess.PIPE,
                     encoding="utf-8",
                     errors="ignore",
                 )
-                mac = ""
                 self.log.debug(
                     "checking output from '%s' to do a lookup on given guid for matching MAC and connection name",
-                    exe,
+                    cmd,
                 )
-                for line in output.stdout.strip().splitlines():
-                    if guid in line or description in line:
-                        connection = line.split(",")
-                        mac = connection[2].replace('"', "")
-                        self.mac = mac.lower().replace("-", ":")
-                        self.connection_name = connection[0].replace('"', "")
+
+                interfaces = self.parse_netsh_interfaces(cp.stdout)
+                print(interfaces)
+                for iface in interfaces:
+                    if guid.lower() in iface.guid.lower():
+                        self.mac = iface.physical_address
+                        self.connection_name = iface.name
                         self.log.debug(
                             f"guid {guid} maps to {self.mac} and {self.connection_name}"
                         )
