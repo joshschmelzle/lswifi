@@ -2199,11 +2199,11 @@ class WirelessNetworkBss:
 
                 # channel center frequency segment 0
                 six_channel_center_freq_seg_0 = body[six_ghz_ops_ie_position + 2]
-                out += f", Frequency Segment 0: {six_channel_center_freq_seg_0}"
+                out += f", CCFS 0: {six_channel_center_freq_seg_0}"
 
                 # channel center frequency segment 1
                 six_channel_center_freq_seg_1 = body[six_ghz_ops_ie_position + 3]
-                out += f", Frequency Segment 1: {six_channel_center_freq_seg_1}"
+                out += f", CCFS 1: {six_channel_center_freq_seg_1}"
 
                 if channel_width_value == 3:
                     if (
@@ -2247,11 +2247,63 @@ class WirelessNetworkBss:
         if eid_ext == 59:  # HE 6 GHz Band Capabilities
             pass
 
-        if eid_ext == 106:  # BE EHT Operation
+        if eid_ext == 106:  # Wi-Fi 7/BE/EHT Operation
+            eht_operation_parameters_position = 1
+            eht_operation_information_present = False
+
+            eht_operation_information_present = get_bit(
+                body[eht_operation_parameters_position], 0
+            )
+
+            # D5.0 9-404a
+            # Channel Width subfield encoding is as follows (B0-B2):
+            # Set to 0 for 20 MHz EHT BSS bandwidth.
+            # Set to 1 for 40 MHz EHT BSS bandwidth.
+            # Set to 2 for 80 MHz EHT BSS bandwidth.
+            # Set to 3 for 160 MHz EHT BSS bandwidth.
+            # Set to 4 for 320 MHz EHT BSS bandwidth.
+            # Values in the ranges 5 to 7 are reserved.
+
+            if eht_operation_information_present:
+                eht_control_field_position = eht_operation_parameters_position + 5
+                eht_channel_width_bit0 = get_bit(body[eht_control_field_position], 0)
+                eht_channel_width_bit1 = get_bit(body[eht_control_field_position], 1)
+                eht_channel_width_bit2 = get_bit(body[eht_control_field_position], 2)
+
+                eht_channel_width_bits = bools_to_binary_string(
+                    [
+                        eht_channel_width_bit2,
+                        eht_channel_width_bit1,
+                        eht_channel_width_bit0,
+                    ]
+                )
+                eht_cbw_value = binary_string_to_int(eht_channel_width_bits)
+                eht_cbw = "20"
+                if eht_cbw_value == 1:
+                    eht_cbw = "40"
+                if eht_cbw_value == 2:
+                    eht_cbw = "80"
+                if eht_cbw_value == 3:
+                    eht_cbw = "160"
+                if eht_cbw_value == 4:
+                    eht_cbw = "320"
+
+                out += f"Channel Width: {eht_cbw} MHz"
+
+                # channel center frequency segment 0
+                eht_ccfs0 = body[eht_control_field_position + 1]
+                out += f", CCFS 0: {eht_ccfs0}"
+
+                # channel center frequency segment 1
+                eht_ccfs1 = body[eht_control_field_position + 2]
+                out += f", CCFS 1: {eht_ccfs1}"
+
             if self is not None:
                 self.phy_type.name = "EHT"
                 if "be" not in self.modes:
                     self.modes.append("be")
+                if eht_operation_information_present:
+                    self.channel_width.value = eht_cbw
 
         if eid_ext == 107:  # BE Multi-Link
             pass
