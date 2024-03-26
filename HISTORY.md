@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.43 (2024/03/25)
+-------------------
+
+- Remove debug print statement added in 0.1.42
+
 0.1.42 (2024/03/25)
 -------------------
 

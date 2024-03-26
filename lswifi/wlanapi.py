@@ -984,7 +984,6 @@ class WirelessInterface(object):
                 )
 
                 interfaces = self.parse_netsh_interfaces(cp.stdout)
-                print(interfaces)
                 for iface in interfaces:
                     if guid.lower() in iface.guid.lower():
                         self.mac = iface.physical_address
