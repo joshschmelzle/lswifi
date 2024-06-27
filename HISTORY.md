@@ -4,6 +4,13 @@ Release History
 RELEASED
 --------
 
+0.1.44 (2024/06/27)
+-------------------
+
+- Rename AKM labels for concision and to match labels found in WFA deployment guide
+- Add Management MIC (MME) to IE dictionary
+- Add TWT Information Extension to Extension IE dictionary
+
 0.1.43 (2024/03/25)
 -------------------
 
