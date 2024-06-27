@@ -20,7 +20,7 @@ CIPHER_SUITE_DICT = {
     4: "AES",  # CCMP-128 WPA2-Enterprise 00-0F-AC:4 / WPA2-Personal 00-0F-AC:4
     5: "WEP-104",
     6: "BIP-CMAC-128",
-    7: "Group addressed traffic not allowed",
+    7: "Group not allowed",
     8: "GCMP-128",
     9: "GCMP-256",  # WPA3-Enterprise 00-0F-AC:9 / WPA3-Personal 00-0F-AC:9
     10: "CCMP-256",
@@ -33,31 +33,31 @@ CIPHER_SUITE_DICT = {
 
 AKM_SUITE_DICT = {
     0: "Reserved",
-    1: ".1X",  # WPA2-Enterprise aka 802.1X with SHA1
+    1: ".1X-SHA-1",  # WPA2-Enterprise aka 802.1X with SHA1
     2: "PSK",
-    3: "FT-.1X-SHA256",  # FT 802.1X with SHA256
+    3: "FT-.1X-SHA-256",  # FT 802.1X with SHA256
     4: "FT-PSK",
-    5: ".1X-SHA256",  # WPA3 - Enterprise aka 802.1X with SHA256
-    6: "PSK-SHA256",
-    7: "TDLS-SHA256",
+    5: ".1X-SHA-256",  # WPA3 - Enterprise aka 802.1X with SHA256
+    6: "PSK-SHA-256",
+    7: "TDLS-SHA-256",
     8: "SAE",  # SAE with p256 (HMAC-SHA-256)
     9: "FT-SAE",
     10: "APPeerKey",
-    11: ".1X-SuiteB-SHA256",
-    12: ".1X-SuiteB-SHA384",  # WPA3 - Enterprise 192-bit aka 802.1X with SHA384
-    13: "FT-.1X-SHA384",
-    14: "FILS-SIV-256",
-    15: "FILS-SIV-512",
-    16: "FT-FILS-SIV-256",
-    17: "FT-FILS-SIV-512",
+    11: ".1X-SuiteB-SHA-256", # WPA3 - Enterprise SuiteB (pre-CNSA)
+    12: ".1X-CNSA-SHA-384",  # WPA3 - Enterprise 192-bit (CNSA) aka 802.1X with SHA384
+    13: "FT-.1X-SHA-384",
+    14: "FILS-SHA-256",
+    15: "FILS-SHA-384",
+    16: "FT-FILS-SHA-256",
+    17: "FT-FILS-SHA-384",
     18: "OWE",
-    19: "FT-PSK-SHA384",
-    20: "PSK-SHA384",
+    19: "FT-PSK-SHA-384",
+    20: "PSK-SHA-384",
     21: "PASN",
-    22: ".1X-SHA384-FT",
-    23: ".1X-SHA384",
-    24: "SAE V. H.",  # SAE with p256 (HMAC-SHA-256), p384 (HMAC-SHA-384), or p521 (HMAC-SHA-521)
-    25: "FT-SAE V. H.",
+    22: ".1X-SHA-384-FT",
+    23: ".1X-SHA-384",
+    24: "SAE-GDH",  # SAE with p256 (HMAC-SHA-256), p384 (HMAC-SHA-384), or p521 (HMAC-SHA-521) depending on DH group 19, 20, or 21 respectively
+    25: "FT-SAE-GDH",  # see comment on 24
 }
 
 INTERWORKING_NETWORK_TYPE = {
@@ -120,6 +120,7 @@ IE_DICT = {
     71: "Multiple BSSID",
     72: "20/40 BSS Coexistence",
     74: "Overlapping BSS Scan Parameters",
+    76: "Management MIC (MME)",
     84: "SSID List",
     107: "Interworking",
     108: "Advertisement Protocol",
@@ -204,15 +205,16 @@ EXTENSION_IE_DICT = {
     58: "(58) Short SSID List",
     59: "(59) HE 6 GHz Band Capabilities",
     60: "(60) UL MU Power Capabilities",
-    106: "(106) EHT Operation",  # P802.11be_D2.3
-    107: "(107) Multi-Link",  # P802.11be_D2.3
-    108: "(108) EHT Capabilities",  # P802.11be_D2.3
-    109: "(109) TID-To-Link Mapping",  # P802.11be_D2.3
-    110: "(110) Multi-Link Traffic Indication",  # P802.11be_D2.3
-    113: "(113) QoS Characteristics",  # P802.11be_D2.3
-    133: "(133) MLO Link Info",  # P802.11be_D5.0
-    134: "(134) AID Bitmap",  # P802.11be_D5.0
-    135: "(135) Bandwidth Indication",  # P802.11be_D5.0
+    106: "(106) EHT Operation",  # P802.11be_D6.0
+    107: "(107) Multi-Link",  # P802.11be_D6.0
+    108: "(108) EHT Capabilities",  # P802.11be_D6.0
+    109: "(109) TID-To-Link Mapping",  # P802.11be_D6.0
+    110: "(110) Multi-Link Traffic Indication",  # P802.11be_D6.0
+    113: "(113) QoS Characteristics",  # P802.11be_D6.0
+    133: "(133) MLO Link Info",  # P802.11be_D6.0
+    134: "(134) AID Bitmap",  # P802.11be_D6.0
+    135: "(135) Bandwidth Indication",  # P802.11be_D6.0
+    141: "(141) TWT Information Extension",  # P802.11be_D6.0
 }
 
 
