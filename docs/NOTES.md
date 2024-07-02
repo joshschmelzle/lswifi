@@ -15,18 +15,20 @@ Definitions:
     - Client perspective
         - Client can only operate as a NIC. 
         - Has to use bits passing through it's interface to determine noise.
-- Noise floor definiton:
 
-| Bandwidth | Thermal noise power | Notes |
-| --------- | ------------- | --------- |
-| 1 MHz	    |    −114 dBm	| Bluetooth channel |
-| 2 MHz	    |    −111 dBm	| Commercial GPS channel |
-| 3.84 MHz	|    −108 dBm	| UMTS channel |
-| 6 MHz	    |    −106 dBm	| Analog television channel |
-| 20 MHz	|    −101 dBm	| WLAN 802.11 channel |
-| 40 MHz	|    −98 dBm 	| WLAN 802.11n 40 MHz channel |
-| 80 MHz	|    −95 dBm	| WLAN 802.11ac 80 MHz channel |
-| 160 MHz	|    −92 dBm	| WLAN 802.11ac 160 MHz channel |
+- Noise floor definition:
+
+| Bandwidth | Thermal noise power | Notes                         |
+| --------- | ------------------- | ----------------------------- |
+| 1 MHz	    |    −114 dBm	      | Bluetooth classic channel     |
+| 2 MHz	    |    −111 dBm	      | BLE / Commercial GPS channel  |
+| 3.84 MHz	|    −108 dBm	      | UMTS channel                  |
+| 6 MHz	    |    −106 dBm	      | Analog television channel     |
+| 20 MHz	|    −101 dBm	      | WLAN 802.11 channel           |
+| 40 MHz	|    −98 dBm 	      | WLAN 802.11n 40 MHz channel   |
+| 80 MHz	|    −95 dBm	      | WLAN 802.11ac 80 MHz channel  |
+| 160 MHz	|    −92 dBm	      | WLAN 802.11ac 160 MHz channel |
+| 320 MHz   |    -89 dBm          | WLAN 802.11be 320 MHz channel |
 
 Notes regarding 802.11:
 
@@ -43,7 +45,7 @@ Noise floor can not be retrieved threw Microsoft APIs such as the Native Wi-Fi A
 
 Values such as the noise floor can be queried by issuing a device specific OID (Atheros 5XXX chipset) to the NDIS driver. If memory serves me the OID for noise floor was 0xFF000020 (for a Atheros 5XXX chipset only).
 
-One way to figure out the custom OIDs is to use tools like “PCAGizmo” and OIDScope (http://www.pcausa.com/Utilities/utilities.htm) which allows you to trace all the calls to a NDIS driver. By using the wifi manager that comes with your wifi card (private-labeled Atheros utility) you will be able to trace (i.e. reverse engineer) the calls that get you information not found in the general purpose APIs.
+One way to figure out the custom OIDs is to use tools like "PCAGizmo" and OIDScope (http://www.pcausa.com/Utilities/utilities.htm) which allows you to trace all the calls to a NDIS driver. By using the wifi manager that comes with your wifi card (private-labeled Atheros utility) you will be able to trace (i.e. reverse engineer) the calls that get you information not found in the general purpose APIs.
 
 Here is a list that I found during a search online:
 
