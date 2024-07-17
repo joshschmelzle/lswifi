@@ -17,7 +17,7 @@ CIPHER_SUITE_DICT = {
     1: "WEP-40",  # WEP
     2: "TKIP",  # WPA-Personal (TKIP is limited to 54 Mbps)
     3: "Reserved",
-    4: "AES",  # CCMP-128 WPA2-Enterprise 00-0F-AC:4 / WPA2-Personal 00-0F-AC:4
+    4: "CCMP-128",  # CCMP-128 WPA2-Enterprise 00-0F-AC:4 / WPA2-Personal 00-0F-AC:4
     5: "WEP-104",
     6: "BIP-CMAC-128",
     7: "Group not allowed",
@@ -54,7 +54,7 @@ AKM_SUITE_DICT = {
     19: "FT-PSK-SHA-384",
     20: "PSK-SHA-384",
     21: "PASN",
-    22: ".1X-SHA-384-FT",
+    22: "FT-.1X-SHA-384",
     23: ".1X-SHA-384",
     24: "SAE-GDH",  # SAE with p256 (HMAC-SHA-256), p384 (HMAC-SHA-384), or p521 (HMAC-SHA-521) depending on DH group 19, 20, or 21 respectively
     25: "FT-SAE-GDH",  # see comment on 24
@@ -528,7 +528,7 @@ _6GHZ_160MHZ_CHANNEL_LIST = {
     "6985": "207",
 }
 
-# Based on P802.11be_D2.3
+# Based on P802.11be_D6.0 Annex E.1 Table E-4
 _6GHZ_320MHZ_CHANNEL_LIST = {
     "6105": "31",
     "6265": "63",
