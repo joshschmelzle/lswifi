@@ -2715,16 +2715,15 @@ class WirelessNetworkBss:
                 self.encryption.value = "".join(pairwise_list)
             else:
                 self.encryption.value = "{}/{}".format(
-                    ",".join(pairwise_list),
-                    CIPHER_SUITE_DICT[group_cipher_suite]
+                    ",".join(pairwise_list), CIPHER_SUITE_DICT[group_cipher_suite]
                 )
             self.security.value = "{}/{}/{}".format(
                 ",".join(akm_list),
                 ",".join(pairwise_list),
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
-        akm_ids = '/'.join(map(str, akm_ids))
-        akm_ouis = '/'.join(map(str, akm_ouis))
+        akm_ids = "/".join(map(str, akm_ids))
+        akm_ouis = "/".join(map(str, akm_ouis))
         out = (
             "Version: {} AKM: {} {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
                 str(version) + ",",

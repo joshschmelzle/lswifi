@@ -43,7 +43,7 @@ AKM_SUITE_DICT = {
     8: "SAE",  # SAE with p256 (HMAC-SHA-256)
     9: "FT-SAE",
     10: "APPeerKey",
-    11: ".1X-SuiteB-SHA-256", # WPA3 - Enterprise SuiteB (pre-CNSA)
+    11: ".1X-SuiteB-SHA-256",  # WPA3 - Enterprise SuiteB (pre-CNSA)
     12: ".1X-CNSA-SHA-384",  # WPA3 - Enterprise 192-bit (CNSA) aka 802.1X with SHA384
     13: "FT-.1X-SHA-384",
     14: "FILS-SHA-256",
