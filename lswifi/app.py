@@ -819,8 +819,11 @@ class lswifi:
                         bss.channel_number_marked.out(),
                         bss.channel_frequency.out(),
                         bss.spatial_streams.out(),
-                        bss.security.out(),
                         bss.amendments.out(),
+                        # bss.security.out(),
+                        bss.auth.out(),
+                        bss.encryption.out(),
+                        bss.pmf.out(),
                         bss.uptime.out(),
                     ]
                 )
