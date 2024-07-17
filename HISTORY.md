@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.45 (2024/07/02)
+-------------------
+
+- Rename cipher suite 00-0F-AC:4 from `AES` to `CCMP-128` to 1) match IEEE meaning and 2) with Wi-Fi 7 networks we will start to see GCMP-256 too, finally.
+
 0.1.44 (2024/06/27)
 -------------------
 

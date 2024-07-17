@@ -17,6 +17,10 @@ WORKFLOW
 9. Push code
 10. (maintainers only) build package and deploy to PyPI
 
+ - `python setup.py build`
+ - `python setup.py check`
+ - `python setup.py deploy`
+
 pip-compile
 -----------
 
