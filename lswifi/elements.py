@@ -25,11 +25,13 @@ from lswifi.constants import (
     _160MHZ_CHANNEL_LIST,
 )
 from lswifi.helpers import *
+from lswifi.schemas.auth import Auth
 from lswifi.schemas.band import *
 from lswifi.schemas.beacon import *
 from lswifi.schemas.bssid import *
 from lswifi.schemas.capabilities import *
 from lswifi.schemas.channel import *
+from lswifi.schemas.encryption import Encryption
 from lswifi.schemas.ie import *
 from lswifi.schemas.modes import *
 from lswifi.schemas.out import *
@@ -140,6 +142,8 @@ class WirelessNetworkBss:
             self.country_code = "--"
             self.apname = OutObject(header="AP NAME")
             self.security = Security(self.capabilities)
+            self.auth = Auth(self.capabilities)
+            self.encryption = Encryption()
             self.pmf = PMF()
             self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
             self.stations = OutObject(header="QBSS", subheader="STA")
@@ -2685,14 +2689,18 @@ class WirelessNetworkBss:
         index += 2
         akm_list = []
         count = 0
+        akm_ids = []
         akm_suite = 0
         # print("akm before index {}".format(index))
         # print("akm counter value {}".format(akm_cipher_suite_count))
+        akm_ouis = []
         while count < akm_cipher_suite_count:
             akm_oui = convert_mac_address_to_string(
                 [body[i] for i in [index, index + 1, index + 2]]
             )
+            akm_ouis.append(akm_oui)
             akm_suite = body[index + 3]
+            akm_ids.append(akm_suite)
             try:
                 akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
             except KeyError:
@@ -2702,17 +2710,27 @@ class WirelessNetworkBss:
         if akm_suite == 0:
             akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
         if self is not None:
+            self.auth.value = "{}".format(",".join(akm_list))
+            if "".join(pairwise_list) == str(CIPHER_SUITE_DICT[group_cipher_suite]):
+                self.encryption.value = "".join(pairwise_list)
+            else:
+                self.encryption.value = "{}/{}".format(
+                    ",".join(pairwise_list),
+                    CIPHER_SUITE_DICT[group_cipher_suite]
+                )
             self.security.value = "{}/{}/{}".format(
                 ",".join(akm_list),
                 ",".join(pairwise_list),
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
+        akm_ids = '/'.join(map(str, akm_ids))
+        akm_ouis = '/'.join(map(str, akm_ouis))
         out = (
             "Version: {} AKM: {} {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
                 str(version) + ",",
-                group_cipher_oui,
+                akm_ouis,
                 "/".join(akm_list),
-                f"({akm_suite})",
+                f"({akm_ids})",
                 "/".join(pairwise_list),
                 f"({pairwise_cipher_suite})",
                 CIPHER_SUITE_DICT[group_cipher_suite],
@@ -2771,7 +2789,7 @@ class WirelessNetworkBss:
             if MFPC:
                 self.pmf.value = "{}".format("Required" if MFPR else "Capable")
             else:
-                self.pmf.value = "--"
+                self.pmf.value = "Disabled"
             # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
         out += "RSN Capabilities: 0x{:02x}{:02x}, PMF Capable (MFPC): {}, PMF Required (MFPR): {}\n".format(
             int(RSN_CAP1),
