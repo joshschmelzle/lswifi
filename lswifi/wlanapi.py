@@ -109,8 +109,6 @@ except OSError:
     IPHLP_API_EXISTS = False
     print("!!! iphlpapi.dll not foud !!!")
 
-# Define necessary constants
-# ERROR_SUCCESS = 0   # SystemErrorCodes.ERROR_SUCCESS.value
 MAX_ADAPTER_NAME_LENGTH = 256
 MAX_ADAPTER_DESCRIPTION_LENGTH = 128
 MAX_ADAPTER_ADDRESS_LENGTH = 8
