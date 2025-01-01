@@ -924,7 +924,7 @@ class WirelessInterface(object):
         self.state_string = WLAN_INTERFACE_STATE_DICT.get(self.state, 0)
         self.mac = "unknown"
         self.connection_name = "unknown"
-        self.map_guid_to_mac_and_connection_name(self.guid, self.description)
+        self.map_guid_to_mac_and_connection_name(self.guid)
 
     def create_netsh_interface(self, info):
         name = info.get("Name")
@@ -966,7 +966,7 @@ class WirelessInterface(object):
                 interfaces.append(self.create_netsh_interface(interface_info))
         return interfaces
 
-    def map_guid_to_mac_and_connection_name(self, guid, description) -> None:
+    def map_guid_to_mac_and_connection_name(self, guid) -> None:
         if which("netsh.exe"):
             guid = str(guid)[1:-1]  # remove { } around guid
             cmd = "netsh wlan show interfaces"  # use netsh wlan show interfaces to map interface guid to mac
@@ -979,20 +979,27 @@ class WirelessInterface(object):
                     errors="ignore",
                 )
                 self.log.debug(
-                    "checking output from '%s' to do a lookup on given guid for matching MAC and connection name",
+                    "checking output from '%s' to match guid (%s) a MAC address and connection name",
                     cmd,
+                    guid,
                 )
+                mapped = False
 
                 interfaces = self.parse_netsh_interfaces(cp.stdout)
                 for iface in interfaces:
                     if iface.guid:
                         if guid.lower() in iface.guid.lower():
+                            mapped = True
                             self.mac = iface.physical_address
                             self.connection_name = iface.name
                             self.log.debug(
-                                f"guid {guid} maps to {self.mac} and {self.connection_name}"
+                                f"guid ({guid}) maps to {self.mac} and {self.connection_name}"
                             )
                             break
+                if not mapped:
+                    self.log.debug(
+                        "failed to map guid (%s) to a MAC address from '%s'", guid, cmd
+                    )
             except SubprocessError as error:
                 raise error
         else:
