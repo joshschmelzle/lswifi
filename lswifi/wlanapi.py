@@ -985,13 +985,14 @@ class WirelessInterface(object):
 
                 interfaces = self.parse_netsh_interfaces(cp.stdout)
                 for iface in interfaces:
-                    if guid.lower() in iface.guid.lower():
-                        self.mac = iface.physical_address
-                        self.connection_name = iface.name
-                        self.log.debug(
-                            f"guid {guid} maps to {self.mac} and {self.connection_name}"
-                        )
-                        break
+                    if iface.guid:
+                        if guid.lower() in iface.guid.lower():
+                            self.mac = iface.physical_address
+                            self.connection_name = iface.name
+                            self.log.debug(
+                                f"guid {guid} maps to {self.mac} and {self.connection_name}"
+                            )
+                            break
             except SubprocessError as error:
                 raise error
         else:
