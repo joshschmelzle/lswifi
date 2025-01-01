@@ -4,6 +4,12 @@ Release History
 RELEASED
 --------
 
+0.1.46 (2024/12/31)
+-------------------
+
+- Fixed a crash occurring when mapping an interface GUID to a physical address on systems with certain administrative language settings.
+- Drop support for Python 3.7-3.8
+
 0.1.45 (2024/07/02)
 -------------------
 
@@ -22,7 +28,7 @@ RELEASED
 
 - Remove debug print statement added in 0.1.42
 
-0.1.42 (2024/03/25)
+0.1.42 (2024/03/25)`
 -------------------
 
 - Fix MAC address detection for certain WLAN interfaces

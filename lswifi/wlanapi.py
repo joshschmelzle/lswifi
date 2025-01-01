@@ -9,14 +9,14 @@ mostly wrapper code around Native Wifi wlanapi.h
 
 import contextlib
 import logging
-import re
-import subprocess
 import sys
 import threading
+from collections import namedtuple
 from ctypes import (
     c_bool,
     c_byte,
     c_char,
+    c_char_p,
     c_long,
     c_ubyte,
     c_uint,
@@ -25,10 +25,11 @@ from ctypes import (
     c_ushort,
     c_void_p,
     c_wchar,
+    c_wchar_p,
+    cast,
+    create_string_buffer,
 )
 from enum import Enum
-from shutil import which
-from subprocess import SubprocessError, run
 
 from lswifi.guid import GUID
 
@@ -88,14 +89,107 @@ WLAN_REASON_CODE = DWORD
 ## (MAC) address: `typedef UCHAR DOT11_MAC_ADDRESS[6];`
 DOT11_MAC_ADDRESS = c_ubyte * 6
 
+# load wlanapi.dll into memory
+
 WLAN_API_EXISTS = True
 
-# load wlanapi.dll into memory
 try:
     WLAN_API = windll.LoadLibrary("wlanapi.dll")
 except OSError:
     WLAN_API_EXISTS = False
     print("!!! wlanapi.dll not foud !!!")
+
+# load iphlpapi.dll into memory
+
+IPHLP_API_EXISTS = True
+
+try:
+    IPHLP_API = windll.LoadLibrary("iphlpapi.dll")
+except OSError:
+    IPHLP_API_EXISTS = False
+    print("!!! iphlpapi.dll not foud !!!")
+
+# Define necessary constants
+# ERROR_SUCCESS = 0   # SystemErrorCodes.ERROR_SUCCESS.value
+MAX_ADAPTER_NAME_LENGTH = 256
+MAX_ADAPTER_DESCRIPTION_LENGTH = 128
+MAX_ADAPTER_ADDRESS_LENGTH = 8
+
+# IP_ADAPTER_ADDRESSES structure
+
+
+# Define IP_ADAPTER_ADDRESSES structure
+class IP_ADAPTER_ADDRESSES(Structure):
+    pass  # This will be dynamically extended
+
+
+LP_IP_ADAPTER_ADDRESSES = POINTER(IP_ADAPTER_ADDRESSES)
+
+IP_ADAPTER_ADDRESSES._fields_ = [
+    ("Length", DWORD),
+    ("IfIndex", DWORD),
+    ("Next", LP_IP_ADAPTER_ADDRESSES),
+    ("AdapterName", c_char_p),
+    ("FirstUnicastAddress", c_void_p),
+    ("FirstAnycastAddress", c_void_p),
+    ("FirstMulticastAddress", c_void_p),
+    ("FirstDnsServerAddress", c_void_p),
+    ("DnsSuffix", c_wchar_p),
+    ("Description", c_wchar_p),
+    ("FriendlyName", c_wchar_p),
+    ("PhysicalAddress", c_ubyte * MAX_ADAPTER_ADDRESS_LENGTH),
+    ("PhysicalAddressLength", DWORD),
+    ("Flags", DWORD),
+    ("Mtu", DWORD),
+    ("IfType", DWORD),
+    ("OperStatus", DWORD),
+    ("Ipv6IfIndex", DWORD),
+    ("ZoneIndices", DWORD * 16),
+    ("FirstPrefix", c_void_p),
+]
+
+NetworkAdapter = namedtuple(
+    "NetworkAdapter", ["mac_address", "description", "friendly_name"]
+)
+
+
+def get_adapter_infos_by_guid(interface_guid):
+    buffer_size = c_ulong(15000)
+    adapter_addresses = create_string_buffer(buffer_size.value)
+    result = IPHLP_API.GetAdaptersAddresses(
+        0,  # Family (0 = unspecified, returns both IPv4 and IPv6)
+        0,  # Flags
+        None,  # Reserved
+        byref(adapter_addresses),
+        byref(buffer_size),
+    )
+
+    if result != SystemErrorCodes.ERROR_SUCCESS.value:
+        raise RuntimeError(
+            f"Failed to retrieve adapter addresses, error code: {result}"
+        )
+
+    adapter = cast(adapter_addresses, POINTER(IP_ADAPTER_ADDRESSES))
+
+    while adapter:
+        # Convert adapter name to GUID format and compare
+        adapter_name = adapter.contents.AdapterName.decode()
+        guid_str = f"{adapter_name}"
+        if guid_str.lower() == str(interface_guid).lower():
+            mac_address = adapter.contents.PhysicalAddress
+            mac_length = adapter.contents.PhysicalAddressLength
+            return NetworkAdapter(
+                mac_address=":".join(
+                    f"{mac_address[i]:02X}" for i in range(mac_length)
+                ),
+                description=adapter.contents.Description,
+                friendly_name=adapter.contents.FriendlyName,
+            )
+
+        adapter = adapter.contents.Next
+
+    # raise ValueError("GUID not found among physical adapters")
+
 
 # DOT11_AUTH_ALGORITHM enumeration
 
@@ -892,26 +986,6 @@ class InformationElement(
         )
 
 
-class NetshWifiInterface:
-    def __init__(
-        self,
-        name,
-        description,
-        guid,
-        physical_address,
-        interface_type,
-        state,
-        primary_interface=None,
-    ):
-        self.name = name
-        self.description = description
-        self.guid = guid
-        self.physical_address = physical_address
-        self.interface_type = interface_type
-        self.state = state
-        self.primary_interface = primary_interface
-
-
 class WirelessInterface(object):
     """Data class for the wireless interface"""
 
@@ -922,90 +996,16 @@ class WirelessInterface(object):
         self.guid_string = str(wlan_iface_info.InterfaceGuid)
         self.state = wlan_iface_info.isState
         self.state_string = WLAN_INTERFACE_STATE_DICT.get(self.state, 0)
-        self.mac = "unknown"
+        adapter_info = get_adapter_infos_by_guid(self.guid_string)
         self.connection_name = "unknown"
-        self.map_guid_to_mac_and_connection_name(self.guid)
-
-    def create_netsh_interface(self, info):
-        name = info.get("Name")
-        description = info.get("Description")
-        guid = info.get("GUID")
-        physical_address = info.get("Physical address")
-        interface_type = info.get("Interface type")
-        state = info.get("State")
-        primary_interface = info.get("Primary interface")
-        return NetshWifiInterface(
-            name,
-            description,
-            guid,
-            physical_address,
-            interface_type,
-            state,
-            primary_interface,
-        )
-
-    def parse_netsh_interfaces(self, output):
-        interfaces = []
-        interface_info = {}
-        lines = output.split("\n")
-        seen = False
-        for index, line in enumerate(lines):
-            match = re.match(r"^\s*([^:]+)\s*:\s*(.*)", line)
-            if match:
-                if "name" in line.lower():
-                    if not seen:
-                        interface_info = {}
-                        seen = True
-                    else:
-                        interfaces.append(self.create_netsh_interface(interface_info))
-                        interface_info = {}
-                        seen = False
-                key, value = match.groups()
-                interface_info[key.strip()] = value.strip()
-            if index == len(lines) - 1:
-                interfaces.append(self.create_netsh_interface(interface_info))
-        return interfaces
-
-    def map_guid_to_mac_and_connection_name(self, guid) -> None:
-        if which("netsh.exe"):
-            guid = str(guid)[1:-1]  # remove { } around guid
-            cmd = "netsh wlan show interfaces"  # use netsh wlan show interfaces to map interface guid to mac
-            try:
-                cp = run(
-                    cmd,
-                    stderr=subprocess.STDOUT,
-                    stdout=subprocess.PIPE,
-                    encoding="utf-8",
-                    errors="ignore",
-                )
-                self.log.debug(
-                    "checking output from '%s' to match guid (%s) a MAC address and connection name",
-                    cmd,
-                    guid,
-                )
-                mapped = False
-
-                interfaces = self.parse_netsh_interfaces(cp.stdout)
-                for iface in interfaces:
-                    if iface.guid:
-                        if guid.lower() in iface.guid.lower():
-                            mapped = True
-                            self.mac = iface.physical_address
-                            self.connection_name = iface.name
-                            self.log.debug(
-                                f"guid ({guid}) maps to {self.mac} and {self.connection_name}"
-                            )
-                            break
-                if not mapped:
-                    self.log.debug(
-                        "failed to map guid (%s) to a MAC address from '%s'", guid, cmd
-                    )
-            except SubprocessError as error:
-                raise error
-        else:
-            self.log.warn(
-                f"Unable to find getmac.exe to map {self.guid} to a physical address"
-            )
+        self.description = "unknown"
+        self.mac = "unknown"
+        if adapter_info:
+            self.mac = adapter_info.mac_address
+            if self.mac:
+                self.mac = self.mac.lower()
+            self.connection_name = adapter_info.friendly_name
+            self.description = adapter_info.description
 
     def __str__(self):
         return f"Interface: {self.__dict__}"
