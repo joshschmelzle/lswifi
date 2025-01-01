@@ -28,7 +28,7 @@ RELEASED
 
 - Remove debug print statement added in 0.1.42
 
-0.1.42 (2024/03/25)`
+0.1.42 (2024/03/25)
 -------------------
 
 - Fix MAC address detection for certain WLAN interfaces
