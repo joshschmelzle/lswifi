@@ -174,14 +174,14 @@ Check the version installed:
 Looking to install a specific version of lswifi?
 
 ```bash
-python -m pip install lswifi==0.1.33
+python -m pip install lswifi==0.1.47.post1
 ```
 
 FAQs
 ----
 
 1. What OSes and Python versions are required to run `lswifi`?
-    - Windows 10+ and Python 3.7 are the current minimum versions we're willing to support (subject to change).
+    - Windows 10+ and Python 3.9 are the current minimum versions I'm willing to support (subject to change based on the [official Python release cycle](https://devguide.python.org/versions/)).
     - Windows 11 and capable interface required for 6 GHz support. Don't have 6 GHz capable interface? Try `lswifi -rnr` with multi-band 6 GHz APs nearby.
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
