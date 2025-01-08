@@ -152,7 +152,19 @@ NetworkAdapter = namedtuple(
 
 
 def get_adapter_infos_by_guid(interface_guid):
-    buffer_size = c_ulong(15000)
+    # Call with 0 size to get required buffer size first
+    buffer_size = c_ulong(0)
+    result = IPHLP_API.GetAdaptersAddresses(
+        0,  # Family
+        0,  # Flags
+        None,  # Reserved
+        None,  # Buffer
+        byref(buffer_size)
+    )
+    
+    print(buffer_size)
+    sys.exit(-1)
+    
     adapter_addresses = create_string_buffer(buffer_size.value)
     result = IPHLP_API.GetAdaptersAddresses(
         0,  # Family (0 = unspecified, returns both IPv4 and IPv6)

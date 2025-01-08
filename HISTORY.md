@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.47 (2025/01/07)
+-------------------
+
+- Fixed buffer overflow crash in interface enumeration by dynamically allocating buffer size instead of using fixed limit (introduced in 0.1.46).
+
 0.1.46 (2024/12/31)
 -------------------
 
