@@ -163,7 +163,6 @@ def get_adapter_infos_by_guid(interface_guid):
     )
     
     print(buffer_size)
-    sys.exit(-1)
     
     adapter_addresses = create_string_buffer(buffer_size.value)
     result = IPHLP_API.GetAdaptersAddresses(
