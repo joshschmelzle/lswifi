@@ -162,8 +162,6 @@ def get_adapter_infos_by_guid(interface_guid):
         byref(buffer_size)
     )
     
-    print(buffer_size)
-    
     adapter_addresses = create_string_buffer(buffer_size.value)
     result = IPHLP_API.GetAdaptersAddresses(
         0,  # Family (0 = unspecified, returns both IPv4 and IPv6)
