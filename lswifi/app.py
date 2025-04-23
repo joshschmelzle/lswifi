@@ -530,7 +530,7 @@ class lswifi:
                 if args.ies or args.export:
                     wlanapi_bss = str(bss.bssid).lower()
                     if args.ies:
-                        user_bss = args.ies.lower()
+                        user_bss = args.ies.lower().replace("-",":").replace(".",":")
                     if args.bytes:
                         user_bss = args.bytes.lower()
                     if args.export:
