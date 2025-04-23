@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.48 (2025/04/23)
+-------------------
+
+- Add GPS ellipse IE for HPE Aruba Networking.
+
 0.1.47 (2025/01/07)
 -------------------
 

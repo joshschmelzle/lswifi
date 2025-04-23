@@ -1488,9 +1488,9 @@ class WirelessNetworkBss:
             out = f"OUI: 00:0b:86 (HPE Aruba Networking)"
             if vendor_oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
-                if oui_subtype == 1: # CAC
+                if oui_subtype == 1:  # CAC
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, CAC"
-                elif oui_subtype == 2: # Mesh
+                elif oui_subtype == 2:  # Mesh
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, Mesh"
                 elif oui_subtype == 3:  # AP Name
                     # element_body[5]
@@ -1501,57 +1501,71 @@ class WirelessNetworkBss:
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Name: {apname}"
                     if self is not None:
                         self.apname.value = apname
-                elif oui_subtype == 4: # ARM
+                elif oui_subtype == 4:  # ARM
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, ARM"
-                elif oui_subtype == 5: # SLB
+                elif oui_subtype == 5:  # SLB
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, SLB"
-                elif oui_subtype == 6: # SJ_LOOP_PROTECT
+                elif oui_subtype == 6:  # SJ_LOOP_PROTECT
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, SJ_LOOP_PROTECT"
-                elif oui_subtype == 7: # Auto mesh
+                elif oui_subtype == 7:  # Auto mesh
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, Auto Mesh"
-                elif oui_subtype == 8: # LCI
+                elif oui_subtype == 8:  # LCI
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, LCI"
-                elif oui_subtype == 9: # GPS
+                elif oui_subtype == 9:  # GPS
                     gps = ""
-                    try: 
+                    try:
                         data_start = 6
-                        
-                        if len(memoryview_body) >= data_start + 51: 
+
+                        if len(memoryview_body) >= data_start + 51:
                             length = int(memoryview_body[data_start])
                             subversion = memoryview_body[data_start + 1]
                             hop = memoryview_body[data_start + 2]
-                            
+
                             # Extract doubles (8-byte values)
-                            latitude_bytes = bytes(memoryview_body[data_start + 3:data_start + 11])
-                            longitude_bytes = bytes(memoryview_body[data_start + 11:data_start + 19])
-                            major_axis_bytes = bytes(memoryview_body[data_start + 19:data_start + 27])
-                            minor_axis_bytes = bytes(memoryview_body[data_start + 27:data_start + 35])
-                            orientation_bytes = bytes(memoryview_body[data_start + 35:data_start + 43])
-                            distance_bytes = bytes(memoryview_body[data_start + 43:data_start + 51])
-                            
+                            latitude_bytes = bytes(
+                                memoryview_body[data_start + 3 : data_start + 11]
+                            )
+                            longitude_bytes = bytes(
+                                memoryview_body[data_start + 11 : data_start + 19]
+                            )
+                            major_axis_bytes = bytes(
+                                memoryview_body[data_start + 19 : data_start + 27]
+                            )
+                            minor_axis_bytes = bytes(
+                                memoryview_body[data_start + 27 : data_start + 35]
+                            )
+                            orientation_bytes = bytes(
+                                memoryview_body[data_start + 35 : data_start + 43]
+                            )
+                            distance_bytes = bytes(
+                                memoryview_body[data_start + 43 : data_start + 51]
+                            )
+
                             # Unpack network byte order (big-endian) doubles
-                            latitude = struct.unpack('>d', latitude_bytes)[0]
-                            longitude = struct.unpack('>d', longitude_bytes)[0]
-                            major_axis = struct.unpack('>d', major_axis_bytes)[0]
-                            minor_axis = struct.unpack('>d', minor_axis_bytes)[0]
-                            orientation = struct.unpack('>d', orientation_bytes)[0]
-                            distance = struct.unpack('>d', distance_bytes)[0]
-                            
+                            latitude = struct.unpack(">d", latitude_bytes)[0]
+                            longitude = struct.unpack(">d", longitude_bytes)[0]
+                            major_axis = struct.unpack(">d", major_axis_bytes)[0]
+                            minor_axis = struct.unpack(">d", minor_axis_bytes)[0]
+                            orientation = struct.unpack(">d", orientation_bytes)[0]
+                            distance = struct.unpack(">d", distance_bytes)[0]
+
                             valid_data = (
-                                -90 <= latitude <= 90 and 
-                                -180 <= longitude <= 180 and
-                                major_axis >= 0 and 
-                                minor_axis >= 0 and
-                                0 <= orientation <= 360
+                                -90 <= latitude <= 90
+                                and -180 <= longitude <= 180
+                                and major_axis >= 0
+                                and minor_axis >= 0
+                                and 0 <= orientation <= 360
                             )
                             if valid_data:
-                                gps = (f"length: {length}, subversion: {subversion}, hop: {hop}, "
+                                gps = (
+                                    f"length: {length}, subversion: {subversion}, hop: {hop}, "
                                     f"lat: {latitude:.6f}, long: {longitude:.6f}, "
                                     f"major_axis: {major_axis:.2f}m, minor_axis: {minor_axis:.2f}m, "
-                                    f"orientation: {orientation:.2f}°, distance: {distance:.2f}m")
+                                    f"orientation: {orientation:.2f}°, distance: {distance:.2f}m"
+                                )
                             else:
                                 gps = "invalid GPS data values"
-                                
+
                             # gps = (f"length: {length}, subversion: {subversion}, hop: {hop}, "
                             #     f"lat: {latitude:.6f}, long: {longitude:.6f}, "
                             #     f"major_axis: {major_axis:.2f}m, minor_axis: {minor_axis:.2f}m, "
