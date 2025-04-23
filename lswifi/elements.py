@@ -1557,25 +1557,18 @@ class WirelessNetworkBss:
                                 and 0 <= orientation <= 360
                             )
                             if valid_data:
+                                # gps = (f"length: {length}, subversion: {subversion}, hop: {hop}, "
+                                #     f"lat: {latitude:.6f}, long: {longitude:.6f}, "
+                                #     f"major_axis: {major_axis:.2f}m, minor_axis: {minor_axis:.2f}m, "
+                                #     f"orientation: {orientation:.2f}°, distance: {distance:.2f}m")
                                 gps = (
-                                    f"length: {length}, subversion: {subversion}, hop: {hop}, "
-                                    f"lat: {latitude:.6f}, long: {longitude:.6f}, "
-                                    f"major_axis: {major_axis:.2f}m, minor_axis: {minor_axis:.2f}m, "
-                                    f"orientation: {orientation:.2f}°, distance: {distance:.2f}m"
+                                    f"length: {length}, subver: {subversion}, hop: {hop}, "
+                                    f"coords: [{latitude:.6f}, {longitude:.6f}], "
+                                    f"ellipse: [{major_axis:.2f}m x {minor_axis:.2f}m, {orientation:.2f}°], "
+                                    f"distance: {distance:.2f}m"
                                 )
                             else:
                                 gps = "invalid GPS data values"
-
-                            # gps = (f"length: {length}, subversion: {subversion}, hop: {hop}, "
-                            #     f"lat: {latitude:.6f}, long: {longitude:.6f}, "
-                            #     f"major_axis: {major_axis:.2f}m, minor_axis: {minor_axis:.2f}m, "
-                            #     f"orientation: {orientation:.2f}°, distance: {distance:.2f}m")
-                            gps = (
-                                f"length: {length}, subver: {subversion}, hop: {hop}, "
-                                f"coords: [{latitude:.6f}, {longitude:.6f}], "
-                                f"ellipse: [{major_axis:.2f}m x {minor_axis:.2f}m, {orientation:.2f}°], "
-                                f"distance: {distance:.2f}m"
-                            )
                         else:
                             gps = "not enough expected data"
                     except Exception as e:
