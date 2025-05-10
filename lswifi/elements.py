@@ -964,6 +964,17 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        if element_id == 69:
+            decoded = WirelessNetworkBss.__parse_time_advertisement(self, element_data)
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
         # 802.11-2016 9.4.2.45 RM Enabled Capabilities element (70)
         if element_id == 70:
             decoded = WirelessNetworkBss.__parse_rm_enabled_capabilities_element(
@@ -1604,6 +1615,143 @@ class WirelessNetworkBss:
                             f"{self.bssid if self is not None else 'unknown BSSID'}: couldn't parse GPS ellipse IE: {str(e)}"
                         )
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, GPS Ellipse: {gps}"
+                elif oui_subtype == 10:  # AP Health
+                    check = memoryview_body[5:]
+                    if len(check) >= 5:
+                        health_bytes = bytes(memoryview_body[5:9])
+                        health_value = int.from_bytes(health_bytes, byteorder="big")
+                        version_map = {0: "1"}
+                        ip_protocol_map = {0: "IPv4", 1: "IPv6"}
+                        uplink_map = {0: "Uplink exists", 1: "No uplink"}
+                        uplink_type_map = {
+                            0: "Ethernet",
+                            1: "Modem",
+                            2: "Mesh",
+                            3: "Wi-Fi uplink",
+                        }
+                        network_layer_map = {
+                            0: "Success",
+                            1: "Missing IP",
+                            2: "No IP address (PPPoE failure)",
+                            3: "No IP address (DHCP failure)",
+                            4: "Missing DGW IP address",
+                            5: "NTP date & time sync failure",
+                            6: "HCM status down",
+                        }
+                        proxy_server_map = {
+                            0: "Success",
+                            1: "Authentication failure",
+                            2: "Proxy server connection error",
+                            3: "Failure at previous layer",
+                        }
+                        activate_map = {
+                            0: "Success",
+                            1: "Unable to resolve A/AAAA",
+                            2: "IP connection failure",
+                            3: "HTTPS (TLS) failure",
+                            4: "Mandatory upgrade failure",
+                            5: "Slow mandatory upgrade",
+                            6: "No provisioning rule",
+                            7: "Invalid activate response",
+                            8: "Failure at previous layer",
+                        }
+                        central_map = {
+                            0: "Success",
+                            1: "Unable to resolve A/AAAA",
+                            2: "IP connection failure",
+                            3: "HTTPS (TLS) failure",
+                            4: "Websocket (WSS) failure",
+                            5: "No AP license",
+                            6: "Other failure",
+                            7: "Failure at previous layer",
+                        }
+
+                        version = (health_value >> 29) & 0x7  # bits 0-2
+                        ip_protocol = (health_value >> 28) & 0x1  # bit 3
+                        uplink = (health_value >> 27) & 0x1  # bit 4
+                        uplink_type = (health_value >> 24) & 0x7  # bits 5-7
+                        network_layer = (health_value >> 20) & 0xF  # bits 8-11
+                        proxy_server = (health_value >> 18) & 0x3  # bits 12-13
+                        activate = (health_value >> 14) & 0xF  # bits 14-17
+                        central = (health_value >> 11) & 0x7  # bits 18-20
+                        reserved = health_value & 0x7FF  # bits 21-31
+
+                        ap_health_map = {
+                            "version": {
+                                "val": version,
+                                "meaning": version_map.get(
+                                    version, f"Unknown ({version})"
+                                ),
+                            },
+                            "ip_protocol": {
+                                "val": ip_protocol,
+                                "meaning": ip_protocol_map.get(
+                                    ip_protocol, f"Unknown ({ip_protocol})"
+                                ),
+                            },
+                            "uplink": {
+                                "val": uplink,
+                                "meaning": uplink_map.get(
+                                    uplink, f"Unknown ({uplink})"
+                                ),
+                            },
+                            "uplink_type": {
+                                "val": uplink_type,
+                                "meaning": uplink_type_map.get(
+                                    uplink_type, f"Unknown ({uplink_type})"
+                                ),
+                            },
+                            "network_layer": {
+                                "val": network_layer,
+                                "meaning": network_layer_map.get(
+                                    network_layer, f"Unknown ({network_layer})"
+                                ),
+                            },
+                            "proxy_server": {
+                                "val": proxy_server,
+                                "meaning": proxy_server_map.get(
+                                    proxy_server, f"Unknown ({proxy_server})"
+                                ),
+                            },
+                            "activate": {
+                                "val": activate,
+                                "meaning": activate_map.get(
+                                    activate, f"Unknown ({activate})"
+                                ),
+                            },
+                            "central": {
+                                "val": central,
+                                "meaning": central_map.get(
+                                    central, f"Unknown ({central})"
+                                ),
+                            },
+                            "reserved": {"val": reserved},
+                        }
+
+                        ap_health = [
+                            # f"Version: {ap_health_map['version']['meaning']}",
+                            f"IP protocol: {ap_health_map['ip_protocol']['meaning']}",
+                            f"Uplink: {ap_health_map['uplink']['meaning']}",
+                            f"Uplink type: {ap_health_map['uplink_type']['meaning']}",
+                            f"Network layer: {ap_health_map['network_layer']['meaning']}",
+                            f"Proxy server: {ap_health_map['proxy_server']['meaning']}",
+                            f"Activate: {ap_health_map['activate']['meaning']}",
+                            f"Central: {ap_health_map['central']['meaning']}",
+                            # f"Reserved: {ap_health_map['reserved']['val']}"
+                        ]
+
+                        summary = ""
+                        for v in ap_health:
+                            summary += f"\n  {v}"
+
+                    else:
+                        log.warning(
+                            "Not enough data to extract AP Health IE from HPE Aruba Networking frame"
+                        )
+                        out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health IE: parser error"
+                        return out
+
+                    out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health: 0x{element_data[5:].hex()}{summary}"
             return out
         if "00:13:92" in oui:  # Ruckus
             out = f"OUI: {oui} (Ruckus Wireless)"
@@ -2713,6 +2861,20 @@ class WirelessNetworkBss:
             f"HT Channel Width: {sta_channel_width}, "
             f"Secondary Channel Offset: {secondary_channel_offset}"
         )
+
+    def __parse_time_advertisement(self, element_data):
+        """
+        9.4.2.59 Time Advertisement element
+
+        The Time Advertisement element, shown in Figure 9-468, specifies fields describing the source of time
+        corresponding to a time standard, an external clock (external time source), an estimate of the offset between
+        that time standard and the TSF timer, and an estimate of the standard deviation of the error in the offset
+        estimate. This information is used by a receiving STA to align its own estimate of the time standard based on
+        that of another STA.
+        """
+        body = list(memoryview(element_data))
+        out = f"Octets: {len(body)}, 0x{element_data.hex()}"
+        return out
 
     def __parse_ht_capabilities_element(self, edata):
         """
