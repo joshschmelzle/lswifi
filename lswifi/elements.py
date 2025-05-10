@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.elements
@@ -51,6 +60,8 @@ class WirelessNetworkBss:
         connected_bssid=None,
         is_byte_input_file=False,
         is_bytes_arg=False,
+        is_pcapng=False,
+        pcapng_ies=None,
     ):
         """
         bss_entry:
@@ -91,6 +102,12 @@ class WirelessNetworkBss:
                 align=Alignment.RIGHT,
                 subheader="[Network Name]",
             )
+            self.channel_number = ChannelNumber(bss_entry)
+            self.channel_frequency = OutObject(
+                value="{0:.0f}".format(float(bss_entry.ChCenterFrequency / 1000)),
+                header="FREQ.",
+                subheader="[GHz]",
+            )
             self.bssid = BSSID(
                 bss_entry, connected_bssid, header="BSSID", subheader="[MAC Address]"
             )
@@ -112,10 +129,10 @@ class WirelessNetworkBss:
                 header="AP UPTIME",
                 subheader="[approx.]",
             )
+            self.beacon_period = bss_entry.BeaconPeriod
             self.beacon_interval = BeaconInterval(
                 value=bss_entry.BeaconPeriod, header="BEACON", subheader="[ms]"
             )
-            self.channel_number = ChannelNumber(bss_entry)
             self.channel_number_marked = ChannelNumber(bss_entry)
             self.channel_frequency = OutObject(
                 value="{0:.0f}".format(
@@ -165,18 +182,29 @@ class WirelessNetworkBss:
             self.has_rnr = False
             self.rnrs = []
             if not is_byte_input_file:
-                # parse IEs
-                self.raw_information_elements = self._get_information_elements_buffer(
-                    bss_entry
-                )
-                self.iesbytes = bytearray(self.raw_information_elements)
-                # self.iesbytes = [c for c in self.raw_information_elements]
+                if not is_pcapng:
+                    self.raw_information_elements = (
+                        self._get_information_elements_buffer(bss_entry)
+                    )
+                    # self.iesbytes = [c for c in self.raw_information_elements]
+                    self.iesbytes = bytearray(self.raw_information_elements)
+                else:
+                    self.iesbytes = bytearray(pcapng_ies)
 
                 # if we're going to print out bytes we don't want to process yet as we could have a malformed IE that needs to be decoded and handled correctly
                 if not is_bytes_arg:
-                    self.information_elements = (
-                        WirelessNetworkBss.process_information_elements(self, bss_entry)
-                    )
+                    if not is_pcapng:
+                        self.information_elements = (
+                            WirelessNetworkBss.process_information_elements(
+                                self, bss_entry=bss_entry
+                            )
+                        )
+                    else:
+                        self.information_elements = (
+                            WirelessNetworkBss.process_information_elements(
+                                self, ie_buffer=pcapng_ies
+                            )
+                        )
 
                     ##########################################
                     # Do stuff now that IEs have been parsed #
@@ -203,8 +231,7 @@ class WirelessNetworkBss:
                         self.channel_number_marked.value = (
                             f" {self.channel_number_marked}"
                         )
-                    # if len(self.channel_number) == 3:
-                    #    pass
+
                     self.channel_number_marked.value = f"{self.channel_number}@{self.channel_width}{self.channel_marking}"
 
             self.band = Band(self.channel_frequency.value)
@@ -325,7 +352,7 @@ class WirelessNetworkBss:
             ]
         )
         self.printoutlist(outlist)
-        print("")
+        print()
         outlist = []  # TODO: revisit
         outlist.append(["CHANNEL", "WIDTH", "FREQ.", "AMENDMENTS", "SS"])
         outlist.append(
@@ -438,7 +465,6 @@ class WirelessNetworkBss:
             if self.capabilities.immediate_block_ack
             else ""
         )
-        # out += "Raw: {}".format(self.raw_information_elements)
         out += "\n"
         # out += f"{len(self.ie_numbers.list)} INFORMATION ELEMENTS ({self.ie_size} bytes):\n"
         if not self.is_byte_file:
@@ -554,15 +580,16 @@ class WirelessNetworkBss:
                     )
                 )
 
-    def process_information_elements(self, bss_entry):
+    def process_information_elements(self, bss_entry=None, ie_buffer=None):
         self.log.debug(
             "Processing information elements for BSSID {}".format(self.bssid)
         )
-        # ctypes
-        bss_entry_pointer = addressof(bss_entry)
-        ie_offset = bss_entry.IeOffset
-        data_type = c_char * bss_entry.IeSize
-        ie_buffer = data_type.from_address(bss_entry_pointer + ie_offset)
+        if bss_entry:
+            bss_entry_pointer = addressof(bss_entry)
+            ie_offset = bss_entry.IeOffset
+            data_type = c_char * bss_entry.IeSize
+        if not ie_buffer:
+            ie_buffer = data_type.from_address(bss_entry_pointer + ie_offset)
         information_elements = []
         # init element vars
         element_id = 0

@@ -33,10 +33,10 @@ Output nearby Wi-Fi networks that have a detected signal of `-60 dBm` or stronge
 > lswifi -t -60
 ```
 
-Output only networks that match `my_ssid` (partial match support):
+Output only networks that match `ENCOM` (partial match support):
 
 ``` {.sourceCode .bash}
-> lswifi -include my_ssid
+> lswifi -include ENCOM
 ```
 
 Output verbose information (including Information Elements) for BSSID `00:00:00:00:00:00` (exact match):
@@ -79,6 +79,12 @@ Watch event notifications (inc. roaming, connection, scanning, etc.):
 > lswifi --watchevents
 ```
 
+Export scan results to pcap:
+
+``` {.sourceCode .bash}
+> lswifi -export
+```
+
 CLI options
 -----------
 
@@ -87,21 +93,18 @@ options:
   -h, --help            show this help message and exit
   -version, --version, -V
                         show program's version number and exit
-  -n #, --scans #       set how many scans to do before exiting
+  -n, --scans #         set how many scans to do before exiting
   --time #              set test in seconds to perform scans for
-  -i #, --interval #    seconds between scans
+  -i, --interval #      seconds between scans
   -ies [BSSID]          print extra information about information elements for a specified BSSID
-  -threshold -82, -t -82
-                        threshold which excludes networks with weak signal strength from results (-82 is default)
+  -threshold, -t -82    threshold which excludes networks with weak signal strength from results (-82 is default)
   -all                  remove threshold filtering which excludes results with weaker signal
   -g                    display filter to limit output by 2.4 GHz band
   -a                    display filter to limit output by 5 GHz band
   -six                  display filter to limit output by 6 GHz band
-  -include SSID, -inc SSID
-                        display filter to limit results by specified SSIDs (partial matching supported)
-  -exclude SSID, -exc SSID
-                        display filter to exclude results by specified SSIDs (partial matching supported)
-  -bssid BSSID          display filter to limit results by specified BSSIDs (partial matching supported)
+  -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
+  -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
+  -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h
@@ -109,7 +112,7 @@ options:
   --period              adds beacon period column to output using information from AP beacon
   --uptime, -uptime     sort output by access point uptime based on beacon timestamp
   -rnr, --rnr           special mode to create an alternate table based on RNR results
-  --channel-width 20|40|80|160
+  --channel-width 20|40|80|160|320
                         display filter to limit output by a specified channel width
   -ethers               adds an ap name column to output and use an ethers file for the ap names
   --append-ethers BSSID,APNAME
@@ -124,10 +127,13 @@ options:
   --json [JSON]         output will be formatted as json
   --indent 4            JSON output will be formatted with pretty print with provided indent level
   --csv [CSV]           output will be formatted as csv
-  -export [BSSID], -exp [BSSID]
-                        export bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac        
-                        address of the BSSID as argument.
-  -decode BYTEFILE      decode a raw .BSS or .IES file
+  -exportraw, -expraw [BSSID]
+                        export raw bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
+  -export, -exp [BSSID]
+                        export scan results to pcapng file. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
+  -path EXPORT_PATH     specify output path for pcapng export (defaults to app data directory)
+  -decoderaw BYTE_FILE  decode a raw .BSS or .IES file
+  -decode PCAPNG_FILE   parse scan results from pcapng file. by default shows all networks in the file, can be combined with filtering options.
   --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
   --watchevents         a special mode which watches for notification on a wireless interface such as connection and roaming events
   --syslog <server IP>  syslogs events from --watchevents to a remote syslog server
@@ -182,7 +188,7 @@ FAQs
 
 1. What OSes and Python versions are required to run `lswifi`?
     - Windows 10+ and Python 3.9 are the current minimum versions I'm willing to support (subject to change based on the [official Python release cycle](https://devguide.python.org/versions/)).
-    - Windows 11 and capable interface required for 6 GHz support. Don't have 6 GHz capable interface? Try `lswifi -rnr` with multi-band 6 GHz APs nearby.
+    - Windows 11 and a capable interface is required for 6 GHz support. Don't have 6 GHz capable interface? Try `lswifi -rnr` with multi-band 6 GHz APs nearby.
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
 3. Do I need to install `lswifi` in a virtual environment (venv)?
@@ -191,14 +197,16 @@ FAQs
    - Either `lswifi` is not installed, or the Python Scripts directory is not in the PATH environment variable.
    - To fix ensure the Scripts directory is included in the [PATH environment variable](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables) and `lswifi.exe` exists in said folder.
    - Here is an example for how to find the Scripts directory (this directory needs to be on the PATH):
+5. What does "Not a monitor mode packet capture" in `<file>.pcapng` capture file properties mean?
+   - Wi-Fi frames captured via Windows Native Wifi API (wlanapi.dll). Not a traditional direct over-the-air monitor mode capture; data is processed by Windows driver stack which may combine or modify information from beacons and probe responses.
 
 ```bash
 > python
-Python 3.11.0 (main, Oct 24 2022, 18:26:48) [MSC v.1933 64 bit (AMD64)] on win32
+Python 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 15:28:43) [MSC v.1943 64 bit (ARM64)] on win32
 Type "help", "copyright", "credits" or "license" for more information.
 >>> import os,sys
 >>> os.path.join(sys.prefix, 'Scripts')
-'C:\\Users\\jsz\\AppData\\Local\\Programs\\Python\\Python311\\Scripts'
+'C:\\Users\\jsz\\AppData\\Local\\Programs\\Python\\Python313-arm64\\Scripts'
 ```
 
 Contributing

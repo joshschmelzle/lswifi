@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 import os
 import sys
@@ -72,7 +81,7 @@ setup(
     python_requires=">=3.9",
     extras_require=extras,
     entry_points={"console_scripts": ["lswifi=lswifi.__main__:main"]},
-    license="BSD 3-Clause License",
+    license="BSD-3-Clause",
     platforms=["win32"],
     keywords=[
         "lswifi",
@@ -89,6 +98,7 @@ setup(
         "Natural Language :: English",
         "Development Status :: 3 - Alpha",
         "Environment :: Console",
+        "License :: OSI Approved :: BSD License",
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",

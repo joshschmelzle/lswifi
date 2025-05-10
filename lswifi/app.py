@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.core
@@ -16,8 +25,11 @@ import datetime
 import json
 import logging
 import os
+import struct
 import sys
 import time
+import traceback
+from ctypes import POINTER, cast, create_string_buffer
 from operator import itemgetter
 from time import sleep
 
@@ -25,7 +37,7 @@ from time import sleep
 from lswifi import wlanapi as WLAN_API
 from lswifi.__version__ import __title__, __version__
 from lswifi.client import Client, get_interface_info
-from lswifi.constants import APNAMEJSONFILE
+from lswifi.constants import APNAMEJSONFILE, DECORS, DECORS_END, DECORS_START
 from lswifi.elements import WirelessNetworkBss
 from lswifi.helpers import (
     Base64Encoder,
@@ -39,6 +51,7 @@ from lswifi.helpers import (
     remove_control_chars,
     strip_mac_address_format,
 )
+from lswifi.pcapng import PCAPNG
 from lswifi.schemas.out import *
 
 
@@ -102,8 +115,12 @@ class lswifi:
                 self.displayEthers()
                 sys.exit(0)
 
-            if args.bytefile:
+            if args.decoderaw:
                 self.decode_bytefile(args)
+                sys.exit(0)
+
+            if args.decode:
+                self.decode_pcapng_file(args)
                 sys.exit(0)
 
             scanning = True
@@ -472,8 +489,10 @@ class lswifi:
             json_names = self.loadAPNames()
 
         exportpath = None
+        exportraw_path = None
+        pcapng_path = None
 
-        if args.export:
+        if args.exportraw:
             appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
             is_path = os.path.isdir(appdata_path)
             if not is_path:
@@ -484,16 +503,39 @@ class lswifi:
             if not datepathexists:
                 os.makedirs(datepath)
 
-            exportpath = os.path.join(
+            exportraw_path = os.path.join(
                 datepath,
                 str(datetime.datetime.now().replace(microsecond=0).time()).replace(
                     ":", ""
                 ),
             )
-            log.debug(f"raw byte files exported to {exportpath}")
-            if not os.path.isdir(exportpath):
-                os.makedirs(exportpath)
+            exportpath = exportraw_path
+            log.debug(f"raw byte files exported to {exportraw_path}")
+            if not os.path.isdir(exportraw_path):
+                os.makedirs(exportraw_path)
 
+        if args.export:
+            if args.export_path:
+                pcapng_path = args.export_path
+                if not os.path.isabs(pcapng_path):
+                    pcapng_path = os.path.abspath(pcapng_path)
+
+                os.makedirs(os.path.dirname(pcapng_path), exist_ok=True)
+                if os.path.isdir(pcapng_path):
+                    pcapng_path = os.path.join(
+                        pcapng_path,
+                        f"lswifi_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pcapng",
+                    )
+            else:
+                appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+                is_path = os.path.isdir(appdata_path)
+                if not is_path:
+                    os.makedirs(appdata_path)
+
+                pcapng_path = os.path.join(
+                    appdata_path,
+                    f"lswifi_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pcapng",
+                )
             # print(datetime.date.today())
             # print(str(datetime.datetime.now().replace(microsecond=0).time()).replace(":",""))
             # print(datetime.datetime.now().replace(microsecond=0).isoformat().replace(":",""))
@@ -527,15 +569,17 @@ class lswifi:
         else:
             # WirelessNetworkBss object
             for index, bss in enumerate(wireless_network_bss_list):
-                if args.ies or args.export:
+                if args.ies or args.exportraw:
                     wlanapi_bss = str(bss.bssid).lower()
                     if args.ies:
                         user_bss = args.ies.lower().replace("-", ":").replace(".", ":")
                     if args.bytes:
                         user_bss = args.bytes.lower()
-                    if args.export:
-                        if args.export != "all":  # if lswifi -export xx:xx:xx:nn:nn:nn
-                            user_bss = args.export
+                    if args.exportraw:
+                        if (
+                            args.exportraw != "all"
+                        ):  # if lswifi -export xx:xx:xx:nn:nn:nn
+                            user_bss = args.exportraw
                             # print(f"{bss_len} {index}")
                             # print(f"{wlanapi_bss} {user_bss}")
 
@@ -543,7 +587,7 @@ class lswifi:
                                 # print("{} {}".format(wlanapi_bss, user_bss))
                                 if bss_len == (index + 1):
                                     print(
-                                        f"no match for {args.export} found in scan results. please try again ..."
+                                        f"no match for {args.exportraw} found in scan results. please try again ..."
                                     )
                                 continue
 
@@ -554,14 +598,14 @@ class lswifi:
                         # print(f"{os.path.join(exportpath, bss)}")
                         # print(f"{type(bss.bssbytes.send())}")
                         # print(f"{bss.bssbytes.send()}")
-                        bssfile = open(os.path.join(exportpath, bsspath), "wb")
+                        bssfile = open(os.path.join(exportraw_path, bsspath), "wb")
                         try:
                             bssfile.write(bss.bssbytes.send())
                         finally:
                             bssfile.close()
 
                         bsspath = export_bss + ".bss"
-                        bssfile = open(os.path.join(exportpath, bsspath), "wb")
+                        bssfile = open(os.path.join(exportraw_path, bsspath), "wb")
                         try:
                             bssfile.write(bss.bssbytes.send())
                         finally:
@@ -571,7 +615,7 @@ class lswifi:
                             # print(f"{os.path.join(exportpath, ies)}")
                             # print(f"{type(bss.iesbytes)}")
                             # print(f"{bss.iesbytes}")
-                            iesfile = open(os.path.join(exportpath, iespath), "wb")
+                            iesfile = open(os.path.join(exportraw_path, iespath), "wb")
                             try:
                                 iesfile.write(bss.iesbytes)
                             finally:
@@ -583,14 +627,14 @@ class lswifi:
                                     f"found and exporting requested bssid from the scan results of {client.mac}."
                                 )
                                 print(
-                                    f"raw byte files for {args.export} exported to {exportpath}"
+                                    f"raw byte files for {args.export} exported to {exportraw_path}"
                                 )
                                 break
                             elif (bss_len - 1) == index:
                                 log.info(
                                     f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
                                 )
-                                print(f"files exported to {exportpath}")
+                                print(f"files exported to {exportraw_path}")
 
                             continue
 
@@ -923,6 +967,111 @@ class lswifi:
                     for result in csv_out:
                         writer.writerow(result)
 
+        if args.export and len(wireless_network_bss_list) > 0:
+            pcap = PCAPNG(pcapng_path)
+            networks_exported = 0
+
+            try:
+                with pcap:
+                    interface_id = pcap.add_interface(
+                        name=client.iface.description,
+                        description=f"{client.mac}",
+                    )
+
+                    for bss in wireless_network_bss_list:
+                        if args.export != "all":
+                            if str(bss.bssid).lower() != args.export.lower():
+                                continue
+
+                        if not args.all and bss.rssi.value < args.sensitivity:
+                            continue
+
+                        if (
+                            args.a or args.g or args.six
+                        ) and not self._bss_matches_band_filter(bss, args):
+                            continue
+
+                        if args.width is not None and args.width not in str(
+                            bss.channel_width
+                        ):
+                            continue
+
+                        if args.include is not None and args.include not in str(
+                            bss.ssid
+                        ):
+                            continue
+
+                        if args.exclude and args.exclude in str(bss.ssid):
+                            continue
+
+                        if args.bssid is not None:
+                            input_mac = strip_mac_address_format(args.bssid)
+                            bss_mac = strip_mac_address_format(str(bss.bssid))
+                            if input_mac not in bss_mac:
+                                continue
+
+                        frame_data = pcap.create_radiotap_frame(bss)
+                        pcap.write_packet(
+                            interface_id, client.last_scan_time_epoch, frame_data
+                        )
+                        networks_exported += 1
+
+                if args.export != "all":
+                    if networks_exported > 0:
+                        log.info(f"Exported BSSID {args.export} to {pcapng_path}")
+                        print(f"Exported BSSID {args.export} to {pcapng_path}")
+                    else:
+                        log.info(f"BSSID {args.export} not found or filtered out")
+                else:
+                    log.info(f"Exported {networks_exported} networks to {pcapng_path}")
+
+            except Exception as e:
+                log.error(f"Error exporting to pcapng: {str(e)}")
+                print(f"Error exporting to pcapng: {str(e)}")
+
+        if args.exportraw:
+            for index, bss in enumerate(wireless_network_bss_list):
+                wlanapi_bss = str(bss.bssid).lower()
+                clean_wlanapi_bss = wlanapi_bss.replace("(*)", "")
+                if args.exportraw != "all":
+                    user_bss = args.exportraw
+                    if clean_wlanapi_bss != user_bss:
+                        if bss_len == (index + 1):
+                            print(
+                                f"No match for {args.exportraw} found in scan results. Please try again ..."
+                            )
+                        continue
+
+                export_bss = clean_wlanapi_bss.replace(":", "-")
+
+                bsspath = export_bss + ".bss"
+                bssfile = open(os.path.join(exportpath, bsspath), "wb")
+                try:
+                    bssfile.write(bss.bssbytes.send())
+                finally:
+                    bssfile.close()
+
+                iespath = export_bss + ".ies"
+                iesfile = open(os.path.join(exportpath, iespath), "wb")
+                try:
+                    iesfile.write(bss.iesbytes)
+                finally:
+                    iesfile.close()
+
+                if args.exportraw != "all":
+                    log.info(
+                        f"Found and exporting requested BSSID from the scan results of {client.mac}."
+                    )
+                    print(
+                        f"Raw byte files for {args.exportraw} exported to {exportpath}"
+                    )
+                    break
+                elif (bss_len - 1) == index:
+                    log.info(
+                        f"Found and exporting {bss_len} BSSIDs from the scan results of {client.mac}."
+                    )
+                    print(f"Files exported to {exportpath}")
+
         return (
             out_results,
             rnr_results,
@@ -932,6 +1081,303 @@ class lswifi:
             json_out,
             newapnames,
         )
+
+    def _bss_matches_band_filter(self, bss, args):
+        """Check if a BSS matches the band filtering criteria"""
+        if args.a and args.g and not args.six:
+            if is_two_four_band(bss.channel_frequency.value):
+                return True
+            if is_five_band(bss.channel_frequency.value):
+                return True
+            if is_six_band(bss.channel_frequency.value):
+                return False
+
+        if args.a and args.six and not args.g:
+            if is_two_four_band(bss.channel_frequency.value):
+                return False
+            if is_five_band(bss.channel_frequency.value):
+                return True
+            if is_six_band(bss.channel_frequency.value):
+                return True
+
+        if args.a and not args.six and not args.g:
+            if is_two_four_band(bss.channel_frequency.value):
+                return False
+            if is_five_band(bss.channel_frequency.value):
+                return True
+            if is_six_band(bss.channel_frequency.value):
+                return False
+
+        if args.g and args.six and not args.a:
+            if is_two_four_band(bss.channel_frequency.value):
+                return True
+            if is_five_band(bss.channel_frequency.value):
+                return False
+            if is_six_band(bss.channel_frequency.value):
+                return True
+
+        if args.g and not args.six and not args.a:
+            if is_two_four_band(bss.channel_frequency.value):
+                return True
+            if is_five_band(bss.channel_frequency.value):
+                return False
+            if is_six_band(bss.channel_frequency.value):
+                return False
+
+        if args.six and not args.a and not args.g:
+            if is_two_four_band(bss.channel_frequency.value):
+                return False
+            if is_five_band(bss.channel_frequency.value):
+                return False
+            if is_six_band(bss.channel_frequency.value):
+                return True
+
+        return True
+
+    def decode_pcapng_file(self, args):
+        """Parse scan results from a pcapng file"""
+        log = logging.getLogger(__name__)
+
+        if not os.path.isfile(args.decode):
+            print(f"{args.decode} file does not exist on file system... exiting...")
+            return
+
+        try:
+
+            class MockBssEntry:
+                def __init__(self):
+                    self.dot11Ssid = type("obj", (), {"SSID": b"", "SSIDLength": 0})()
+                    self.PhyId = 0
+                    self.dot11Bssid = None
+                    self.dot11BssType = 1
+                    self.dot11BssPhyType = 7
+                    self.Rssi = -75
+                    self.LinkQuality = 0
+                    self.InRegDomain = True
+                    self.BeaconPeriod = 100
+                    self.Timestamp = 0
+                    self.HostTimestamp = 0
+                    self.CapabilityInformation = 0
+                    self.ChCenterFrequency = 2412
+                    self.WlanRateSet = type(
+                        "obj", (), {"RateSetLength": 0, "RateSet": [0] * 126}
+                    )()
+                    self.IeOffset = 0
+                    self.IeSize = 0
+                    self.iesbytes = None
+
+                def send(self):
+                    return self.iesbytes
+
+            pcap = PCAPNG(args.decode, mode="r")
+            networks = []
+
+            with pcap:
+                for (
+                    interface_id,
+                    interface_name,
+                    timestamp,
+                    packet_data,
+                ) in pcap.get_packets():
+                    # log.debug("\\\\\\")
+                    try:
+                        if len(packet_data) < 36:
+                            continue
+
+                        header_len = struct.unpack_from("<BBH", packet_data, 0)[2]
+
+                        if header_len < 8 or header_len > len(packet_data):
+                            continue
+
+                        frame_data = packet_data[header_len:]
+
+                        if len(frame_data) < 2:
+                            continue
+
+                        frame_control = struct.unpack("<H", frame_data[:2])[0]
+                        frame_type = (frame_control & 0x000C) >> 2
+                        frame_subtype = (frame_control & 0x00F0) >> 4
+
+                        if frame_type != 0 or frame_subtype != 8:
+                            continue
+
+                        if len(frame_data) < 22:
+                            continue
+
+                        bssid = frame_data[16:22]
+
+                        rssi = -99
+                        present = struct.unpack_from("<I", packet_data, 4)[0]
+                        if present & 0x00000020:
+                            offset = 8
+                            if present & 0x00000001:
+                                offset += 8
+                            if present & 0x00000002:
+                                offset += 1
+                            if present & 0x00000004:
+                                offset += 1
+                            if present & 0x00000008:
+                                offset += 4
+                            if present & 0x00000010:
+                                offset += 2
+
+                            if offset < header_len:
+                                rssi = struct.unpack(
+                                    "b", packet_data[offset : offset + 1]
+                                )[0]
+
+                        freq = 0
+                        if present & 0x00000008:
+                            freq_offset = 8
+                            if present & 0x00000001:
+                                freq_offset += 8
+                            if present & 0x00000002:
+                                freq_offset += 1
+                            if present & 0x00000004:
+                                freq_offset += 1
+
+                            if freq_offset + 2 <= header_len:
+                                freq = struct.unpack(
+                                    "<H", packet_data[freq_offset : freq_offset + 2]
+                                )[0]
+
+                        ssid = b""
+                        if len(frame_data) >= 38:
+                            ie_offset = 36
+                            if frame_data[ie_offset] == 0:
+                                ie_len = frame_data[ie_offset + 1]
+                                if ie_len <= 32 and ie_offset + 2 + ie_len <= len(
+                                    frame_data
+                                ):
+                                    ssid = frame_data[
+                                        ie_offset + 2 : ie_offset + 2 + ie_len
+                                    ]
+
+                        capabilities = 0
+                        if len(frame_data) >= 36:
+                            capabilities = struct.unpack("<H", frame_data[34:36])[0]
+
+                        beacon_period = 100
+                        if len(frame_data) >= 34:
+                            beacon_period = struct.unpack("<H", frame_data[32:34])[0]
+
+                        ies_data = frame_data[36:] if len(frame_data) > 36 else b""
+                        buffer = create_string_buffer(ies_data)
+                        buffer_type = POINTER(type(buffer))
+                        ies_data = cast(buffer, buffer_type).contents
+
+                        mock_bss = MockBssEntry()
+                        mock_bss.dot11Bssid = bssid
+                        mock_bss.dot11Ssid.SSID = ssid
+                        mock_bss.dot11Ssid.SSIDLength = len(ssid)
+                        mock_bss.Rssi = rssi
+                        mock_bss.ChCenterFrequency = freq * 1000
+                        mock_bss.BeaconPeriod = beacon_period
+                        mock_bss.CapabilityInformation = capabilities
+                        mock_bss.Timestamp = timestamp
+                        mock_bss.iesbytes = ies_data
+
+                        bss = WirelessNetworkBss(
+                            mock_bss, is_pcapng=True, pcapng_ies=ies_data
+                        )
+                        bssid_str = ":".join(f"{b:02x}" for b in bssid)
+
+                        bss.ssid.value = ssid.decode("utf-8", errors="replace")
+                        bss.bssid.value = bssid_str
+                        bss.rssi.value = rssi
+
+                        # convert channel frequency unit from MHz to GHz
+                        # 2412 to 2.412, 5825 to 5.825, 6855 to 6.855
+                        bss.channel_frequency.value = f"{freq}"
+                        bss.channel_frequency.value = "{0:.3f}".format(
+                            int(bss.channel_frequency.value) / 1000
+                        )
+
+                        bss.ie_rates.value = bss.parse_rates(bss.ie_rates)
+
+                        if len(bss.channel_number_marked) == 1:
+                            bss.channel_number_marked.value = (
+                                f"  {bss.channel_number_marked}"
+                            )
+                        if len(bss.channel_number_marked) == 2:
+                            bss.channel_number_marked.value = (
+                                f" {bss.channel_number_marked}"
+                            )
+
+                        bss.channel_number_marked.value = f"{bss.channel_number}@{bss.channel_width}{bss.channel_marking}"
+
+                        networks.append(bss)
+                        # log.debug("///")
+                    except Exception as e:
+                        trace = traceback.format_exc()
+                        line_number = traceback.extract_tb(sys.exc_info()[2])[-1][1]
+                        error_msg = (
+                            f"Error processing packet: {line_number}: {str(e)}\n{trace}"
+                        )
+                        log.error(error_msg)
+                        # log.debug("///")
+                        continue
+
+            if networks:
+
+                class TempClient:
+                    def __init__(self, networks):
+                        self.data = networks
+                        self.mac = "pcapng file"
+                        self.iface = type(
+                            "obj",
+                            (object,),
+                            {
+                                "connection_name": "pcapng file",
+                                "description": "pcapng file",
+                                "guid_string": "pcapng file",
+                            },
+                        )
+                        self.last_scan_time_iso = datetime.datetime.now().isoformat()
+                        self.last_scan_time_epoch = time.time()
+
+                client = TempClient(networks)
+                (
+                    out_results,
+                    rnr_results,
+                    bss_len,
+                    bssid_list,
+                    json_names,
+                    json_out,
+                    newapnames,
+                ) = self.parse_bss_list(
+                    client,
+                    False,
+                    args.csv if hasattr(args, "csv") else "",
+                    args.json if hasattr(args, "json") else "",
+                    args,
+                )
+
+                if args.rnr:
+                    self.print_rnr_list(rnr_results, client.mac, args)
+                else:
+                    if not args.ies:
+                        self.print_bss_list(
+                            out_results,
+                            bss_len,
+                            client.mac,
+                            bssid_list,
+                            False,
+                            json_names,
+                            json_out,
+                            newapnames,
+                            args,
+                        )
+            else:
+                log.info(f"No networks found in {args.decode}")
+
+        except Exception as e:
+            trace = traceback.format_exc()
+            line_number = traceback.extract_tb(sys.exc_info()[2])[-1][1]
+            error_msg = (
+                f"Error parsing pcapng file at line {line_number}: {str(e)}\n{trace}"
+            )
+            log.error(error_msg)
 
     def print_rnr_list(self, rnr_results: list, client_mac, args):
         log = logging.getLogger(__name__)
@@ -953,28 +1399,20 @@ class lswifi:
                 headers.append(tup.header)
                 subheaders.append(tup.subheader)
 
-            # define fun ascii border
-            decorators = ["=", "~", "+", "-"]
-            begin_upper = "-"
-            end_upper = "-"
-            out_header_decorators = ()
-
             result = ""
 
-            # add column header and subheader
             rnr_results.insert(0, headers)
             rnr_results.insert(1, subheaders)
 
-            # generate fun ascii border
-
+            border = ()
             rnr_results_len = len(rnr_results[0]) - 1
             for index, _item in enumerate(rnr_results[0]):
                 if index == rnr_results_len:
                     max_len = len(_item)
                 max_len = max(len(x) for x in [y[index] for y in rnr_results])
-                out_header_decorators = out_header_decorators + (
+                border = border + (
                     generate_pretty_separator(
-                        max_len, decorators, begin_upper, end_upper
+                        max_len, DECORS, DECORS_START, DECORS_END
                     ),
                 )
 
@@ -985,9 +1423,8 @@ class lswifi:
                 else:
                     result += f"{{{index}:{align}{max_len}}}  "
 
-            # add fun ascii border
-            rnr_results.insert(0, out_header_decorators)
-            rnr_results.insert(3, out_header_decorators)
+            rnr_results.insert(0, border)
+            rnr_results.insert(3, border)
 
             for row in rnr_results:
                 rnr_results = []
@@ -1041,52 +1478,44 @@ class lswifi:
                         tup.subheader = SubHeader("(*): connected")
                 subheaders.append(tup.subheader)
 
-            # define fun ascii border
-            header_decorators = ["~", "+", "="]
-            begin_upper = "-"
-            end_upper = "-"
-            out_header_decorators = ()
-
-            subheader_decorators = ["+", "~", "="]
-            begin_lower = "-"
-            end_lower = "-"
-            out_subheader_decorators = ()
-
             result_indexes_string = ""
 
             # add column header and subheader
             scan_results.insert(0, headers)
             scan_results.insert(1, subheaders)
 
-            # generate fun ascii border
-
             scan_results_len = len(scan_results[0]) - 1
+            border = ()
             for index, _item in enumerate(scan_results[0]):
                 # print(index, item)
                 if index == scan_results_len:
                     max_len = len(_item)
                 else:
                     max_len = max(len(x) for x in [y[index] for y in scan_results])
-                out_header_decorators = out_header_decorators + (
+                border = border + (
                     generate_pretty_separator(
-                        max_len, header_decorators, begin_upper, end_upper
-                    ),
-                )
-                out_subheader_decorators = out_subheader_decorators + (
-                    generate_pretty_separator(
-                        max_len, subheader_decorators, begin_lower, end_lower
+                        max_len, DECORS, DECORS_START, DECORS_END
                     ),
                 )
 
                 if index == scan_results_len:
                     result_indexes_string += f"{{{index}}}"
                 else:
-                    align = [y[index] for y in scan_results][0].alignment.value
+                    try:
+                        first_item = [y[index] for y in scan_results][0]
+                        if hasattr(first_item, "alignment") and hasattr(
+                            first_item.alignment, "value"
+                        ):
+                            align = first_item.alignment.value
+                        else:
+                            align = "<"
+                    except (AttributeError, IndexError):
+                        align = "<"
+
                     result_indexes_string += f"{{{index}:{align}{max_len}}}  "
 
-            # add fun ascii border
-            scan_results.insert(0, out_header_decorators)
-            scan_results.insert(3, out_subheader_decorators)
+            scan_results.insert(0, border)
+            scan_results.insert(3, border)
 
             # print results
             if not args.json:
@@ -1116,9 +1545,9 @@ class lswifi:
                 self.updateAPNames(json_names, newapnames)
 
     def decode_bytefile(self, args):
-        if os.path.isfile(args.bytefile):
-            if args.bytefile.lower().rsplit(".", 1)[1] == "ies":
-                fh = open(args.bytefile, "rb")
+        if os.path.isfile(args.decoderaw):
+            if args.decoderaw.lower().rsplit(".", 1)[1] == "ies":
+                fh = open(args.decoderaw, "rb")
                 ies = ""
                 try:
                     _bytearray = bytearray(fh.read())
@@ -1127,7 +1556,7 @@ class lswifi:
                         f"bytes):\n{format_bytes_as_hex(_bytearray)}"
                     )
 
-                    print("")
+                    print()
                     ies = WirelessNetworkBss.decode_bytefile_ies(_bytearray)
                 finally:
                     fh.close()
@@ -1175,15 +1604,15 @@ class lswifi:
                 print(out)
                 return
 
-            if args.bytefile.lower().rsplit(".", 1)[1] == "bss":
-                fh = open(args.bytefile, "rb")
+            if args.decoderaw.lower().rsplit(".", 1)[1] == "bss":
+                fh = open(args.decoderaw, "rb")
                 ies = ""
                 try:
                     _bytearray = bytearray(fh.read())
                     print(
                         f"Raw BSS ({len(_bytearray)} bytes):\n{format_bytes_as_hex(_bytearray)}"
                     )
-                    print("")
+                    print()
                     print(
                         "Decoded BSS Information (NOTE: this is missing information found in .ies file):"
                     )
@@ -1193,7 +1622,7 @@ class lswifi:
                 finally:
                     fh.close()
         else:
-            print(f"{args.bytefile} file does not exist on file system... exiting...")
+            print(f"{args.decoderaw} file does not exist on file system... exiting...")
 
 
 def run(args, **kwargs) -> None:

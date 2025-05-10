@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.appsetup
@@ -32,6 +41,30 @@ class ExportAction(argparse.Action):
         """If no values, return something arbitrary so the arg is not None."""
         if not values:
             values = "all"
+        setattr(namespace, self.dest, values)
+
+
+class ExportPcapNGAction(argparse.Action):
+    """Enable export to pcapng argument
+
+    Adds support for bool or bssid
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """If no values, return something arbitrary so the arg is not None."""
+        if not values:
+            values = "all"
+        setattr(namespace, self.dest, values)
+
+
+class WriteToPcapNGAction(argparse.Action):
+    """Enable write to pcapng file arguments"""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """If no values, return something arbitrary so the arg is not None."""
+        if not values:
+            values = f"lswifi_{BOOT_TIME}.pcapng"
+        VerifyPath(values, ".pcapng")
         setattr(namespace, self.dest, values)
 
 
@@ -158,8 +191,8 @@ def json_indent(value):
 
 
 def width(value):
-    """Validate user provided channel bandwidth is 20, 40, 80, or 160"""
-    valid_channels = ["20", "40", "80", "160"]
+    """Validate user provided channel bandwidth is 20, 40, 80, 160, or 320"""
+    valid_channels = ["20", "40", "80", "160", "320"]
     if value == "None":
         return None
 
@@ -229,34 +262,34 @@ def setup_parser() -> argparse.ArgumentParser:
                                           -%@#-
                                             :
 
-            basic usage examples:
-            ---------------------
+            Usage examples:
+            ---------------
 
             Print detected nearby Wi-Fi networks:
               >lswifi
 
-            Print nearby Wi-Fi networks with a perceived signal strength of -60 dBm or greater:
+            Print and filter nearby Wi-Fi networks with a perceived signal strength of -60 dBm or greater:
               >lswifi -t -60
 
-            Print Wi-Fi networks based on SSID filter (supports partial match):
-              >lswifi -include my_ssid
+            Print and filter nearby Wi-Fi networks based on SSID name (partial match supported):
+              >lswifi -include Aperture_Science
 
-            Print only 2.4 GHz, 5 GHz, or 6 GHz Wi-Fi Networks:
+            Print and filter based on 2.4 GHz, 5 GHz, or 6 GHz Wi-Fi Networks:
               >lswifi -g
               >lswifi -a
               >lswifi -six
 
-            Print the BSSID or channel of the connected AP:
+            Print the BSSID or channel of the currently connected AP:
               >lswifi -ap
               >lswifi -channel
               >lswifi -ap -channel
               >lswifi -ap -channel -raw
 
-            Print only networks with BSSIDs that contain <mac> (supports partial match):
+            Print networks with BSSIDs containing MAC address (supports partial match):
               >lswifi -bssid 06:6D:15:88:81:59
               >lswifi -bssid 06:6D:15
 
-            Print additional details (inc. information elements) for a provided BSSID (<mac> must be exact match):
+            Print additional details (inc. information elements) for a provided BSSID (MAC address must be exact match):
               >lswifi -ies 06:6D:15:88:81:59
               
             Print and add detected AP names column in output:
@@ -270,9 +303,9 @@ def setup_parser() -> argparse.ArgumentParser:
             
             Print a special table for BSSes which contain Reduced Neighbor Reports:
               >lswifi -rnr
-              
-            Print multiple columns:
-              >lswifi --ap-names --qbss --tpc --pmf
+            
+            Export results to pcapng:
+              >lswifi -export
 """
         ),
         epilog="Made with Python by Josh Schmelzle",
@@ -368,6 +401,7 @@ def setup_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-bssid",
+        "-bss",
         dest="bssid",
         metavar="BSSID",
         help="display filter to limit results by specified BSSIDs (partial matching supported)",
@@ -422,7 +456,7 @@ def setup_parser() -> argparse.ArgumentParser:
         dest="width",
         type=width,
         default="None",
-        metavar="20|40|80|160",
+        metavar="20|40|80|160|320",
         help="display filter to limit output by a specified channel width",
     )
     parser.add_argument(
@@ -507,20 +541,42 @@ def setup_parser() -> argparse.ArgumentParser:
         help="output will be formatted as csv",
     )
     parser.add_argument(
+        "-exportraw",
+        "-expraw",
+        nargs="?",
+        type=str,
+        metavar="BSSID",
+        dest="exportraw",
+        action=ExportAction,
+        help="export raw bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.",
+    )
+    parser.add_argument(
         "-export",
         "-exp",
         nargs="?",
         type=str,
         metavar="BSSID",
         dest="export",
-        action=ExportAction,
-        help="export bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.",
+        action=ExportPcapNGAction,
+        help="export scan results to pcapng file. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.",
+    )
+    parser.add_argument(
+        "-path",
+        type=str,
+        dest="export_path",
+        help="specify output path for pcapng export (defaults to app data directory)",
+    )
+    parser.add_argument(
+        "-decoderaw",
+        dest="decoderaw",
+        metavar="BYTE_FILE",
+        help="decode a raw .BSS or .IES file",
     )
     parser.add_argument(
         "-decode",
-        dest="bytefile",
-        metavar="BYTEFILE",
-        help="decode a raw .BSS or .IES file",
+        dest="decode",
+        metavar="PCAPNG_FILE",
+        help="parse scan results from pcapng file. by default shows all networks in the file, can be combined with filtering options.",
     )
     parser.add_argument(
         "--bytes",

@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.constants
@@ -11,6 +20,11 @@ from collections import namedtuple
 
 APNAMEACKFILE = "apnames.ack"
 APNAMEJSONFILE = "apnames.json"
+
+DECORS = ["~", "+", "=", "-"]
+DECORS_START = "-"
+DECORS_END = "-"
+DECORS_OUT = ()
 
 CIPHER_SUITE_DICT = {
     0: "Use group",  # "Use group cipher suite"

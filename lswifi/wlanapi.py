@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.wlanapi
@@ -155,13 +164,9 @@ def get_adapter_infos_by_guid(interface_guid):
     # Call with 0 size to get required buffer size first
     buffer_size = c_ulong(0)
     result = IPHLP_API.GetAdaptersAddresses(
-        0,  # Family
-        0,  # Flags
-        None,  # Reserved
-        None,  # Buffer
-        byref(buffer_size)
+        0, 0, None, None, byref(buffer_size)  # Family  # Flags  # Reserved  # Buffer
     )
-    
+
     adapter_addresses = create_string_buffer(buffer_size.value)
     result = IPHLP_API.GetAdaptersAddresses(
         0,  # Family (0 = unspecified, returns both IPv4 and IPv6)

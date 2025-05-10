@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.lswifi
@@ -16,13 +25,13 @@ import sys
 if sys.platform == "win32":
     pass
 else:
-    print("lswifi only works on win32... exiting...")
+    print("lswifi currently only works on win32 ... exiting ...")
     sys.exit(-1)
 
-# hard set no support for Python versions < 3.7
-if sys.version_info < (3, 7):
+# hard set no support for Python versions < 3.9
+if sys.version_info < (3, 9):
     print(
-        "lswifi requires Python 3.7+. \nyour active Python version is {0}.\nexiting...".format(
+        "lswifi requires Python 3.9+. \nyour active Python version is {0}.\nexiting...".format(
             platform.python_version()
         )
     )

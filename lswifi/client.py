@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+#  _              _  __ _
+# | |_____      _(_)/ _(_)
+# | / __\ \ /\ / / | |_| |
+# | \__ \\ V  V /| |  _| |
+# |_|___/ \_/\_/ |_|_| |_|
 
 """
 lswifi.client
@@ -286,7 +295,6 @@ def get_interface_info(args, iface) -> str:
                     outstr += f"    BSSID: {bssid}\n"
                     outstr += f"    BSS Type: {dot11BssType}\n"
                     outstr += f"    PHY: {dot11PhyType}\n"
-                    # out += "PH    Y Index: {}\n".format(uDot11PhyIndex)
                     outstr += f"    Signal Quality: {wlanSignalQuality}%\n"
                     outstr += f"    Rx Rate: {ulRxRate/1000} Mbps\n"
                     outstr += f"    Tx Rate: {ulTxRate/1000} Mbps\n"
@@ -332,13 +340,16 @@ class Client(object):
             self.log = logging.getLogger(__name__)
             self.scan_finished = False
             self.data = None
-            now = datetime.datetime
             self.last_event = ""
-            self.last_scan_time_epoch = now.utcnow().timestamp()
-            self.last_scan_time_iso = (
-                now.now().astimezone().isoformat(timespec="milliseconds")
+            now = datetime.datetime
+            now = now.now()
+            nowutc = now.now(datetime.UTC)
+            self.last_scan_time_epoch = now.timestamp()
+            self.last_scan_time_epoch_utc = nowutc.timestamp()
+            self.last_scan_time_iso = now.astimezone().isoformat(
+                timespec="milliseconds"
             )
-            self.last_scan_time_utc = now.utcnow()
+            self.last_scan_time_utc = nowutc
             self.args = args
             self.get_bssid_args = SimpleNamespace(
                 get_current_ap=True,
@@ -527,11 +538,14 @@ class Client(object):
                     self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
                     self.scan_finished = True
                     now = datetime.datetime
-                    self.last_scan_time_epoch = now.utcnow().timestamp()
-                    self.last_scan_time_iso = (
-                        now.now().astimezone().isoformat(timespec="milliseconds")
+                    now = now.now()
+                    nowutc = now.now(datetime.UTC)
+                    self.last_scan_time_epoch = now.timestamp()
+                    self.last_scan_time_epoch_utc = nowutc.timestamp()
+                    self.last_scan_time_iso = now.astimezone().isoformat(
+                        timespec="milliseconds"
                     )
-                    self.last_scan_time_utc = now.utcnow()
+                    self.last_scan_time_utc = nowutc
                     self.log.debug(f"({self.mac}), finish get_bss_list...")
 
                 # if str(wlan_event).strip() == "network_available":

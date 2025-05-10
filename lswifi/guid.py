@@ -1,4 +1,6 @@
-# extracted from from comtypes.py
+# -*- coding: utf-8 -*-
+#
+# Extracted from from comtypes.py
 
 from ctypes import (
     Structure,
