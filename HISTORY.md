@@ -4,6 +4,12 @@ Release History
 RELEASED
 --------
 
+0.1.49 (2025/05/12)
+-------------------
+
+- Add import/export for pcapng files using `-export` arg.
+- Add AP health IE for HPE Aruba Networking.
+
 0.1.48 (2025/04/23)
 -------------------
 

@@ -1620,6 +1620,61 @@ class WirelessNetworkBss:
                     if len(check) >= 5:
                         health_bytes = bytes(memoryview_body[5:9])
                         health_value = int.from_bytes(health_bytes, byteorder="big")
+
+                        binary_repr = format(health_value, "032b")
+                        log.debug(f"AP Health IE value: 0x{health_value:08x}")
+                        log.debug(f"Binary representation: {binary_repr}")
+
+                        bit_positions = "Bit:   "
+                        for i in range(0, 32):
+                            bit_positions += f"{i:2d} "
+                        log.debug(f"{bit_positions}")
+
+                        binary_display = "Value: "
+                        for bit in binary_repr:
+                            binary_display += f" {bit} "
+                        log.debug(f"{binary_display}")
+
+                        field_ranges = [
+                            ("v", 31, 29),  # version
+                            ("i", 28, 28),  # ip_protocol
+                            ("u", 27, 27),  # uplink
+                            ("t", 26, 24),  # uplink_type
+                            ("n", 23, 20),  # network_layer
+                            ("p", 19, 18),  # proxy_server
+                            ("a", 17, 14),  # activate
+                            ("c", 13, 11),  # central
+                            ("r", 10, 0),  # reserved
+                        ]
+
+                        field_markers = "Field: "
+                        for i in range(31, -1, -1):
+                            field_char = " "
+                            for code, high, low in field_ranges:
+                                if low <= i <= high:
+                                    field_char = code
+                                    break
+                            field_markers += f" {field_char} "
+                        log.debug(f"{field_markers}")
+
+                        log.debug(
+                            f"Legend: v=version (31-29), i=ip_protocol (28), u=uplink (27), t=uplink_type (26-24),"
+                        )
+                        log.debug(
+                            f"        n=network_layer (23-20), p=proxy_server (19-18), a=activate (17-14),"
+                        )
+                        log.debug(f"        c=central (13-11), r=reserved (10-0)")
+
+                        version = (health_value >> 29) & 0x7  # bits 0-2
+                        ip_protocol = (health_value >> 28) & 0x1  # bit 3
+                        uplink = (health_value >> 27) & 0x1  # bit 4
+                        uplink_type = (health_value >> 24) & 0x7  # bits 5-7
+                        network_layer = (health_value >> 20) & 0xF  # bits 8-11
+                        proxy_server = (health_value >> 18) & 0x3  # bits 12-13
+                        activate = (health_value >> 14) & 0xF  # bits 14-17
+                        central = (health_value >> 11) & 0x7  # bits 18-20
+                        reserved = health_value & 0x7FF  # bits 21-31
+
                         version_map = {0: "1"}
                         ip_protocol_map = {0: "IPv4", 1: "IPv6"}
                         uplink_map = {0: "Uplink exists", 1: "No uplink"}
@@ -1628,6 +1683,10 @@ class WirelessNetworkBss:
                             1: "Modem",
                             2: "Mesh",
                             3: "Wi-Fi uplink",
+                            4: "Reserved",
+                            5: "Reserved",
+                            6: "Reserved",
+                            7: "Reserved",
                         }
                         network_layer_map = {
                             0: "Success",
@@ -1637,6 +1696,15 @@ class WirelessNetworkBss:
                             4: "Missing DGW IP address",
                             5: "NTP date & time sync failure",
                             6: "HCM status down",
+                            7: "Reserved",
+                            8: "Reserved",
+                            9: "Reserved",
+                            10: "Reserved",
+                            11: "Reserved",
+                            12: "Reserved",
+                            13: "Reserved",
+                            14: "Reserved",
+                            15: "Failure at previous layer",
                         }
                         proxy_server_map = {
                             0: "Success",
@@ -1665,16 +1733,6 @@ class WirelessNetworkBss:
                             6: "Other failure",
                             7: "Failure at previous layer",
                         }
-
-                        version = (health_value >> 29) & 0x7  # bits 0-2
-                        ip_protocol = (health_value >> 28) & 0x1  # bit 3
-                        uplink = (health_value >> 27) & 0x1  # bit 4
-                        uplink_type = (health_value >> 24) & 0x7  # bits 5-7
-                        network_layer = (health_value >> 20) & 0xF  # bits 8-11
-                        proxy_server = (health_value >> 18) & 0x3  # bits 12-13
-                        activate = (health_value >> 14) & 0xF  # bits 14-17
-                        central = (health_value >> 11) & 0x7  # bits 18-20
-                        reserved = health_value & 0x7FF  # bits 21-31
 
                         ap_health_map = {
                             "version": {
@@ -1727,6 +1785,45 @@ class WirelessNetworkBss:
                             },
                             "reserved": {"val": reserved},
                         }
+
+                        reconstructed_value = (
+                            (version << 29)
+                            | (ip_protocol << 28)
+                            | (uplink << 27)
+                            | (uplink_type << 24)
+                            | (network_layer << 20)
+                            | (proxy_server << 18)
+                            | (activate << 14)
+                            | (central << 11)
+                            | reserved
+                        )
+
+                        log.debug(f"AP Health IE extracted fields:")
+                        log.debug(
+                            f"  version (v): {version} -> {version_map.get(version, f'Unknown ({version})')}"
+                        )
+                        log.debug(
+                            f"  ip_protocol (i): {ip_protocol} -> {ip_protocol_map.get(ip_protocol, f'Unknown ({ip_protocol})')}"
+                        )
+                        log.debug(
+                            f"  uplink (u): {uplink} -> {uplink_map.get(uplink, f'Unknown ({uplink})')}"
+                        )
+                        log.debug(
+                            f"  uplink_type (t): {uplink_type} -> {uplink_type_map.get(uplink_type, f'Unknown ({uplink_type})')}"
+                        )
+                        log.debug(
+                            f"  network_layer (n): {network_layer} -> {network_layer_map.get(network_layer, f'Unknown ({network_layer})')}"
+                        )
+                        log.debug(
+                            f"  proxy_server (p): {proxy_server} -> {proxy_server_map.get(proxy_server, f'Unknown ({proxy_server})')}"
+                        )
+                        log.debug(
+                            f"  activate (a): {activate} -> {activate_map.get(activate, f'Unknown ({activate})')}"
+                        )
+                        log.debug(
+                            f"  central (c): {central} -> {central_map.get(central, f'Unknown ({central})')}"
+                        )
+                        log.debug(f"  reserved (r): {reserved}")
 
                         ap_health = [
                             # f"Version: {ap_health_map['version']['meaning']}",
