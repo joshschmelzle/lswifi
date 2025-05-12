@@ -1540,7 +1540,26 @@ class WirelessNetworkBss:
                     if self is not None:
                         self.apname.value = apname
                 elif oui_subtype == 4:  # ARM
+                    ie_subtype = int.from_bytes(element_body[5], "little")
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, ARM"
+                    if ie_subtype == 8:
+                        out += " from a beacon"
+                        log.debug(
+                            f"ARM IE version {vendor_oui_type}, type {oui_subtype}, subtype {ie_subtype}, from a beacon"
+                        )
+                    elif ie_subtype == 4:
+                        eirp_raw = memoryview_body[6] & 0xFF
+                        eirp_dbm = eirp_raw * 4
+                        if eirp_raw > 50:
+                            log.warning(
+                                f"Unusual EIRP value in ARM IE: raw={eirp_raw}, calculated={eirp_dbm:.1f} dBm"
+                            )
+                            out += f" EIRP: {eirp_dbm:.1f} dBm (raw: {eirp_raw})"
+                        else:
+                            out += f" EIRP: {eirp_dbm:.1f} dBm"
+                        log.debug(
+                            f"ARM IE version {vendor_oui_type}, type {oui_subtype}, subtype {ie_subtype}, EIRP {eirp_dbm}"
+                        )
                 elif oui_subtype == 5:  # SLB
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, SLB"
                 elif oui_subtype == 6:  # SJ_LOOP_PROTECT
