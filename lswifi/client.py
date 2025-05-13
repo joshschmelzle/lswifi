@@ -343,7 +343,7 @@ class Client(object):
             self.last_event = ""
             now = datetime.datetime
             now = now.now()
-            nowutc = now.now(datetime.UTC)
+            nowutc = now.now(datetime.timezone.utc)
             self.last_scan_time_epoch = now.timestamp()
             self.last_scan_time_epoch_utc = nowutc.timestamp()
             self.last_scan_time_iso = now.astimezone().isoformat(
@@ -539,7 +539,7 @@ class Client(object):
                     self.scan_finished = True
                     now = datetime.datetime
                     now = now.now()
-                    nowutc = now.now(datetime.UTC)
+                    nowutc = now.now(datetime.timezone.utc)
                     self.last_scan_time_epoch = now.timestamp()
                     self.last_scan_time_epoch_utc = nowutc.timestamp()
                     self.last_scan_time_iso = now.astimezone().isoformat(

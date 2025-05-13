@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.50 (2025/05/13)
+-------------------
+
+- Fixed Python 3.9 compatibility by replacing datetime.UTC with datetime.timezone.utc
+
 0.1.49 (2025/05/12)
 -------------------
 
