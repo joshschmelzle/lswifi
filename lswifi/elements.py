@@ -1637,7 +1637,7 @@ class WirelessNetworkBss:
                 elif oui_subtype == 10:  # AP Health
                     check = memoryview_body[5:]
                     if len(check) >= 5:
-                        health_bytes = bytes(memoryview_body[5:9])
+                        health_bytes = bytes(memoryview_body[6:9])
                         health_value = int.from_bytes(health_bytes, byteorder="big")
 
                         binary_repr = format(health_value, "032b")
@@ -1867,7 +1867,7 @@ class WirelessNetworkBss:
                         out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health IE: parser error"
                         return out
 
-                    out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health: 0x{element_data[5:].hex()}{summary}"
+                    out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health: 0x{element_data[6:].hex()}{summary}"
             return out
         if "00:13:92" in oui:  # Ruckus
             out = f"OUI: {oui} (Ruckus Wireless)"
