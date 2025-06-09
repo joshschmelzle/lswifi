@@ -1639,6 +1639,15 @@ class WirelessNetworkBss:
                     if len(check) >= 5:
                         health_bytes = bytes(memoryview_body[6:9])
                         health_value = int.from_bytes(health_bytes, byteorder="big")
+                        if health_value > 0xFFFFFFFF:
+                            log.warning(
+                                f"Input data exceeds 32 bits: 0x{health_value:x} ({health_value.bit_length()} bits)"
+                            )
+                            log.warning(
+                                "AP Health IE specification only supports 32-bit values"
+                            )
+                            out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health IE: parser error"
+                            return out
 
                         binary_repr = format(health_value, "032b")
                         log.debug(f"AP Health IE value: 0x{health_value:08x}")
@@ -1694,9 +1703,18 @@ class WirelessNetworkBss:
                         central = (health_value >> 11) & 0x7  # bits 18-20
                         reserved = health_value & 0x7FF  # bits 21-31
 
-                        version_map = {0: "1"}
+                        version_map = {
+                            0: "1",
+                            1: "Reserved",
+                            2: "Reserved",
+                            3: "Reserved",
+                            4: "Reserved",
+                            5: "Reserved",
+                            6: "Reserved",
+                            7: "Reserved",
+                        }
                         ip_protocol_map = {0: "IPv4", 1: "IPv6"}
-                        uplink_map = {0: "Uplink exists", 1: "No uplink"}
+                        uplink_map = {0: "Uplink existed", 1: "No uplink"}
                         uplink_type_map = {
                             0: "Ethernet",
                             1: "Modem",
@@ -1713,9 +1731,9 @@ class WirelessNetworkBss:
                             2: "No IP address (PPPoE failure)",
                             3: "No IP address (DHCP failure)",
                             4: "Missing DGW IP address",
-                            5: "NTP date & time sync failure",
-                            6: "HCM status down",
-                            7: "Reserved",
+                            5: "Failed ARP/ND for DGW",
+                            6: "NTP date & time sync failure",
+                            7: "HCM status down",
                             8: "Reserved",
                             9: "Reserved",
                             10: "Reserved",
@@ -1740,7 +1758,14 @@ class WirelessNetworkBss:
                             5: "Slow mandatory upgrade",
                             6: "No provisioning rule",
                             7: "Invalid activate response",
-                            8: "Failure at previous layer",
+                            8: "Reserved",
+                            9: "Reserved",
+                            10: "Reserved",
+                            11: "Reserved",
+                            12: "Reserved",
+                            13: "Reserved",
+                            14: "Reserved",
+                            15: "Failure at previous layer",
                         }
                         central_map = {
                             0: "Success",
