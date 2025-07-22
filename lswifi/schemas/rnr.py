@@ -39,6 +39,11 @@ RNR = namedtuple(
         "RNR_UPR_ACTIVE",
         "RNR_COLOCATED_AP",
         "RNR_TWENTY_MHZ_PSD",
+        "RNR_AP_MLD_ID",
+        "RNR_LINK_ID",
+        "RNR_BSS_PARAMS_CHANGE_COUNT",
+        "RNR_ALL_UPDATES_INCLUDED",
+        "RNR_DISABLED_LINK",
     ],
 )
 
@@ -230,6 +235,66 @@ class RNR_COLOCATED_AP(OutObject):
         self.value = "Yes" if colocatedap else "--"
         self.header = Header("CO-LOCATED")
         self.subheader = SubHeader("AP")
+
+    def __repr__(self):
+        return f"OutObject({self.value},{self.header},{self.subheader})"
+
+
+class RNR_AP_MLD_ID(OutObject):
+    """Base class for MLD ID Designation"""
+
+    def __init__(self, mld_id):
+        self.value = mld_id if mld_id is not None else "--"
+        self.header = Header("AP MLD")
+        self.subheader = SubHeader("ID")
+
+    def __repr__(self):
+        return f"OutObject({self.value},{self.header},{self.subheader})"
+
+
+class RNR_LINK_ID(OutObject):
+    """Base class for Link ID Designation"""
+
+    def __init__(self, link_id):
+        self.value = link_id if link_id is not None else "--"
+        self.header = Header("LINK")
+        self.subheader = SubHeader("ID")
+
+    def __repr__(self):
+        return f"OutObject({self.value},{self.header},{self.subheader})"
+
+
+class RNR_BSS_PARAMS_CHANGE_COUNT(OutObject):
+    """Base class for BSS Parameters Change Count Designation"""
+
+    def __init__(self, change_count):
+        self.value = change_count if change_count is not None else "--"
+        self.header = Header("BSS PARAMS")
+        self.subheader = SubHeader("CHANGE COUNT")
+
+    def __repr__(self):
+        return f"OutObject({self.value},{self.header},{self.subheader})"
+
+
+class RNR_ALL_UPDATES_INCLUDED(OutObject):
+    """Base class for All Updates Included Designation"""
+
+    def __init__(self, all_updates):
+        self.value = "Yes" if all_updates else "--"
+        self.header = Header("ALL UPDATES")
+        self.subheader = SubHeader("INCLUDED")
+
+    def __repr__(self):
+        return f"OutObject({self.value},{self.header},{self.subheader})"
+
+
+class RNR_DISABLED_LINK(OutObject):
+    """Base class for Disabled Link Indication Designation"""
+
+    def __init__(self, disabled_link):
+        self.value = "Yes" if disabled_link else "--"
+        self.header = Header("DISABLED")
+        self.subheader = SubHeader("LINK")
 
     def __repr__(self):
         return f"OutObject({self.value},{self.header},{self.subheader})"

@@ -38,6 +38,20 @@
             "request": "launch",
             "module": "lswifi",
             "args": [ "-decode", "out.ies"]
+        },
+        {
+            "name": "lswifi -rnr",
+            "type": "python",
+            "request": "launch",
+            "module": "lswifi",
+            "args": [ "-rnr"]
+        },
+        {
+            "name": "lswifi -decode [pcap] -rnr",
+            "type": "python",
+            "request": "launch",
+            "module": "lswifi",
+            "args": [ "-decode", ".\\tests\\caps\\wifi7unifi.pcapng", "-rnr"]
         }
     ]
 }

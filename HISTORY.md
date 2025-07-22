@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.53 (2025/07/22)
+-------------------
+
+- Improve RNR decoding for Wi-Fi 7
+
 0.1.52 (2025/06/09)
 -------------------
 

@@ -1251,42 +1251,15 @@ class WirelessNetworkBss:
     def __parse_reduced_neighbor_report(self, element_data):
         if self is not None:
             self.has_rnr = True
+
         body = list(memoryview(element_data))
 
-        # TBTT information header is body[0] and body[1]
-        # print(get_bit(body[0], 0)) # b0
-        # print(get_bit(body[0], 1)) # b1
-        tbtt_info_field_type = get_bit(body[0], 0) + get_bit(body[0], 1)
-        # print(tbtt_info_field_type)
-        # if the type subfield is 0, it contains the length in octets of each TBTT information field that is included in the TBTT information set field of the neighbor AP information field
-        # get_bit(body[0], 2) b2
-        get_bit(body[0], 2)
-        # print(filtered_neighbor_ap)
-        # get_bit(body[0], 3) b3
-        get_bit(body[0], 3)
-        # get_bit(body[0], 4) b4
-        # get_bit(body[0], 5) b5
-        # get_bit(body[0], 6) b6
-        # get_bit(body[0], 7) b7
-        (
-            get_bit(body[0], 4)
-            + get_bit(body[0], 5)
-            + get_bit(body[0], 6)
-            + get_bit(body[0], 7)
-        )
-        # print(tbtt_information_count)
-        # get_bit(body[1], 0) b8
-        # get_bit(body[1], 1) b9
-        # get_bit(body[1], 2) b10
-        # get_bit(body[1], 3) b11
-        # get_bit(body[1], 4) b12
-        # get_bit(body[1], 5) b13
-        # get_bit(body[1], 6) b14
-        # get_bit(body[1], 7) b15
-        body[1]
-        # print(tbtt_information_length)
-        # tbbt_information_count =
-        # body[1]
+        tbtt_info_field_type = body[0] & 0x03  # bits 0-1
+        filtered_neighbor_ap = bool(body[0] & 0x04)  # bit 2
+        reserved_bit3 = bool(body[0] & 0x08)  # bit 3
+        tbtt_information_count = (body[0] >> 4) & 0x0F  # bits 4-7
+        tbtt_information_length = body[1]  # bits 8-15
+
         operating_class = body[2]
         channel_number = body[3]
         # print(operating_class)
@@ -1296,139 +1269,217 @@ class WirelessNetworkBss:
             f"Operating Class: {operating_class}, Channel number: {channel_number}"
         )
 
-        buffer = body[4:]
+        buffer_offset = 4
         tbtt_count = 0
+
         if tbtt_info_field_type == 0:
-            while len(buffer) != 0:
-                neighbor_ap_tbtt_offset = buffer[0]
-                base_out += f"\nTBTT {tbtt_count}:"
-                tbtt_count += 1
-                if neighbor_ap_tbtt_offset == 255:
-                    neighbor_ap_tbtt_offset = "Unknown (255)"
-                base_out += f"\n  TBTT Offset: {neighbor_ap_tbtt_offset}"
-                buffer.pop(0)
-                bssid = ""
-                shortssid = ""
-                same_ssid = False
-                multiple_bssid = False
-                transmitted_bssid = False
-                unsolicited_probe_resp_active = False
-                co_located_ap = False
 
-                twentymhzpsd = 0
-                if len(buffer) > 5:
-                    o1, o2, o3, o4, o5, o6 = [buffer[i] for i in [0, 1, 2, 3, 4, 5]]
-                    bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
-                    base_out += f", BSSID: {bssid}"
-                    for _ in range(6):
-                        buffer.pop(0)
-                if len(buffer) > 3:
-                    # short ssid
-                    shortssidtemp = []
-                    for _ in range(4):
-                        shortssidtemp.append(f"{buffer[0]:02x}")
-                        buffer.pop(0)
-                    shortssidtemp.reverse()  # fix endianness
-                    shortssid = f"0x{''.join(b for b in shortssidtemp)}"
-                    base_out += f", Short SSID: {shortssid}"
-                if len(buffer) >= 1:
-                    # bss parameter
-                    # get_bit(buffer[0], 0) b0 - oct recommended
-                    oct_recommended = get_bit(buffer[0], 0)
-                    if oct_recommended:
-                        base_out += f", OCT recommended"
-                    # get_bit(buffer[0], 1) b1 - same SSID
-                    same_ssid = get_bit(buffer[0], 1)
-                    if same_ssid:
-                        base_out += f", Same SSID"
-                    # get_bit(buffer[0], 2) b2 - multiple BSSID
-                    multiple_bssid = get_bit(buffer[0], 2)
-                    if multiple_bssid:
-                        base_out += f", Multiple BSSID"
-                    # get_bit(buffer[0], 3) b3 - tx BSSID
-                    transmitted_bssid = get_bit(buffer[0], 3)
-                    if transmitted_bssid:
-                        base_out += f", Transmitted BSSID"
-                    # get_bit(buffer[0], 4) b4 - member of ESS w/ 2.4/5 GHz co-located AP
-                    ess_with_2g_or_5g_co_located_ap = get_bit(buffer[0], 4)
-                    if ess_with_2g_or_5g_co_located_ap:
-                        base_out += f", member of ESS With 2.4/5 GHz Co-Located AP"
-                    # get_bit(buffer[0], 5) b5 - unsolicited probe responses active
-                    unsolicited_probe_resp_active = get_bit(buffer[0], 5)
-                    if unsolicited_probe_resp_active:
-                        base_out += f", Unsolicited Probe Resp Active"
-                    # get_bit(buffer[0], 6) b6 - co-located ap
-                    co_located_ap = get_bit(buffer[0], 6)
-                    if co_located_ap:
-                        base_out += f", Co-Located AP"
-                    # get_bit(buffer[0], 7) b7 - reserved
+            for _ in range(tbtt_information_count + 1):  # count is 0-based
+                if buffer_offset >= len(body):
+                    break
 
-                    buffer.pop(0)
-                if len(buffer) >= 1:
-                    # 20 mhz PSD
-                    twentymhzpsd = buffer[0]
-                    # Power is expressed in terms of 0.5dBm from -64 to 63 and is encoded as 8-bit 2's compliment
-                    twentymhzpsd = twos(twentymhzpsd, 1) * 0.5
-                    base_out += f"\n  20 MHz PSD: {str(twentymhzpsd)}"
-                    buffer.pop(0)
-                width = "unknown"
-                operating_class = str(operating_class)
-                channel_number = channel_number
-                if operating_class == "131":
-                    width = "20"
-                if operating_class == "132":
-                    width = "40"
-                if operating_class == "133":
-                    width = "80"
-                if operating_class == "134":
-                    width = "160"
-                rnr_shortssid = RNR_SHORT_SSID(shortssid)
-                rnr_bssid = RNR_BSSID(bssid)
-                rnr_channel = RNR_CHANNEL(channel_number, width)
-                rnr_freq = RNR_FREQ(channel_number)
-                try:
-                    rnr_freq.value = "{0:.3f}".format(float(int(rnr_freq.value) / 1000))
-                except ValueError:
-                    rnr_freq.value = "0.000"
-                # initially unit is MHz but converted to GHz after IEs are parsed below
-                rnr_twentymhzpsd = RNR_TWENTY_MHZ_PSD(twentymhzpsd)
-                rnr_samessid = RNR_SAME_SSID(same_ssid)
-                rnr_multiplebssid = RNR_MULTIPLE_BSSID(multiple_bssid)
-                rnr_transmittedbssid = RNR_TRANSMITTED_BSSID(transmitted_bssid)
-                rnr_upractive = RNR_UPR_ACTIVE(unsolicited_probe_resp_active)
-                RNR_TBTT(tbtt_count - 1)
-                rnr_tbtt_offset = RNR_TBTT_OFFSET(neighbor_ap_tbtt_offset)
-                rnr_colocatedap = RNR_COLOCATED_AP(co_located_ap)
-                if self is not None:
-                    oob_bssid = OOB_BSSID(self.bssid.value)
-                    oob_rssi = OOB_RSSI(self.rssi.value)
-                    oob_ssid = OOB_SSID(self.ssid.value)
-                    oob_channel = OOB_CHANNEL(self.channel_number.value)
+                tbtt_info_start = buffer_offset
+                tbtt_info_end = min(
+                    tbtt_info_start + tbtt_information_length, len(body)
+                )
+
+                if tbtt_info_end <= tbtt_info_start:
+                    break
+
+                tbtt_info = body[tbtt_info_start:tbtt_info_end]
+                parsed_info = self._parse_tbtt_info_field(
+                    tbtt_info, tbtt_count, operating_class, channel_number
+                )
+                if parsed_info:
+                    base_out += parsed_info
                 else:
-                    oob_bssid = OOB_BSSID("unknown")
-                    oob_rssi = OOB_RSSI("unknown")
-                    oob_ssid = OOB_SSID("unknown")
-                    oob_channel = OOB_CHANNEL("unknown")
-                if self is not None:
-                    self.rnrs.append(
-                        RNR(
-                            oob_ssid,
-                            oob_bssid,
-                            oob_rssi,
-                            oob_channel,
-                            rnr_channel,
-                            rnr_freq,
-                            rnr_tbtt_offset,
-                            rnr_bssid,
-                            rnr_shortssid,
-                            rnr_samessid,
-                            rnr_multiplebssid,
-                            rnr_transmittedbssid,
-                            rnr_upractive,
-                            rnr_colocatedap,
-                            rnr_twentymhzpsd,
-                        )
-                    )
+                    base_out += ", problem"
+
+                buffer_offset = tbtt_info_end
+                tbtt_count += 1
+
+        return base_out
+
+    def _parse_tbtt_info_field(
+        self, tbtt_info, tbtt_count, operating_class, channel_number
+    ):
+        """Parse a single TBTT information field based on its length."""
+        if len(tbtt_info) == 0:
+            return ""
+
+        offset = 0
+        base_out = f"\nTBTT {tbtt_count}:"
+
+        # TBTT Offset (always present, 1 octet)
+        neighbor_ap_tbtt_offset = tbtt_info[offset]
+        offset += 1
+
+        if neighbor_ap_tbtt_offset == 255:
+            base_out += f"\n  TBTT Offset: Unknown (255)"
+        else:
+            base_out += f"\n  TBTT Offset: {neighbor_ap_tbtt_offset}"
+
+        bssid = ""
+        shortssid = ""
+        twentymhzpsd = 0
+        same_ssid = False
+        multiple_bssid = False
+        transmitted_bssid = False
+        unsolicited_probe_resp_active = False
+        co_located_ap = False
+
+        # MLD parameters (Wi-Fi 7)
+        ap_mld_id = None
+        link_id = None
+        bss_params_change_count = None
+        all_updates_included = False
+        disabled_link_indication = False
+
+        # BSSID (6 octets, if present)
+        if offset + 6 <= len(tbtt_info):
+            bssid_bytes = tbtt_info[offset : offset + 6]
+            bssid = convert_mac_address_to_string(list(bssid_bytes))
+            base_out += f", BSSID: {bssid}"
+            offset += 6
+
+        # Short SSID (4 octets, if present)
+        if offset + 4 <= len(tbtt_info):
+            shortssid_bytes = tbtt_info[offset : offset + 4]
+            shortssid = f"0x{int.from_bytes(shortssid_bytes, byteorder='little'):08x}"
+            base_out += f", Short SSID: {shortssid}"
+            offset += 4
+
+        # BSS Parameters (1 octet, if present)
+        if offset < len(tbtt_info):
+            bss_params = tbtt_info[offset]
+            offset += 1
+
+            oct_recommended = bool(bss_params & 0x01)
+            same_ssid = bool(bss_params & 0x02)
+            multiple_bssid = bool(bss_params & 0x04)
+            transmitted_bssid = bool(bss_params & 0x08)
+            ess_with_2g_or_5g_co_located_ap = bool(bss_params & 0x10)
+            unsolicited_probe_resp_active = bool(bss_params & 0x20)
+            co_located_ap = bool(bss_params & 0x40)
+
+            if oct_recommended:
+                base_out += ", OCT recommended"
+            if same_ssid:
+                base_out += ", Same SSID"
+            if multiple_bssid:
+                base_out += ", Multiple BSSID"
+            if transmitted_bssid:
+                base_out += ", Transmitted BSSID"
+            if ess_with_2g_or_5g_co_located_ap:
+                base_out += ", member of ESS With 2.4/5 GHz Co-Located AP"
+            if unsolicited_probe_resp_active:
+                base_out += ", Unsolicited Probe Resp Active"
+            if co_located_ap:
+                base_out += ", Co-Located AP"
+
+        # 20 MHz PSD (1 octet, if present)
+        if offset < len(tbtt_info):
+            psd_raw = tbtt_info[offset]
+            offset += 1
+            # Power is expressed in terms of 0.5dBm from -64 to 63 (8-bit 2's complement)
+            twentymhzpsd = twos(psd_raw, 1) * 0.5
+            base_out += f"\n  20 MHz PSD: {twentymhzpsd}"
+
+        # MLD Parameters (3 octets, if present - Wi-Fi 7)
+        if offset + 3 <= len(tbtt_info):
+            mld_bytes = tbtt_info[offset : offset + 3]
+            mld_params = int.from_bytes(mld_bytes, byteorder="little")
+
+            ap_mld_id = mld_params & 0xFF  # B0-B7
+            link_id = (mld_params >> 8) & 0x0F  # B8-B11
+            bss_params_change_count = (mld_params >> 12) & 0xFF  # B12-B19
+            all_updates_included = bool(mld_params & (1 << 20))  # B20
+            disabled_link_indication = bool(mld_params & (1 << 21))  # B21
+            # B22-B23 are reserved
+
+            base_out += f"\n  MLD Parameters:"
+            base_out += f"\n    AP MLD ID: {ap_mld_id}"
+            base_out += f"\n    Link ID: {link_id}"
+            base_out += f"\n    BSS Parameters Change Count: {bss_params_change_count}"
+            if all_updates_included:
+                base_out += "\n    All Updates Included"
+            if disabled_link_indication:
+                base_out += "\n    Disabled Link Indication"
+
+            offset += 3
+
+        if self is None:
+            return
+
+        # Determine channel width
+        width = "unknown"
+        if operating_class == 131:
+            width = "20"
+        elif operating_class == 132:
+            width = "40"
+        elif operating_class == 133:
+            width = "80"
+        elif operating_class == 134:
+            width = "160"
+
+        rnr_shortssid = RNR_SHORT_SSID(shortssid)
+        rnr_bssid = RNR_BSSID(bssid)
+        rnr_channel = RNR_CHANNEL(channel_number, width)
+        rnr_freq = RNR_FREQ(channel_number)
+
+        try:
+            rnr_freq.value = f"{float(int(rnr_freq.value) / 1000):.3f}"
+        except ValueError:
+            rnr_freq.value = "0.000"
+
+        rnr_twentymhzpsd = RNR_TWENTY_MHZ_PSD(twentymhzpsd)
+        rnr_samessid = RNR_SAME_SSID(same_ssid)
+        rnr_multiplebssid = RNR_MULTIPLE_BSSID(multiple_bssid)
+        rnr_transmittedbssid = RNR_TRANSMITTED_BSSID(transmitted_bssid)
+        rnr_upractive = RNR_UPR_ACTIVE(unsolicited_probe_resp_active)
+        RNR_TBTT(tbtt_count)
+        rnr_tbtt_offset = RNR_TBTT_OFFSET(neighbor_ap_tbtt_offset)
+        rnr_colocatedap = RNR_COLOCATED_AP(co_located_ap)
+
+        oob_bssid = OOB_BSSID(self.bssid.value if self.bssid else "unknown")
+        oob_rssi = OOB_RSSI(self.rssi.value if self.rssi else "unknown")
+        oob_ssid = OOB_SSID(self.ssid.value if self.ssid else "unknown")
+        oob_channel = OOB_CHANNEL(
+            self.channel_number.value if self.channel_number else "unknown"
+        )
+
+        rnr_mld_id = RNR_AP_MLD_ID(ap_mld_id)
+        rnr_link_id = RNR_LINK_ID(link_id)
+        rnr_bss_params_change_count = RNR_BSS_PARAMS_CHANGE_COUNT(
+            bss_params_change_count
+        )
+        rnr_all_updates_included = RNR_ALL_UPDATES_INCLUDED(all_updates_included)
+        rnr_disabled_link = RNR_DISABLED_LINK(disabled_link_indication)
+
+        rnr = RNR(
+            oob_ssid,
+            oob_bssid,
+            oob_rssi,
+            oob_channel,
+            rnr_channel,
+            rnr_freq,
+            rnr_tbtt_offset,
+            rnr_bssid,
+            rnr_shortssid,
+            rnr_samessid,
+            rnr_multiplebssid,
+            rnr_transmittedbssid,
+            rnr_upractive,
+            rnr_colocatedap,
+            rnr_twentymhzpsd,
+            rnr_mld_id,
+            rnr_link_id,
+            rnr_bss_params_change_count,
+            rnr_all_updates_included,
+            rnr_disabled_link,
+        )
+
+        self.rnrs.append(rnr)
 
         return base_out
 
