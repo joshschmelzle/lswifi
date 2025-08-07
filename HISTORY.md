@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.54 (2025/08/07)
+-------------------
+
+- Fix channel parsing error for 160 MHz CBW
+
 0.1.53 (2025/07/22)
 -------------------
 

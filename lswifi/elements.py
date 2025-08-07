@@ -2590,8 +2590,8 @@ class WirelessNetworkBss:
                     # D8 std says indicates support for 40 and 80 not one or the other
                     pass
                 if onesixty_in_5g_and_6g or onesixty_or_eighty_plus_eighty_in_5g_and_6g:
-                    self.channel_width.value = "160"
-                    self.channel_marking = ""
+                    # this is a capability bit, doesn't indicate actual channel in use
+                    pass
                 self.phy_type.name = "HE"
                 if "ax" not in self.modes:
                     self.modes.append("ax")
@@ -2730,7 +2730,6 @@ class WirelessNetworkBss:
                     ]
                 )
                 eht_cbw_value = binary_string_to_int(eht_channel_width_bits)
-                eht_cbw = "20"
                 if eht_cbw_value == 1:
                     eht_cbw = "40"
                 if eht_cbw_value == 2:
