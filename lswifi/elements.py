@@ -2730,6 +2730,7 @@ class WirelessNetworkBss:
                     ]
                 )
                 eht_cbw_value = binary_string_to_int(eht_channel_width_bits)
+                eht_cbw = "20"
                 if eht_cbw_value == 1:
                     eht_cbw = "40"
                 if eht_cbw_value == 2:
