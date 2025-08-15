@@ -18,7 +18,10 @@ schema definition for Reduced Neighbor Report (RNR IE 201)
 
 from collections import namedtuple
 
-from lswifi.helpers import get_6ghz_frequency_from_channel_number
+from lswifi.helpers import (
+    get_2ghz5ghz_frequency_from_channel_number,
+    get_6ghz_frequency_from_channel_number,
+)
 from lswifi.schemas.out import Header, OutObject, SubHeader
 
 RNR = namedtuple(
@@ -51,8 +54,8 @@ RNR = namedtuple(
 class OOB_BSSID(OutObject):
     """Base class for Discovery BSSID Designation"""
 
-    def __init__(self, ssid=""):
-        self.value = ssid
+    def __init__(self, bssid=""):
+        self.value = bssid
         self.header = Header("BSSID")
         self.subheader = SubHeader("[MAC Address]")
 
@@ -159,8 +162,11 @@ class RNR_CHANNEL(OutObject):
 class RNR_FREQ(OutObject):
     """Base class for RNR Frequency Designation"""
 
-    def __init__(self, channel):
-        self.value = get_6ghz_frequency_from_channel_number(str(channel))
+    def __init__(self, channel, operating_class):
+        if int(operating_class) in (131, 132, 133, 134, 135):
+            self.value = get_6ghz_frequency_from_channel_number(str(channel))
+        else:
+            self.value = get_2ghz5ghz_frequency_from_channel_number(str(channel))
         self.header = Header("NEIGHBOR")
         self.subheader = SubHeader("FREQ.")
 

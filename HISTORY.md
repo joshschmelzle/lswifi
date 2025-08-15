@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.55 (2025/08/15)
+-------------------
+
+- Fix RNR parsing when reported neighbor BSSes are in 2.4/5 GHz
+
 0.1.54 (2025/08/07)
 -------------------
 

@@ -87,7 +87,7 @@ class TestHelpers(object):
         assert helpers.is_six_band(7.115) is True
 
     def test_get_channel_number(self):
-        assert helpers.get_channel_number_from_frequency("2910322") == "Unknown"
+        assert helpers.get_channel_number_from_frequency("2910322") == "--"
         assert helpers.get_channel_number_from_frequency("2412") == "1"
         assert helpers.get_channel_number_from_frequency("2417") == "2"
         assert helpers.get_channel_number_from_frequency("2422") == "3"
@@ -213,7 +213,7 @@ class TestHelpers(object):
         assert helpers.get_channel_number_from_frequency("7075") == "225"
         assert helpers.get_channel_number_from_frequency("7095") == "229"
         assert helpers.get_channel_number_from_frequency("7115") == "233"
-        assert helpers.get_channel_number_from_frequency("2.910322") == "Unknown"
+        assert helpers.get_channel_number_from_frequency("2.910322") == "--"
         assert helpers.get_channel_number_from_frequency("2.412") == "1"
         assert helpers.get_channel_number_from_frequency("2.417") == "2"
         assert helpers.get_channel_number_from_frequency("2.422") == "3"

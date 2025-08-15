@@ -23,7 +23,11 @@ import re
 import sys
 from base64 import b64encode
 
-from lswifi.constants import _6GHZ_20MHZ_CHANNEL_LIST, _20MHZ_CHANNEL_LIST
+from lswifi.constants import (
+    _2GHZ_5GHZ_20MHZ_CHANNEL_LIST,
+    _6GHZ_20MHZ_CHANNEL_LIST,
+    _20MHZ_CHANNEL_LIST,
+)
 
 __control_chars = "".join(
     map(chr, itertools.chain(range(0x00, 0x20), range(0x7F, 0xA0)))
@@ -195,18 +199,19 @@ def is_six_band(frequency: str) -> bool:
     return False
 
 
-def get_channel_number_from_frequency(frequency):
+def get_channel_number_from_frequency(freq):
     """gets the 802.11 channel for a corresponding frequency
     in units of kilohertz (kHz). does not support FHSS."""
     try:
-        _frequency = frequency
-        if type(_frequency) == str:
-            _frequency = _frequency.replace(".", "", 1)
-            return _20MHZ_CHANNEL_LIST.get(_frequency, "Unknown")
+        if type(freq) == str:
+            freq = freq.replace(".", "", 1)
+            freq = _20MHZ_CHANNEL_LIST.get(freq, "--")
+            return freq
         else:
-            return _20MHZ_CHANNEL_LIST.get(str(_frequency), "Unknown")
+            freq = _20MHZ_CHANNEL_LIST.get(str(freq), "--")
+            return freq
     except KeyError:
-        return "Unknown"
+        return "--"
 
 
 def twos(val, bytes):
@@ -219,15 +224,30 @@ def twos(val, bytes):
 
 
 def get_6ghz_frequency_from_channel_number(channel_number: str) -> str:
-    """gets the center frequency for a corresponding channel
+    """gets the center frequency for a corresponding 6 GHz channel
 
     Args:
-        channel_number (int): 802.11 channel number
+        channel_number (int): 6 GHz 802.11 channel number
 
     Returns:
         str: frequency
     """
     for key, value in _6GHZ_20MHZ_CHANNEL_LIST.items():
+        if channel_number == value:
+            return key
+    return "Unknown"
+
+
+def get_2ghz5ghz_frequency_from_channel_number(channel_number: str) -> str:
+    """gets the center frequency for a corresponding 2.4 / 5 GHz GHz channel
+
+    Args:
+        channel_number (int): 2.4 / GHz 802.11 channel number
+
+    Returns:
+        str: frequency
+    """
+    for key, value in _2GHZ_5GHZ_20MHZ_CHANNEL_LIST.items():
         if channel_number == value:
             return key
     return "Unknown"

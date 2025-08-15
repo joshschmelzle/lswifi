@@ -237,7 +237,6 @@ class WirelessNetworkBss:
             self.band = Band(self.channel_frequency.value)
         except Exception:
             if self.bssid:
-                print(self.bssid)
                 self.log.error(
                     f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
                 )
@@ -1262,8 +1261,6 @@ class WirelessNetworkBss:
 
         operating_class = body[2]
         channel_number = body[3]
-        # print(operating_class)
-        # print(channel_number)
 
         base_out = (
             f"Operating Class: {operating_class}, Channel number: {channel_number}"
@@ -1412,8 +1409,48 @@ class WirelessNetworkBss:
             return
 
         # Determine channel width
-        width = "unknown"
-        if operating_class == 131:
+        width = "--"
+        if operating_class == 81:
+            width = "20"
+        elif operating_class == 82:
+            width = "20"
+        elif operating_class == 83:
+            width = "40"
+        elif operating_class == 84:
+            width = "40"
+        elif operating_class == 115:
+            width = "20"
+        elif operating_class == 116:
+            width = "40"
+        elif operating_class == 117:
+            width = "40"
+        elif operating_class == 118:
+            width = "20"
+        elif operating_class == 119:
+            width = "40"
+        elif operating_class == 120:
+            width = "40"
+        elif operating_class == 121:
+            width = "20"
+        elif operating_class == 122:
+            width = "40"
+        elif operating_class == 123:
+            width = "40"
+        elif operating_class == 124:
+            width = "20"
+        elif operating_class == 125:
+            width = "20"
+        elif operating_class == 126:
+            width = "40"
+        elif operating_class == 127:
+            width = "40"
+        elif operating_class == 128:
+            width = "80"
+        elif operating_class == 129:
+            width = "160"
+        elif operating_class == 130:
+            width = "80"
+        elif operating_class == 131:
             width = "20"
         elif operating_class == 132:
             width = "40"
@@ -1421,11 +1458,15 @@ class WirelessNetworkBss:
             width = "80"
         elif operating_class == 134:
             width = "160"
+        elif operating_class == 135:
+            width = "80+80"
+        elif operating_class == 136:
+            width = "20"
 
         rnr_shortssid = RNR_SHORT_SSID(shortssid)
         rnr_bssid = RNR_BSSID(bssid)
         rnr_channel = RNR_CHANNEL(channel_number, width)
-        rnr_freq = RNR_FREQ(channel_number)
+        rnr_freq = RNR_FREQ(channel_number, operating_class)
 
         try:
             rnr_freq.value = f"{float(int(rnr_freq.value) / 1000):.3f}"
@@ -1441,11 +1482,11 @@ class WirelessNetworkBss:
         rnr_tbtt_offset = RNR_TBTT_OFFSET(neighbor_ap_tbtt_offset)
         rnr_colocatedap = RNR_COLOCATED_AP(co_located_ap)
 
-        oob_bssid = OOB_BSSID(self.bssid.value if self.bssid else "unknown")
-        oob_rssi = OOB_RSSI(self.rssi.value if self.rssi else "unknown")
-        oob_ssid = OOB_SSID(self.ssid.value if self.ssid else "unknown")
+        oob_bssid = OOB_BSSID(self.bssid.value if self.bssid else "--")
+        oob_rssi = OOB_RSSI(self.rssi.value if self.rssi else "--")
+        oob_ssid = OOB_SSID(self.ssid.value if self.ssid else "")
         oob_channel = OOB_CHANNEL(
-            self.channel_number.value if self.channel_number else "unknown"
+            self.channel_number.value if self.channel_number else "--"
         )
 
         rnr_mld_id = RNR_AP_MLD_ID(ap_mld_id)
@@ -1682,7 +1723,7 @@ class WirelessNetworkBss:
                     except Exception as e:
                         gps = f"parsing error"
                         log.warning(
-                            f"{self.bssid if self is not None else 'unknown BSSID'}: couldn't parse GPS ellipse IE: {str(e)}"
+                            f"{self.bssid if self is not None else '-- BSSID'}: couldn't parse GPS ellipse IE: {str(e)}"
                         )
                     out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, GPS Ellipse: {gps}"
                 elif oui_subtype == 10:  # AP Health
@@ -3142,7 +3183,7 @@ class WirelessNetworkBss:
             try:
                 pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
             except KeyError:
-                pairwise_list.append(f"unknown({pairwise_cipher_suite})")
+                pairwise_list.append(f"--({pairwise_cipher_suite})")
             index += 4
             count += 1
         if pairwise_cipher_suite == 0:
@@ -3166,7 +3207,7 @@ class WirelessNetworkBss:
             try:
                 akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
             except KeyError:
-                akm_list.append(f"unknown({akm_suite})")
+                akm_list.append(f"--({akm_suite})")
             index += 4
             count += 1
         if akm_suite == 0:
