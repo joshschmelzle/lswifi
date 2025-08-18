@@ -425,13 +425,6 @@ def setup_parser() -> argparse.ArgumentParser:
         help="adds TPC column to output using information from AP beacon 802.11h",
     )
     parser.add_argument(
-        "--mfp",
-        "--pmf",
-        dest="pmf",
-        action="store_true",
-        help="adds Protected Management Frame column to output using information from AP beacon RSNE",
-    )
-    parser.add_argument(
         "--period",
         dest="period",
         action="store_true",

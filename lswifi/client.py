@@ -341,8 +341,7 @@ class Client(object):
             self.scan_finished = False
             self.data = None
             self.last_event = ""
-            now = datetime.datetime
-            now = now.now()
+            now = datetime.datetime.now()
             nowutc = now.now(datetime.timezone.utc)
             self.last_scan_time_epoch = now.timestamp()
             self.last_scan_time_epoch_utc = nowutc.timestamp()
@@ -359,7 +358,7 @@ class Client(object):
                 supported=False,
                 is_bytes_arg=self.args.bytes,
             )
-            self.timeout_interval = 5.0
+            self.timeout_interval = 7.0
             self.client_handle = WLAN_API.WLAN.open_handle()
             # self.scan_timer = Timer(self.timeout_interval, self.scan_timeout)
             self.scan_timer = TimerEx(self.timeout_interval, self.scan_timeout)
@@ -537,8 +536,7 @@ class Client(object):
                     self.log.debug(f"({self.mac}), start get_bss_list...")
                     self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
                     self.scan_finished = True
-                    now = datetime.datetime
-                    now = now.now()
+                    now = datetime.datetime.now()
                     nowutc = now.now(datetime.timezone.utc)
                     self.last_scan_time_epoch = now.timestamp()
                     self.last_scan_time_epoch_utc = nowutc.timestamp()

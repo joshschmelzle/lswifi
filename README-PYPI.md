@@ -105,7 +105,6 @@ options:
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h
-  --mfp, --pmf          adds Protected Management Frame column to output using information from AP beacon RSNE
   --period              adds beacon period column to output using information from AP beacon
   --uptime, -uptime     sort output by access point uptime based on beacon timestamp
   -rnr, --rnr           special mode to create an alternate table based on RNR results

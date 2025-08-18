@@ -4,6 +4,13 @@ Release History
 RELEASED
 --------
 
+0.1.56 (2025/08/18)
+-------------------
+
+- Removes --pmf arg as PMF column is included by default
+- Increase scan timeout to 7 seconds
+- Improve RNR parsing when reported neighbor BSSes are in 2.4/5 GHz
+
 0.1.55 (2025/08/15)
 -------------------
 

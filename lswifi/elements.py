@@ -1410,6 +1410,42 @@ class WirelessNetworkBss:
 
         # Determine channel width
         width = "--"
+        if operating_class == 1:
+            width = "20"
+        if operating_class == 2:
+            width = "20"
+        if operating_class == 3:
+            width = "20"
+        if operating_class == 4:
+            width = "20"
+        if operating_class == 5:
+            width = "20"
+        if operating_class == 12:
+            width = "20"
+        if operating_class == 22:
+            width = "40"
+        if operating_class == 23:
+            width = "40"
+        if operating_class == 24:
+            width = "40"
+        if operating_class == 25:
+            width = "40"
+        if operating_class == 26:
+            width = "40"
+        if operating_class == 27:
+            width = "40"
+        if operating_class == 28:
+            width = "40"
+        if operating_class == 29:
+            width = "40"
+        if operating_class == 30:
+            width = "40"
+        if operating_class == 31:
+            width = "40"
+        if operating_class == 32:
+            width = "40"
+        if operating_class == 33:
+            width = "40"
         if operating_class == 81:
             width = "20"
         elif operating_class == 82:

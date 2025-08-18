@@ -108,7 +108,6 @@ options:
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h
-  --mfp, --pmf          adds Protected Management Frame column to output using information from AP beacon RSNE
   --period              adds beacon period column to output using information from AP beacon
   --uptime, -uptime     sort output by access point uptime based on beacon timestamp
   -rnr, --rnr           special mode to create an alternate table based on RNR results
@@ -197,17 +196,19 @@ FAQs
    - Either `lswifi` is not installed, or the Python Scripts directory is not in the PATH environment variable.
    - To fix ensure the Scripts directory is included in the [PATH environment variable](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables) and `lswifi.exe` exists in said folder.
    - Here is an example for how to find the Scripts directory (this directory needs to be on the PATH):
+   
+   ```bash
+   > python
+   Python 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 15:28:43) [MSC v.1943 64 bit (ARM64)] on win32
+   Type "help", "copyright", "credits" or "license" for more information.
+   >>> import os,sys
+   >>> os.path.join(sys.prefix, 'Scripts')
+   'C:\\Users\\jsz\\AppData\\Local\\Programs\\Python\\Python313-arm64\\Scripts'
+   ```
+
 5. What does "Not a monitor mode packet capture" in `<file>.pcapng` capture file properties mean?
    - Wi-Fi frames captured via Windows Native Wifi API (wlanapi.dll). Not a traditional direct over-the-air monitor mode capture; data is processed by Windows driver stack which may combine or modify information from beacons and probe responses.
 
-```bash
-> python
-Python 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 15:28:43) [MSC v.1943 64 bit (ARM64)] on win32
-Type "help", "copyright", "credits" or "license" for more information.
->>> import os,sys
->>> os.path.join(sys.prefix, 'Scripts')
-'C:\\Users\\jsz\\AppData\\Local\\Programs\\Python\\Python313-arm64\\Scripts'
-```
 
 Contributing
 ------------

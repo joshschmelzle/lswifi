@@ -872,9 +872,6 @@ class lswifi:
                     ]
                 )
 
-                if args.pmf:
-                    out_results[-1].insert(len(out_results[-1]) - 1, bss.pmf.out())
-
                 if args.period:
                     out_results[-1].append(bss.beacon_interval.out())
 
