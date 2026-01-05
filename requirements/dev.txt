@@ -11,9 +11,9 @@ astor==0.8.1
 attrs==25.3.0
     # via flake8-bugbear
 autoflake==2.3.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\format.in
+    # via -r format.in
 black==25.1.0
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\format.in
+    # via -r format.in
 build==1.2.2.post1
     # via pip-tools
 cachetools==5.5.2
@@ -27,26 +27,22 @@ click==8.1.8
     #   black
     #   pip-tools
 colorama==0.4.6
-    # via
-    #   build
-    #   click
-    #   pytest
-    #   tox
+    # via tox
 coverage==7.8.0
     # via
-    #   -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\tests.in
+    #   -r tests.in
     #   coverage-badge
 coverage-badge==1.1.2
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\tests.in
+    # via -r tests.in
 distlib==0.3.9
     # via virtualenv
-filelock==3.18.0
+filelock==3.20.1
     # via
     #   tox
     #   virtualenv
 flake8==7.2.0
     # via
-    #   -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    #   -r style.in
     #   flake8-alfred
     #   flake8-bugbear
     #   flake8-builtins
@@ -54,37 +50,37 @@ flake8==7.2.0
     #   flake8-simplify
     #   flake8-string-format
 flake8-alfred==1.1.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-blind-except==0.2.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-bugbear==24.12.12
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-builtins==2.5.0
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-fixme==1.1.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-logging-format==2024.24.12
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-requirements==2.2.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-simplify==0.21.0
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-string-format==0.3.0
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 flake8-variables-names==0.0.6
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\style.in
+    # via -r style.in
 identify==2.6.10
     # via pre-commit
 iniconfig==2.1.0
     # via pytest
 isort==6.0.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\format.in
+    # via -r format.in
 mccabe==0.7.0
     # via flake8
 mock==5.2.0
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\tests.in
+    # via -r tests.in
 mypy==1.15.0
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\typing.in
+    # via -r typing.in
 mypy-extensions==1.1.0
     # via
     #   black
@@ -102,8 +98,6 @@ packaging==25.0
     #   tox
 pathspec==0.12.1
     # via black
-pefile==2023.2.7
-    # via pyinstaller
 pip-tools==7.4.1
     # via -r dev.in
 platformdirs==4.3.8
@@ -134,13 +128,11 @@ pyproject-hooks==1.2.0
     #   build
     #   pip-tools
 pytest==8.3.5
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\tests.in
-pywin32-ctypes==0.2.3
-    # via pyinstaller
+    # via -r tests.in
 pyyaml==6.0.2
     # via pre-commit
 scapy==2.6.1
-    # via -r C:\Users\joshu\Documents\GitHub\lswifi\requirements\tests.in
+    # via -r tests.in
 tox==4.25.0
     # via -r dev.in
 typing-extensions==4.13.2
