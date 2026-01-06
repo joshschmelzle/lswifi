@@ -612,12 +612,16 @@ class WirelessNetworkBss:
                 index += 1
                 element_data = element_data + byte
                 if is_last_byte:
-                    self.log.debug(f"IE {element_id}: appending (last byte, data={element_data.hex()})")
+                    self.log.debug(
+                        f"IE {element_id}: appending (last byte, data={element_data.hex()})"
+                    )
                     self._append_information_elements(
                         element_id, element_length, element_data, information_elements
                     )
             else:
-                self.log.debug(f"IE {element_id}: appending (data={element_data.hex()})")
+                self.log.debug(
+                    f"IE {element_id}: appending (data={element_data.hex()})"
+                )
                 self._append_information_elements(
                     element_id, element_length, element_data, information_elements
                 )
@@ -3431,7 +3435,9 @@ class WirelessNetworkBss:
         return f"{int.from_bytes(edata, 'little')} dBm"
 
     def __parse_bss_load_element(self, edata):
-        sta_count, channel_utilization, available_admission_capacity = struct.unpack("<HBH", edata)
+        sta_count, channel_utilization, available_admission_capacity = struct.unpack(
+            "<HBH", edata
+        )
         channel_utilization = math.ceil((channel_utilization / 255) * 100)
         # TODO: calculate us/s per capacity e.g. 30625 (980000 us/s)
         if self is not None:
