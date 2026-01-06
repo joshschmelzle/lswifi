@@ -2094,6 +2094,13 @@ class WirelessNetworkBss:
                 out = "Cisco Aironet (11)"
             if vendor_oui_type == 20:
                 out = "Cisco Aironet (20)"
+            if vendor_oui_type == 47:  # Cisco AP Name v2
+                apname = remove_control_chars(
+                    "".join([chr(i) for i in memoryview_body[1:]])
+                )
+                out = f"OUI: {oui} (Cisco), Subtype: AP Name v2, AP Name: {apname}"
+                if self is not None:
+                    self.apname.value = apname
             return out
         if "00:50:f2:04" in oui:  # Device name here
             out = "Microsoft WPS"
