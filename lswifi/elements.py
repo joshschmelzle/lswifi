@@ -2071,6 +2071,16 @@ class WirelessNetworkBss:
             if self is not None:
                 self.apname.value = apname
             return out
+        if "84:80:94:00" in oui:  # Meter
+            apname = remove_control_chars(
+                "".join([chr(i) for i in memoryview_body[4:]])
+            )
+            out = (
+                f"OUI: {oui} (Meter), Subtype: {memoryview_body[:1]}, AP Name: {apname}"
+            )
+            if self is not None:
+                self.apname.value = apname
+            return out
         if "00:11:74" in oui:  # Arista / Mojo
             out = f"OUI: {oui} (Arista (Mojo))"
             if vendor_oui_type == 0:
