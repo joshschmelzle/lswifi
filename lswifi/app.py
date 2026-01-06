@@ -1258,7 +1258,7 @@ class lswifi:
                         if len(frame_data) >= 34:
                             beacon_period = struct.unpack("<H", frame_data[32:34])[0]
 
-                        ies_data = frame_data[36:] if len(frame_data) > 36 else b""
+                        ies_data = frame_data[36:-4] if len(frame_data) > 40 else b""
                         buffer = create_string_buffer(ies_data)
                         buffer_type = POINTER(type(buffer))
                         ies_data = cast(buffer, buffer_type).contents
@@ -1344,7 +1344,7 @@ class lswifi:
                     newapnames,
                 ) = self.parse_bss_list(
                     client,
-                    False,
+                    args.apnames,
                     args.csv if hasattr(args, "csv") else "",
                     args.json if hasattr(args, "json") else "",
                     args,
