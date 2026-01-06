@@ -4,95 +4,102 @@ Release History
 RELEASED
 --------
 
-0.1.56 (2025/08/18)
+0.1.57 (2026-01-06)
+-------------------
+
+- Add Cisco AP Name v2 support; prefer v2 over CCX v1 when both are present
+- Add Ubiquiti AP name parsing
+- Add Meter AP name parsing
+
+0.1.56 (2025-08-18)
 -------------------
 
 - Removes --pmf arg as PMF column is included by default
 - Increase scan timeout to 7 seconds
 - Improve RNR parsing when reported neighbor BSSes are in 2.4/5 GHz
 
-0.1.55 (2025/08/15)
+0.1.55 (2025-08-15)
 -------------------
 
 - Fix RNR parsing when reported neighbor BSSes are in 2.4/5 GHz
 
-0.1.54 (2025/08/07)
+0.1.54 (2025-08-07)
 -------------------
 
 - Fix channel parsing error for 160 MHz CBW
 
-0.1.53 (2025/07/22)
+0.1.53 (2025-07-22)
 -------------------
 
 - Improve RNR decoding for Wi-Fi 7
 
-0.1.52 (2025/06/09)
+0.1.52 (2025-06-09)
 -------------------
 
 - Fix AP health IE (again)
 
-0.1.51 (2025/06/05)
+0.1.51 (2025-06-05)
 -------------------
 
 - Fix AP health IE
 
-0.1.50 (2025/05/13)
+0.1.50 (2025-05-13)
 -------------------
 
 - Fixed Python 3.9 compatibility by replacing datetime.UTC with datetime.timezone.utc
 
-0.1.49 (2025/05/12)
+0.1.49 (2025-05-12)
 -------------------
 
 - Add import/export for pcapng files using `-export` arg.
 - Add AP health IE for HPE Aruba Networking.
 
-0.1.48 (2025/04/23)
+0.1.48 (2025-04-23)
 -------------------
 
 - Add GPS ellipse IE for HPE Aruba Networking.
 
-0.1.47 (2025/01/07)
+0.1.47 (2025-01-07)
 -------------------
 
 - Fixed buffer overflow crash in interface enumeration by dynamically allocating buffer size instead of using fixed limit (introduced in 0.1.46).
 
-0.1.46 (2024/12/31)
+0.1.46 (2024-12-31)
 -------------------
 
 - Fixed a crash occurring when mapping an interface GUID to a physical address on systems with certain administrative language settings.
 - Drop support for Python 3.7-3.8
 
-0.1.45 (2024/07/02)
+0.1.45 (2024-07-02)
 -------------------
 
 - Rename cipher suite 00-0F-AC:4 from `AES` to `CCMP-128` to 1) match IEEE meaning and 2) with Wi-Fi 7 networks we will start to see GCMP-256 too, finally.
 - Split security column into 3 columns separating authentication, encryption, and PMF into their own
 
-0.1.44 (2024/06/27)
+0.1.44 (2024-06-27)
 -------------------
 
 - Rename AKM labels for concision and to match labels found in WFA deployment guide
 - Add Management MIC (MME) to IE dictionary
 - Add TWT Information Extension to Extension IE dictionary
 
-0.1.43 (2024/03/25)
+0.1.43 (2024-03-25)
 -------------------
 
 - Remove debug print statement added in 0.1.42
 
-0.1.42 (2024/03/25)
+0.1.42 (2024-03-25)
 -------------------
 
 - Fix MAC address detection for certain WLAN interfaces
 - Fix 320 MHz channel detection in 6 GHz for Wi-Fi 7
 
-0.1.41 (2023/09/22)
+0.1.41 (2023-09-22)
 -------------------
 
 - Suppress syslog errors
 
-0.1.40 (2023/09/15)
+0.1.40 (2023-09-15)
 -------------------
 
 - Update vendor OUIs hash
