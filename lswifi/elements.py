@@ -2067,7 +2067,7 @@ class WirelessNetworkBss:
             if self is not None:
                 self.apname.value = apname
             return out
-        if "5c:5b:35:00" in oui:  # Meter
+        if "84:80:94:00" in oui:  # Meter
             apname = remove_control_chars(
                 "".join([chr(i) for i in memoryview_body[4:]])
             )
