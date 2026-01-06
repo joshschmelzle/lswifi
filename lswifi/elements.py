@@ -2087,6 +2087,14 @@ class WirelessNetworkBss:
             else:
                 out += f", Vender OUI Type: {vendor_oui_type}"
             return out
+        if "00:15:6d:01" in oui:  # Ubiquiti
+            apname = remove_control_chars(
+                "".join([chr(i) for i in memoryview_body[4:]])
+            )
+            out = f"OUI: {oui} (Ubiquiti), Subtype: {memoryview_body[:1]}, AP Name: {apname}"
+            if self is not None:
+                self.apname.value = apname
+            return out
         if "00:40:96" in oui:  # Cisco
             if vendor_oui_type == 0:
                 out = "Cisco Aironet (0)"
