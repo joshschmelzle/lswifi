@@ -605,12 +605,19 @@ class WirelessNetworkBss:
                 continue
             if is_length_byte:
                 element_length = bytes_to_int(byte)
+                self.log.debug(f"IE {element_id}: length={element_length}")
                 is_length_byte = False
                 continue
             if index < element_length:
                 index += 1
                 element_data = element_data + byte
+                if is_last_byte:
+                    self.log.debug(f"IE {element_id}: appending (last byte, data={element_data.hex()})")
+                    self._append_information_elements(
+                        element_id, element_length, element_data, information_elements
+                    )
             else:
+                self.log.debug(f"IE {element_id}: appending (data={element_data.hex()})")
                 self._append_information_elements(
                     element_id, element_length, element_data, information_elements
                 )
@@ -625,10 +632,6 @@ class WirelessNetworkBss:
                 element_id = bytes_to_int(byte)
                 is_index_byte = False
                 continue
-            if is_last_byte:
-                self._append_information_elements(
-                    element_id, element_length, element_data, information_elements
-                )
         return information_elements
 
     def decode_bytefile_ies(bytes):
@@ -1244,7 +1247,8 @@ class WirelessNetworkBss:
         apname = body[10:]
         apname = "".join([chr(i) for i in apname[:-5]])
         if self is not None:
-            self.apname.value = apname
+            if not self.apname.value or len(apname) > len(self.apname.value):
+                self.apname.value = apname
         return f"AP Name: {apname}, Clients: {clients}"
 
     def __parse_reduced_neighbor_report(self, element_data):
@@ -2096,7 +2100,7 @@ class WirelessNetworkBss:
                 out = "Cisco Aironet (20)"
             if vendor_oui_type == 47:  # Cisco AP Name v2
                 apname = remove_control_chars(
-                    "".join([chr(i) for i in memoryview_body[1:]])
+                    "".join([chr(i) for i in memoryview_body[4:]])
                 )
                 out = f"OUI: {oui} (Cisco), Subtype: AP Name v2, AP Name: {apname}"
                 if self is not None:
@@ -3409,14 +3413,12 @@ class WirelessNetworkBss:
         return f"{int.from_bytes(edata, 'little')} dBm"
 
     def __parse_bss_load_element(self, edata):
-        body = [edata[i : i + 1] for i in range(len(edata))]
-        sta_count = int.from_bytes(body[0] + body[1], "little")
-        channel_utilization = math.ceil((int.from_bytes(body[2], "big") / 255) * 100)
-        available_admission_capacity = int.from_bytes(body[3] + body[4], "little")
+        sta_count, channel_utilization, available_admission_capacity = struct.unpack("<HBH", edata)
+        channel_utilization = math.ceil((channel_utilization / 255) * 100)
         # TODO: calculate us/s per capacity e.g. 30625 (980000 us/s)
         if self is not None:
             self.stations.value = str(sta_count)
-            self.utilization.value = "{}%".format(channel_utilization)
+            self.utilization.value = f"{channel_utilization}%"
         return (
             f"Station count: {sta_count}, "
             f"Utilization: {channel_utilization}%, "
