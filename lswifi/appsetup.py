@@ -165,12 +165,12 @@ def setup_logger(args) -> logging.Logger:
 
 
 def sensitivity(value):
-    """Validate user provided sensitivity is between -1 (stronger) and -100 (weaker)"""
+    """Validate user provided sensitivity is between -1 (stronger) and -110 (weaker)"""
     try:
         display_sensitivity = int(value)
-        if display_sensitivity not in range(-100, 0):
+        if display_sensitivity not in range(-110, 0):
             raise argparse.ArgumentTypeError(
-                "rssi sensitivity threshold must be a value from -1 to -100"
+                "rssi sensitivity threshold must be a value from -1 to -110"
             )
     except ValueError:
         raise argparse.ArgumentTypeError(f"{value} not a valid threshold")
@@ -568,8 +568,8 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-decode",
         dest="decode",
-        metavar="PCAPNG_FILE",
-        help="parse scan results from pcapng file. by default shows all networks in the file, can be combined with filtering options.",
+        metavar="PCAP_FILE",
+        help="parse scan results from pcap/pcapng file. by default shows all networks in the file, can be combined with filtering options.",
     )
     parser.add_argument(
         "--bytes",
