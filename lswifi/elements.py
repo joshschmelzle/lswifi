@@ -1023,6 +1023,18 @@ class WirelessNetworkBss:
                 format_bytes_as_hex(element_data),
             )
 
+        # 802.11-2020 9.4.2.54 Management MIC element (76)
+        if element_id == 76:
+            decoded = WirelessNetworkBss.__parse_management_mic(element_data)
+            return WLAN_API.InformationElement(
+                element_id,
+                WirelessNetworkBss.get_eid_name(element_id),
+                element_length,
+                decoded,
+                element_data,
+                format_bytes_as_hex(element_data),
+            )
+
         # 802.11-2020 9.4.2.91 Interworking (107)
         if element_id == 107:
             decoded = WirelessNetworkBss.__parse_interworking_element(
@@ -3060,6 +3072,43 @@ class WirelessNetworkBss:
             bss_width_channel_transition_delay_factor,
             obss_scan_activity_threshold,
         )
+
+    def __parse_management_mic(edata):
+        """
+        Parse Management MIC element (MME) per 802.11-2020 9.4.2.54.
+
+        The MME provides message integrity and replay protection for group
+        addressed robust Management frames and protected Beacon frames.
+
+        Structure:
+            - Key ID (2 octets): bits 0-11 identify IGTK (4-5) or BIGTK (6-7)
+            - IPN/BIPN (6 octets): replay counter as little-endian unsigned integer
+            - MIC (8 or 16 octets): integrity code, length depends on cipher suite
+        """
+        body = list(memoryview(edata))
+
+        # Key ID: 2 octets, little-endian. Bits 0-11 = key ID, bits 12-15 reserved
+        key_id_raw = body[0] | (body[1] << 8)
+        key_id = key_id_raw & 0x0FFF  # Extract bits 0-11
+
+        # Determine key type based on Key ID value
+        if key_id in (4, 5):
+            key_type = "IGTK"
+        elif key_id in (6, 7):
+            key_type = "BIGTK"
+        else:
+            key_type = "Reserved"
+
+        # IPN/BIPN: 6 octets, little-endian unsigned integer
+        ipn = 0
+        for i in range(6):
+            ipn |= body[2 + i] << (8 * i)
+
+        # MIC: remaining bytes (8 for BIP-CMAC-128, 16 for others)
+        mic_bytes = bytes(body[8:])
+        mic = mic_bytes.hex()
+
+        return f"KeyID: {key_id} ({key_type}), " f"IPN: 0x{ipn:012x}, " f"MIC: {mic}"
 
     def __parse_interworking_element(self, edata):
         """
