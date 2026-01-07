@@ -1,5 +1,5 @@
 coverage
-coverage-badge
+genbadge[coverage]
 mock
 pytest
 scapy

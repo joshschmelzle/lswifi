@@ -60,8 +60,8 @@ class WirelessNetworkBss:
         connected_bssid=None,
         is_byte_input_file=False,
         is_bytes_arg=False,
-        is_pcapng=False,
-        pcapng_ies=None,
+        is_pcap=False,
+        pcap_ies=None,
     ):
         """
         bss_entry:
@@ -182,18 +182,18 @@ class WirelessNetworkBss:
             self.has_rnr = False
             self.rnrs = []
             if not is_byte_input_file:
-                if not is_pcapng:
+                if not is_pcap:
                     self.raw_information_elements = (
                         self._get_information_elements_buffer(bss_entry)
                     )
                     # self.iesbytes = [c for c in self.raw_information_elements]
                     self.iesbytes = bytearray(self.raw_information_elements)
                 else:
-                    self.iesbytes = bytearray(pcapng_ies)
+                    self.iesbytes = bytearray(pcap_ies)
 
                 # if we're going to print out bytes we don't want to process yet as we could have a malformed IE that needs to be decoded and handled correctly
                 if not is_bytes_arg:
-                    if not is_pcapng:
+                    if not is_pcap:
                         self.information_elements = (
                             WirelessNetworkBss.process_information_elements(
                                 self, bss_entry=bss_entry
@@ -202,7 +202,7 @@ class WirelessNetworkBss:
                     else:
                         self.information_elements = (
                             WirelessNetworkBss.process_information_elements(
-                                self, ie_buffer=pcapng_ies
+                                self, ie_buffer=pcap_ies
                             )
                         )
 
@@ -613,14 +613,14 @@ class WirelessNetworkBss:
                 element_data = element_data + byte
                 if is_last_byte:
                     self.log.debug(
-                        f"IE {element_id}: appending (last byte, data={element_data.hex()})"
+                        f"IE {element_id}: appending (last byte, hex={element_data.hex()})"
                     )
                     self._append_information_elements(
                         element_id, element_length, element_data, information_elements
                     )
             else:
                 self.log.debug(
-                    f"IE {element_id}: appending (data={element_data.hex()})"
+                    f"IE {element_id}: appending (hex={element_data.hex()}, latin1={ascii(element_data.decode('latin-1'))})"
                 )
                 self._append_information_elements(
                     element_id, element_length, element_data, information_elements
@@ -1631,6 +1631,11 @@ class WirelessNetworkBss:
         """
         log = logging.getLogger(__name__)
         memoryview_body = list(memoryview(element_data))
+
+        if len(memoryview_body) < 4:
+            log.debug(f"Vendor IE too short: {len(memoryview_body)} bytes")
+            return f"OUI: {oui3} (truncated)"
+
         zero, one, two, three = [memoryview_body[i] for i in [0, 1, 2, 3]]
         oui3 = convert_mac_address_to_string([zero, one, two]).upper()
         oui = convert_mac_address_to_string([zero, one, two, three])
@@ -2041,27 +2046,27 @@ class WirelessNetworkBss:
                     self.apname.value = apname
             return out
         if "00:19:77" in oui:  # Aerohive / Extreme
+            out = f"OUI: {oui} (Extreme (Aerohive))"
             if vendor_oui_type == 33:  # Aerohive AP name
-                version = int.from_bytes(element_body[5], "little")
-                if version == 33:
-                    # subtype = int.from_bytes(element_body[6], "little")
-                    # apname_length = int.from_bytes(element_body[7], "little")
+                version = int.from_bytes(element_body[4], "little")
+                if version == 1:
                     apname = remove_control_chars(
-                        "".join([chr(i) for i in memoryview_body[8:]])
+                        "".join([chr(i) for i in memoryview_body[7:]])
                     )
-                    out = f"OUI: {oui} (Extreme (Aerohive)), Subtype: {vendor_oui_type}, AP Name: {apname}"
+                    out += f", AP Name: {apname}"
                     if self is not None:
                         self.apname.value = apname
-            return out
+                return out
         if "00:a0:f8" in oui:  # Zebra Technologies / WiNG / Extreme
             # EID 221 (len=18): OUI: 00:a0:f8 Subtype: 1 Data b'\x00\xa0\xf8\x01\x03\x01\x0f\xc0\x00\x00\x00\x06ap8533'
+            out = f"OUI: {oui} (Extreme (WiNG))"
             if vendor_oui_type == 1:  # AP name
                 # offset = element_body[4, 5, 6, 7, 8, 9, 10] #offset is 7 then + 1 for ap length
                 element_body[11]
                 apname = remove_control_chars(
                     "".join([chr(i) for i in memoryview_body[12:]])
                 )
-                out = f"OUI: {oui} (Extreme (WiNG)), Subtype: {vendor_oui_type}, AP Name: {apname}"
+                out += f", AP Name: {apname}"
                 if self is not None:
                     self.apname.value = apname
             return out

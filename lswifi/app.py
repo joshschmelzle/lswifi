@@ -51,7 +51,7 @@ from lswifi.helpers import (
     remove_control_chars,
     strip_mac_address_format,
 )
-from lswifi.pcapng import PCAPNG
+from lswifi.pcap import PCAP, parse_radiotap_header
 from lswifi.schemas.out import *
 
 
@@ -120,7 +120,7 @@ class lswifi:
                 sys.exit(0)
 
             if args.decode:
-                self.decode_pcapng_file(args)
+                self.decode_pcap_file(args)
                 sys.exit(0)
 
             scanning = True
@@ -490,7 +490,7 @@ class lswifi:
 
         exportpath = None
         exportraw_path = None
-        pcapng_path = None
+        pcap_path = None
 
         if args.exportraw:
             appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
@@ -516,14 +516,14 @@ class lswifi:
 
         if args.export:
             if args.export_path:
-                pcapng_path = args.export_path
-                if not os.path.isabs(pcapng_path):
-                    pcapng_path = os.path.abspath(pcapng_path)
+                pcap_path = args.export_path
+                if not os.path.isabs(pcap_path):
+                    pcap_path = os.path.abspath(pcap_path)
 
-                os.makedirs(os.path.dirname(pcapng_path), exist_ok=True)
-                if os.path.isdir(pcapng_path):
-                    pcapng_path = os.path.join(
-                        pcapng_path,
+                os.makedirs(os.path.dirname(pcap_path), exist_ok=True)
+                if os.path.isdir(pcap_path):
+                    pcap_path = os.path.join(
+                        pcap_path,
                         f"lswifi_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pcapng",
                     )
             else:
@@ -532,7 +532,7 @@ class lswifi:
                 if not is_path:
                     os.makedirs(appdata_path)
 
-                pcapng_path = os.path.join(
+                pcap_path = os.path.join(
                     appdata_path,
                     f"lswifi_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pcapng",
                 )
@@ -965,7 +965,7 @@ class lswifi:
                         writer.writerow(result)
 
         if args.export and len(wireless_network_bss_list) > 0:
-            pcap = PCAPNG(pcapng_path)
+            pcap = PCAP(pcap_path)
             networks_exported = 0
 
             try:
@@ -1015,12 +1015,12 @@ class lswifi:
 
                 if args.export != "all":
                     if networks_exported > 0:
-                        log.info(f"Exported BSSID {args.export} to {pcapng_path}")
-                        print(f"Exported BSSID {args.export} to {pcapng_path}")
+                        log.info(f"Exported BSSID {args.export} to {pcap_path}")
+                        print(f"Exported BSSID {args.export} to {pcap_path}")
                     else:
                         log.info(f"BSSID {args.export} not found or filtered out")
                 else:
-                    log.info(f"Exported {networks_exported} networks to {pcapng_path}")
+                    log.info(f"Exported {networks_exported} networks to {pcap_path}")
 
             except Exception as e:
                 log.error(f"Error exporting to pcapng: {str(e)}")
@@ -1131,8 +1131,8 @@ class lswifi:
 
         return True
 
-    def decode_pcapng_file(self, args):
-        """Parse scan results from a pcapng file"""
+    def decode_pcap_file(self, args):
+        """Parse scan results from a pcap/pcapng file"""
         log = logging.getLogger(__name__)
 
         if not os.path.isfile(args.decode):
@@ -1166,7 +1166,7 @@ class lswifi:
                 def send(self):
                     return self.iesbytes
 
-            pcap = PCAPNG(args.decode, mode="r")
+            pcap = PCAP(args.decode, mode="r")
             networks = []
 
             with pcap:
@@ -1182,6 +1182,9 @@ class lswifi:
                             continue
 
                         header_len = struct.unpack_from("<BBH", packet_data, 0)[2]
+
+                        rt = parse_radiotap_header(packet_data)
+                        header_len = rt["header_len"]
 
                         if header_len < 8 or header_len > len(packet_data):
                             continue
@@ -1203,40 +1206,8 @@ class lswifi:
 
                         bssid = frame_data[16:22]
 
-                        rssi = -99
-                        present = struct.unpack_from("<I", packet_data, 4)[0]
-                        if present & 0x00000020:
-                            offset = 8
-                            if present & 0x00000001:
-                                offset += 8
-                            if present & 0x00000002:
-                                offset += 1
-                            if present & 0x00000004:
-                                offset += 1
-                            if present & 0x00000008:
-                                offset += 4
-                            if present & 0x00000010:
-                                offset += 2
-
-                            if offset < header_len:
-                                rssi = struct.unpack(
-                                    "b", packet_data[offset : offset + 1]
-                                )[0]
-
-                        freq = 0
-                        if present & 0x00000008:
-                            freq_offset = 8
-                            if present & 0x00000001:
-                                freq_offset += 8
-                            if present & 0x00000002:
-                                freq_offset += 1
-                            if present & 0x00000004:
-                                freq_offset += 1
-
-                            if freq_offset + 2 <= header_len:
-                                freq = struct.unpack(
-                                    "<H", packet_data[freq_offset : freq_offset + 2]
-                                )[0]
+                        rssi = rt["rssi"]
+                        freq = rt["frequency"]
 
                         ssid = b""
                         if len(frame_data) >= 38:
@@ -1258,7 +1229,24 @@ class lswifi:
                         if len(frame_data) >= 34:
                             beacon_period = struct.unpack("<H", frame_data[32:34])[0]
 
-                        ies_data = frame_data[36:-4] if len(frame_data) > 40 else b""
+                        # check radiotap flags for FCS presence (bit 4 of flags field)
+                        # fcs_present = False
+                        # if present & RT_PRESENT_FLAGS:
+                        #     flags_offset = 8
+                        #     if present & RT_PRESENT_TSFT:
+                        #         flags_offset += 8
+                        #     if flags_offset < header_len:
+                        #         flags = packet_data[flags_offset]
+                        #         fcs_present = bool(flags & 0x10)
+
+                        # strip FCS only if present
+                        if rt["fcs_present"] and len(frame_data) > 40:
+                            ies_data = frame_data[36:-4]
+                        elif len(frame_data) > 36:
+                            ies_data = frame_data[36:]
+                        else:
+                            ies_data = b""
+
                         buffer = create_string_buffer(ies_data)
                         buffer_type = POINTER(type(buffer))
                         ies_data = cast(buffer, buffer_type).contents
@@ -1275,7 +1263,7 @@ class lswifi:
                         mock_bss.iesbytes = ies_data
 
                         bss = WirelessNetworkBss(
-                            mock_bss, is_pcapng=True, pcapng_ies=ies_data
+                            mock_bss, is_pcap=True, pcap_ies=ies_data
                         )
                         bssid_str = ":".join(f"{b:02x}" for b in bssid)
 
@@ -1320,14 +1308,14 @@ class lswifi:
                 class TempClient:
                     def __init__(self, networks):
                         self.data = networks
-                        self.mac = "pcapng file"
+                        self.mac = "pcap file"
                         self.iface = type(
                             "obj",
                             (object,),
                             {
-                                "connection_name": "pcapng file",
-                                "description": "pcapng file",
-                                "guid_string": "pcapng file",
+                                "connection_name": "pcap file",
+                                "description": "pcap file",
+                                "guid_string": "pcap file",
                             },
                         )
                         self.last_scan_time_iso = datetime.datetime.now().isoformat()
@@ -1371,9 +1359,7 @@ class lswifi:
         except Exception as e:
             trace = traceback.format_exc()
             line_number = traceback.extract_tb(sys.exc_info()[2])[-1][1]
-            error_msg = (
-                f"Error parsing pcapng file at line {line_number}: {str(e)}\n{trace}"
-            )
+            error_msg = f"Error parsing pcap at line {line_number}: {str(e)}\n{trace}"
             log.error(error_msg)
 
     def print_rnr_list(self, rnr_results: list, client_mac, args):

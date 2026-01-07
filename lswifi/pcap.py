@@ -10,8 +10,8 @@
 # |_|___/ \_/\_/ |_|_| |_|
 
 """
-lswifi.pcapng
-~~~~~~~~~~~~~
+lswifi.pcap
+~~~~~~~~~~~
 
 """
 
@@ -47,8 +47,148 @@ RT_PRESENT_CHANNEL = 0x00000008
 RT_PRESENT_FHSS = 0x00000010
 RT_PRESENT_DBM_ANTSIGNAL = 0x00000020
 
+PCAP_MAGIC = 0xA1B2C3D4
 
-class PCAPNG:
+
+def parse_radiotap_header(packet_data: bytes) -> dict:
+    """
+    Parse radiotap header and return extracted fields.
+
+    Handles extended present flags, field alignment, and vendor namespaces.
+    """
+    result = {
+        "rssi": -99,
+        "noise": None,
+        "frequency": 0,
+        "channel": 0,
+        "flags": 0,
+        "rate": 0,
+        "antenna": 0,
+        "fcs_present": False,
+        "header_len": 0,
+    }
+
+    if len(packet_data) < 8:
+        return result
+
+    version, pad, header_len = struct.unpack_from("<BBH", packet_data, 0)
+    result["header_len"] = header_len
+
+    if header_len > len(packet_data) or header_len < 8:
+        return result
+
+    present_flags = []
+    offset = 4
+    while offset + 4 <= header_len:
+        present = struct.unpack_from("<I", packet_data, offset)[0]
+        present_flags.append(present)
+        offset += 4
+        if not (present & 0x80000000):  # Extension bit (bit 31)
+            break
+
+    if not present_flags:
+        return result
+
+    first_present = present_flags[0]
+    data_offset = 4 + (len(present_flags) * 4)
+
+    def align_to(off: int, alignment: int) -> int:
+        remainder = off % alignment
+        return off + (alignment - remainder) if remainder else off
+
+    # TSFT (8 bytes, 8-byte aligned)
+    if first_present & RT_PRESENT_TSFT:
+        data_offset = align_to(data_offset, 8)
+        data_offset += 8
+
+    # Flags (1 byte)
+    if first_present & RT_PRESENT_FLAGS:
+        if data_offset < header_len:
+            result["flags"] = packet_data[data_offset]
+            result["fcs_present"] = bool(result["flags"] & 0x10)
+        data_offset += 1
+
+    # Rate (1 byte)
+    if first_present & RT_PRESENT_RATE:
+        if data_offset < header_len:
+            result["rate"] = packet_data[data_offset] * 0.5
+        data_offset += 1
+
+    # Channel (4 bytes: 2 freq + 2 flags, 2-byte aligned)
+    if first_present & RT_PRESENT_CHANNEL:
+        data_offset = align_to(data_offset, 2)
+        if data_offset + 4 <= header_len:
+            freq, chan_flags = struct.unpack_from("<HH", packet_data, data_offset)
+            result["frequency"] = freq
+            result["channel"] = frequency_to_channel(freq)
+        data_offset += 4
+
+    # FHSS (2 bytes)
+    if first_present & RT_PRESENT_FHSS:
+        data_offset += 2
+
+    # Antenna Signal dBm (1 byte, signed)
+    if first_present & RT_PRESENT_DBM_ANTSIGNAL:
+        if data_offset < header_len:
+            result["rssi"] = struct.unpack_from("b", packet_data, data_offset)[0]
+        data_offset += 1
+
+    # Antenna Noise dBm (1 byte, signed)
+    if first_present & 0x00000040:  # RT_PRESENT_DBM_ANTNOISE
+        if data_offset < header_len:
+            result["noise"] = struct.unpack_from("b", packet_data, data_offset)[0]
+        data_offset += 1
+
+    # Lock Quality (2 bytes, 2-byte aligned)
+    if first_present & 0x00000080:
+        data_offset = align_to(data_offset, 2)
+        data_offset += 2
+
+    # TX Attenuation (2 bytes, 2-byte aligned)
+    if first_present & 0x00000100:
+        data_offset = align_to(data_offset, 2)
+        data_offset += 2
+
+    # dB TX Attenuation (2 bytes, 2-byte aligned)
+    if first_present & 0x00000200:
+        data_offset = align_to(data_offset, 2)
+        data_offset += 2
+
+    # dBm TX Power (1 byte)
+    if first_present & 0x00000400:
+        data_offset += 1
+
+    # Antenna (1 byte)
+    if first_present & 0x00000800:
+        if data_offset < header_len:
+            result["antenna"] = packet_data[data_offset]
+        data_offset += 1
+
+    return result
+
+
+def frequency_to_channel(freq: int) -> int:
+    """Convert frequency in MHz to channel number."""
+    # 2.4 GHz
+    if 2412 <= freq <= 2484:
+        if freq == 2484:
+            return 14
+        return (freq - 2407) // 5
+
+    # 5 GHz
+    if 5170 <= freq <= 5885:
+        return (freq - 5000) // 5
+
+    # 6 GHz
+    if 5955 <= freq <= 7115:
+        return (freq - 5950) // 5
+
+    return 0
+
+
+class PCAP:
+    """Reader/writer for pcap and pcapng capture files."""
+
     def __init__(self, file_path, mode="w"):
         self.log = logging.getLogger(__name__)
         self.file_path = file_path
@@ -74,6 +214,26 @@ class PCAPNG:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def _detect_format(self):
+        """Detect if file is pcap or pcapng format. Returns 'pcap', 'pcapng', or None."""
+        pos = self.file.tell()
+        magic = self.file.read(4)
+        self.file.seek(pos)
+
+        if len(magic) < 4:
+            return None
+
+        magic_val = struct.unpack("<I", magic)[0]
+
+        if magic_val == PCAPNG_BLOCK_TYPE_SHB:
+            return "pcapng"
+
+        # legacy pcap
+        if magic_val == PCAP_MAGIC:
+            return "pcap"
+
+        return None
+
     def _write_block(self, block_type, block_data):
         length = len(block_data) + 12
         padding_len = (4 - (length % 4)) % 4
@@ -93,11 +253,6 @@ class PCAPNG:
         self.file.write(block_data)
         self.file.write(padding)
         self.file.write(block_len_bytes)
-        # self.file.write(struct.pack("<I", block_type))
-        # self.file.write(struct.pack("<I", length + padding_len))
-        # self.file.write(block_data)
-        # self.file.write(padding)
-        # self.file.write(struct.pack("<I", length + padding_len))
 
     def _write_option(self, option_code, option_data=b""):
         """Write a pcapng option with proper padding"""
@@ -172,7 +327,7 @@ class PCAPNG:
             )
 
         # Set timestamp resolution to microseconds (value 6)
-        # TImestamps are in units of 10^-6 seconds (microseconds)
+        # Timestamps are in units of 10^-6 seconds (microseconds)
         iface_data += self._write_option(PCAPNG_OPT_IDB_IF_TSRESOL, bytes([6]))
 
         iface_data += self._write_option(PCAPNG_OPT_END)
@@ -312,6 +467,18 @@ class PCAPNG:
         if not self.file or self.mode != "r":
             raise ValueError("File not open for reading")
 
+        file_format = self._detect_format()
+
+        if file_format == "pcap":
+            self.log.debug("Detected legacy pcap format")
+            yield from self._read_pcap_packets()
+            return
+        elif file_format == "pcapng":
+            self.log.debug("Detected pcapng format")
+        else:
+            self.log.error("Unknown file format")
+            return
+
         interfaces = []
 
         for block_type, data in self.read_blocks():
@@ -345,11 +512,12 @@ class PCAPNG:
                 if len(data) < 20:
                     continue
 
-                interface_id, seconds, microseconds, caplen, origlen = struct.unpack(
+                interface_id, ts_high, ts_low, caplen, origlen = struct.unpack(
                     "<IIIII", data[:20]
                 )
 
-                timestamp = seconds + (microseconds / 1000000.0)
+                ts_microseconds = (ts_high << 32) | ts_low
+                timestamp = ts_microseconds / 1_000_000.0
 
                 packet_data = data[20 : 20 + caplen]
 
@@ -357,3 +525,48 @@ class PCAPNG:
                     linktype, interface_name = interfaces[interface_id]
 
                     yield (interface_id, interface_name, timestamp, packet_data)
+
+    def _read_pcap_packets(self):
+        """Generator to read packets from legacy pcap format."""
+        header = self.file.read(24)
+        if len(header) < 24:
+            self.log.error("Invalid pcap file: header too short")
+            return
+
+        magic = struct.unpack("<I", header[:4])[0]
+
+        if magic != PCAP_MAGIC:
+            self.log.error(f"Unknown pcap magic: {hex(magic)}")
+            return
+
+        version_major, version_minor, _, _, snaplen, linktype = struct.unpack(
+            "<HHIIII", header[4:24]
+        )
+
+        self.log.debug(
+            f"PCAP: version={version_major}.{version_minor}, "
+            f"linktype={linktype}, snaplen={snaplen}"
+        )
+
+        if linktype not in (LINKTYPE_IEEE802_11, LINKTYPE_IEEE802_11_RADIOTAP):
+            self.log.warning(f"Unexpected linktype {linktype}, may not be 802.11 data")
+
+        interface_name = "pcap0"
+        packet_num = 0
+
+        while True:
+            pkt_header = self.file.read(16)
+            if len(pkt_header) < 16:
+                break
+
+            ts_sec, ts_usec, caplen, origlen = struct.unpack("<IIII", pkt_header)
+
+            timestamp = ts_sec + (ts_usec / 1_000_000.0)
+
+            packet_data = self.file.read(caplen)
+            if len(packet_data) < caplen:
+                self.log.warning(f"Truncated packet {packet_num}")
+                break
+
+            packet_num += 1
+            yield (0, interface_name, timestamp, packet_data)
