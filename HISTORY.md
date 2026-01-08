@@ -4,6 +4,14 @@ Release History
 RELEASED
 --------
 
+0.1.58 (2026-01-08)
+-------------------
+
+- Fix Aerohive AP name parsing
+- Add Management MIC (MME) parsing in -ies output
+- Add MikroTik/Routerboard AP name parsing
+- Improve pcap decoding
+
 0.1.57 (2026-01-06)
 -------------------
 
