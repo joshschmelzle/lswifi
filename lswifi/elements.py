@@ -2057,6 +2057,43 @@ class WirelessNetworkBss:
                 if self is not None:
                     self.apname.value = apname
             return out
+        if "00:0c:42" in oui:  # MikroTik / Routerboard
+            out = f"OUI: {oui} (MikroTik (Routerboard))"
+            # log.debug(f"element_body type: {type(element_body)}, len: {len(element_body)}")
+            # log.debug(f"element_body: {element_body.hex() if hasattr(element_body, 'hex') else element_body}")
+            # log.debug(f"memoryview_body type: {type(memoryview_body)}")
+            if vendor_oui_type == 0:
+                pos = 6
+                while pos + 2 <= len(element_body):
+                    raw_subtype = element_body[pos]
+                    raw_sublength = element_body[pos + 1]
+                    # log.debug(f"pos: {pos}, raw_subtype: {raw_subtype} (type: {type(raw_subtype)}), raw_sublength: {raw_sublength} (type: {type(raw_sublength)})")
+                    subtype = (
+                        raw_subtype if isinstance(raw_subtype, int) else raw_subtype[0]
+                    )
+                    sublength = (
+                        raw_sublength
+                        if isinstance(raw_sublength, int)
+                        else raw_sublength[0]
+                    )
+                    # log.debug(f"subtype: {subtype}, sublength: {sublength}")
+                    if subtype == 1 and sublength == 30:
+                        apname = remove_control_chars(
+                            "".join(
+                                [
+                                    chr(i)
+                                    for i in memoryview_body[
+                                        pos + 12 : pos + 2 + sublength
+                                    ]
+                                ]
+                            )
+                        )
+                        out += f", AP Name: {apname}"
+                        if self is not None:
+                            self.apname.value = apname
+                        break
+                    pos = pos + 2 + sublength
+            return out
         if "00:19:77" in oui:  # Aerohive / Extreme
             out = f"OUI: {oui} (Extreme (Aerohive))"
             if vendor_oui_type == 33:  # Aerohive AP name
