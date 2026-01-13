@@ -6,7 +6,7 @@ RELEASED
 
 0.1.59 (2026-01-12)
 
-- Add Alcatel-Lucenet AP name parsing
+- Add Alcatel-Lucent AP name parsing
 - Add PowerShell tab completion
 - Fix channel width filtering for 320 MHz
 
