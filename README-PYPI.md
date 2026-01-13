@@ -171,7 +171,7 @@ options:
                         export scan results to pcapng file. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
   -path EXPORT_PATH     specify output path for pcapng export (defaults to app data directory)
   -decoderaw BYTE_FILE  decode a raw .BSS or .IES file
-  -decode PCAP_FILE     parse scan results from pcapng file. by default shows all networks in the file, can be combined with filtering options.
+  -decode PCAP_FILE     parse scan results from pcap/pcapng file. by default shows all networks in the file, can be combined with filtering options.
   --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
   --watchevents         a special mode which watches for notification on a wireless interface such as connection and roaming events
   --syslog <server IP>  syslogs events from --watchevents to a remote syslog server
