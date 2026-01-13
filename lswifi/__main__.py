@@ -54,11 +54,28 @@ def app_path():
 def main():
     is_apname_ack_stored = False
     parser = appsetup.setup_parser()
+
+    completion_result = appsetup.parse_completion_args(sys.argv[1:])
+    if completion_result is not None:
+        args_str, current_word = completion_result
+        appsetup.handle_completion(args_str, current_word)
+        return
+
     args = parser.parse_args()
     appsetup.setup_logger(args)
     log = logging.getLogger(__name__)
     log.debug("args {0}".format(args))
     log.debug("{0}".format(sys.version))
+
+    if hasattr(args, "command") and args.command == "completion":
+        script = appsetup.get_completion_script(args.shell)
+        if script:
+            print(script)
+        else:
+            print(f"Unknown shell: {args.shell}", file=sys.stderr)
+            sys.exit(1)
+        return
+
     if args.data_location:
         app_path()
         sys.exit()

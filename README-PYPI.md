@@ -84,10 +84,50 @@ Export scan results to pcap:
 > lswifi -export
 ```
 
+PowerShell Tab Completion
+-------------------------
+
+To enable PowerShell tab completion for `lswifi`, run the following command in PowerShell:
+
+``` {.sourceCode .powershell}
+lswifi completion powershell | Out-String | Invoke-Expression
+```
+
+To make this permanent, add the above command to your PowerShell profile. To find and edit your profile:
+
+``` {.sourceCode .powershell}
+# View your profile location
+$PROFILE
+
+# Add the completion script to your profile
+lswifi completion powershell | Out-String | Invoke-Expression >> $PROFILE
+
+# Or edit manually
+notepad $PROFILE
+```
+
+Then restart PowerShell or reload your profile:
+
+``` {.sourceCode .powershell}
+. $PROFILE
+```
+
 CLI options
 -----------
 
 ```ascii
+positional arguments:
+  {completion}          commands
+    completion          Generate shell completion script 
+
+CLI options
+-----------
+
+```ascii
+positional arguments:
+  {completion}          commands
+    completion          Generate shell completion script 
+
 options:
   -h, --help            show this help message and exit
   -version, --version, -V

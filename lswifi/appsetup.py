@@ -26,9 +26,43 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 from lswifi import slog
 from lswifi.__version__ import __version__
+from lswifi.completions import get_completions
+
+
+def parse_completion_args(argv: List[str]) -> Optional[Tuple[str, str]]:
+    """Parse hidden completion arguments and return (args_string, current_word)."""
+    if "--_complete" not in argv:
+        return None
+
+    args_value = ""
+    current_value = ""
+
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--_complete_args" and i + 1 < len(argv):
+            args_value = argv[i + 1]
+            i += 2
+        elif argv[i] == "--_complete_current" and i + 1 < len(argv):
+            current_value = argv[i + 1]
+            i += 2
+        else:
+            i += 1
+
+    return (args_value, current_value)
+
+
+def handle_completion(args_str: str, current_word: str) -> None:
+    """Output completions for the given arguments."""
+    args: List[str] = []
+    if args_str.strip():
+        args = args_str.strip().split()
+    completions = get_completions(args, current_word)
+    for completion in completions:
+        print(completion)
 
 
 class ExportAction(argparse.Action):
@@ -596,5 +630,12 @@ def setup_parser() -> argparse.ArgumentParser:
         help="increase verbosity for debugging",
         const=logging.DEBUG,
         default=logging.INFO,
+    )
+    subparsers = parser.add_subparsers(dest="command", help="commands")
+    completion_parser = subparsers.add_parser(
+        "completion", help="Generate shell completion script"
+    )
+    completion_parser.add_argument(
+        "shell", choices=["powershell"], help="Shell to generate completion for"
     )
     return parser
