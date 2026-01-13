@@ -17,6 +17,7 @@ WORKFLOW
 9. Push code
 10. (maintainers only) build package and deploy to PyPI
 
+ - `pip install tox setuptools twine`
  - `tox`
  - `python setup.py build`
  - `python setup.py check`

@@ -4,6 +4,19 @@ Release History
 RELEASED
 --------
 
+0.1.59 (2026-01-12)
+
+- Add Alcatel-Lucenet AP name parsing
+- Add PowerShell tab completion
+- Fix channel width filtering for 320 MHz
+
+0.1.58 (2026-01-08)
+
+- Add MikroTik/Routerboard AP name parsing
+- Add Management MIC element (IE 76) parsing support
+- Fix Aerohive AP name parsing
+- Improve pcap/pcapng decoding
+
 0.1.57 (2026-01-06)
 -------------------
 
