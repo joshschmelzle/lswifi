@@ -2163,6 +2163,16 @@ class WirelessNetworkBss:
             if self is not None:
                 self.apname.value = apname
             return out
+        if "dc:08:56" in oui:  # Alcatel-Lucent
+            out = f"OUI: {oui} (Alcatel-Lucent)"
+            if vendor_oui_type == 1:  # AP Name
+                apname = remove_control_chars(
+                    "".join([chr(i) for i in memoryview_body[4:]])
+                )
+                out += f", AP Name: {apname}"
+                if self is not None:
+                    self.apname.value = apname
+            return out
         if "00:40:96" in oui:  # Cisco
             if vendor_oui_type == 0:
                 out = "Cisco Aironet (0)"
