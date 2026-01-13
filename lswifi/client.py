@@ -29,7 +29,99 @@ from types import SimpleNamespace
 from typing import Union
 
 from lswifi import wlanapi as WLAN_API
+from lswifi.helpers import (
+    get_2ghz5ghz_frequency_from_channel_number,
+    get_6ghz_frequency_from_channel_number,
+    is_five_band,
+    is_six_band,
+    is_two_four_band,
+)
 from lswifi.slog import message as syslog
+
+
+def get_band_from_channel(channel: int) -> str:
+    """Determine the band (2GHz, 5GHz, 6GHz) from a channel number."""
+    channel_str = str(channel)
+    freq = get_2ghz5ghz_frequency_from_channel_number(channel_str)
+    if freq != "Unknown":
+        if is_two_four_band(freq):
+            return "2.4 GHz"
+        elif is_five_band(freq):
+            return "5 GHz"
+    freq = get_6ghz_frequency_from_channel_number(channel_str)
+    if freq != "Unknown":
+        if is_six_band(freq):
+            return "6 GHz"
+    return "Unknown"
+
+
+PCIE_SPEEDS = {
+    1: "2.5 GT/s",
+    2: "5.0 GT/s",
+    3: "8.0 GT/s",
+    4: "16.0 GT/s",
+    5: "32.0 GT/s",
+}
+
+# USB_DEVICE_SPEED enumeration from usbspec.h
+# https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/usbspec/ne-usbspec-_usb_device_speed
+USB_SPEEDS = {
+    0: "Low Speed (USB 1.1)",
+    1: "Full Speed (USB 1.1)",
+    2: "High Speed (USB 2.0)",
+    3: "SuperSpeed (USB 3.0)",
+}
+
+
+def get_adapter_bus_info(adapter_description: str) -> tuple:
+    """Get bus type and speed info for a network adapter.
+
+    Returns:
+        tuple: (bus_type, info_string) where bus_type is 'PCIe', 'USB', or None
+    """
+    import json
+    import subprocess
+
+    # Use InterfaceDescription to match the adapter since Name may differ
+    ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterHardwareInfoSettingData |
+        Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
+        Select-Object BusType, PciExpressCurrentLinkSpeedEncoded, PciExpressCurrentLinkWidth, UsbCurrentSpeedEncoded |
+        ConvertTo-Json"""
+
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return None, None
+        data = json.loads(result.stdout)
+        if not data:
+            return None, None
+
+        # Check for PCIe properties first (BusType may be null even for PCIe adapters)
+        speed_encoded = data.get("PciExpressCurrentLinkSpeedEncoded")
+        width = data.get("PciExpressCurrentLinkWidth")
+        if speed_encoded is not None and width is not None:
+            speed = PCIE_SPEEDS.get(speed_encoded, f"Gen{speed_encoded}")
+            return "PCIe", f"{speed} x{width}"
+
+        # Check for USB
+        usb_speed = data.get("UsbCurrentSpeedEncoded")
+        if usb_speed is not None:
+            speed = USB_SPEEDS.get(usb_speed, f"Unknown ({usb_speed})")
+            return "USB", speed
+
+        # Fallback to BusType if properties aren't available
+        bus_type = data.get("BusType")
+        if bus_type == 15:  # USB
+            return "USB", None
+
+        return None, None
+    except Exception:
+        return None, None
 
 
 class TimerEx(object):
@@ -280,10 +372,38 @@ def get_interface_info(args, iface) -> str:
                         data="dot11CipherAlgorithm",
                     )
 
+                    # Get RSSI, channel, and band from BSS list using connected BSSID
+                    rssi = None
+                    channel = None
+                    band = None
+                    try:
+                        bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
+                            iface, is_bytes_arg=False
+                        )
+                        for bss in bss_list:
+                            if str(bss.bssid) == bssid:
+                                rssi = bss.rssi
+                                channel = bss.channel_number.value
+                                # Determine band from frequency (more reliable than channel number)
+                                freq = bss.channel_frequency.value
+                                if is_two_four_band(freq):
+                                    band = "2.4 GHz"
+                                elif is_five_band(freq):
+                                    band = "5 GHz"
+                                elif is_six_band(freq):
+                                    band = "6 GHz"
+                                break
+                    except Exception:
+                        pass
+
                     outstr += f"    Description: {iface.description}\n"
                     outstr += (
                         f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
                     )
+                    outstr += f"    MAC: {iface.mac}\n"
+                    bus_type, bus_info = get_adapter_bus_info(iface.description)
+                    if bus_type and bus_info:
+                        outstr += f"    {bus_type}: {bus_info}\n"
                     outstr += f"    State: {state}\n"
                     if "wlan_connection_mode_" in wlanConnectionMode:
                         wlanConnectionMode = wlanConnectionMode[21:]
@@ -293,30 +413,34 @@ def get_interface_info(args, iface) -> str:
                     )
                     outstr += f"    SSID: {bytes.decode(connected_ssid)}\n"
                     outstr += f"    BSSID: {bssid}\n"
+                    if channel is not None:
+                        outstr += f"    Channel: {channel}\n"
+                    if band is not None:
+                        outstr += f"    Band: {band}\n"
                     outstr += f"    BSS Type: {dot11BssType}\n"
                     outstr += f"    PHY: {dot11PhyType}\n"
                     outstr += f"    Signal Quality: {wlanSignalQuality}%\n"
-                    outstr += f"    Rx Rate: {ulRxRate/1000} Mbps\n"
-                    outstr += f"    Tx Rate: {ulTxRate/1000} Mbps\n"
+                    if rssi is not None:
+                        outstr += f"    RSSI: {rssi} dBm\n"
+                    outstr += f"    Receive (Rx) Rate: {ulRxRate/1000} Mbps\n"
+                    outstr += f"    Transmit (Tx) Rate: {ulTxRate/1000} Mbps\n"
                     outstr += f"    Security: {'Enabled' if SecurityEnabled else 'Disabled'}\n"
                     outstr += f"    .1X: {'Enabled' if oneXEnabled else 'Disabled'}\n"
-                    outstr += f"    Authentication: {dot11AuthAlgorithm}\n"
-                    outstr += f"    Cipher: {dot11CipherAlgorithm}\n"
+                    outstr += f"    Authentication: {dot11AuthAlgorithm or 'None'}\n"
+                    outstr += f"    Cipher: {dot11CipherAlgorithm or 'None'}\n"
 
             if "ERROR_NOT_SUPPORTED" in result:
                 pass
 
             if "failed" not in result:
                 if key == "channel_number":
-                    channel = result[0].value
-
-                    outstr += "    Channel: {0}\n".format(channel)
+                    channel_from_query = result[0].value
 
                     if args.get_current_ap and args.get_current_channel:
                         if args.raw:
-                            return f"{bssid}, {channel}"
+                            return f"{bssid}, {channel_from_query}"
                         else:
-                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel}"
+                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel_from_query}"
 
                     if args.get_current_ap:
                         if args.raw:
@@ -326,9 +450,10 @@ def get_interface_info(args, iface) -> str:
 
                     if args.get_current_channel:
                         if args.raw:
-                            return channel
+                            return channel_from_query
                         else:
-                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, CHANNEL: {channel}"
+                            return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, CHANNEL: {channel_from_query}"
+
         return outstr
     else:
         return ""

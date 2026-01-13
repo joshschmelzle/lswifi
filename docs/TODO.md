@@ -153,7 +153,7 @@ First step to capabilities testing is to have some sort of record function for a
 ## Detection for other types of networks
 
 - [ ] WiDi/Miracast/WiFi Direct Networks.
-- [ ] WPS is IE 221, OUI 00-50-F2 (Microsoft), and Type 4 --- there is device name in this field.
+- [X] WPS is IE 221, OUI 00-50-F2 (Microsoft), and Type 4 --- there is device name in this field.
 
 ## Potential Improvements for Spatial Stream detection
 
@@ -178,20 +178,13 @@ First step to capabilities testing is to have some sort of record function for a
 Nick has some information on this blog about this <https://www.nickjvturner.com/ap-name-broadcast-support>.
 
 - [X] Cisco Aironet IE
-- [ ] Cisco Meraki (does Meraki have option to include AP name in their beacons?)
+- [X] Cisco Meraki
 - [X] Aruba
-- [ ] Aerohive (IE 221, OUI 00:19:77, Subtype: 33) Aerohive is now owned by Extreme
-- [ ] Mist
-- [ ] Extreme IdentiFi
-- [ ] Extreme WiNG
-- [ ] Commscope Ruckus (does Ruckus have option to include AP names in their beacons?)
-
-## Documentation
-
-- [ ] Add contribution guidelines and what we need from users to help troubleshoot when there is an issue.
-  - Like export of the IES and BSS so that I can analyze them. Or export of the PCAP?
-  - Logs? Watchevents? Debug?
-- [ ] Review class design and organizing code.
+- [X] Aerohive (IE 221, OUI 00:19:77, Subtype: 33) Aerohive is now owned by Extreme
+- [X] Mist
+- [ ] Extreme IdentiFi?
+- [X] Extreme WiNG
+- [X] Commscope Ruckus (does Ruckus have option to include AP names in their beacons?)
 
 DONE
 ====
