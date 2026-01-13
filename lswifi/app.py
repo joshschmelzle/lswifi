@@ -611,32 +611,32 @@ class lswifi:
                         finally:
                             bssfile.close()
 
-                            iespath = export_bss + ".ies"
-                            # print(f"{os.path.join(exportpath, ies)}")
-                            # print(f"{type(bss.iesbytes)}")
-                            # print(f"{bss.iesbytes}")
-                            iesfile = open(os.path.join(exportraw_path, iespath), "wb")
-                            try:
-                                iesfile.write(bss.iesbytes)
-                            finally:
-                                iesfile.close()
+                        iespath = export_bss + ".ies"
+                        # print(f"{os.path.join(exportpath, ies)}")
+                        # print(f"{type(bss.iesbytes)}")
+                        # print(f"{bss.iesbytes}")
+                        iesfile = open(os.path.join(exportraw_path, iespath), "wb")
+                        try:
+                            iesfile.write(bss.iesbytes)
+                        finally:
+                            iesfile.close()
 
-                            # print(f"{bsspath} {iespath}")
-                            if args.export != "all":
-                                log.info(
-                                    f"found and exporting requested bssid from the scan results of {client.mac}."
-                                )
-                                print(
-                                    f"raw byte files for {args.export} exported to {exportraw_path}"
-                                )
-                                break
-                            elif (bss_len - 1) == index:
-                                log.info(
-                                    f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
-                                )
-                                print(f"files exported to {exportraw_path}")
+                        # print(f"{bsspath} {iespath}")
+                        if args.export != "all":
+                            log.info(
+                                f"found and exporting requested bssid from the scan results of {client.mac}."
+                            )
+                            print(
+                                f"raw byte files for {args.export} exported to {exportraw_path}"
+                            )
+                            break
+                        elif (bss_len - 1) == index:
+                            log.info(
+                                f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
+                            )
+                            print(f"files exported to {exportraw_path}")
 
-                            continue
+                        continue
 
                     # compare if bss from list is the same as the one the user wants details for
                     if wlanapi_bss != user_bss:
@@ -710,7 +710,7 @@ class lswifi:
 
                 # handle width filter
                 if args.width is not None:
-                    if args.width not in str(bss.channel_width):
+                    if int(args.width) != int(bss.channel_width.value):
                         continue
 
                 # handle hidden ssid, and handle ssid filter
