@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.61 (TBD)
+------------
+
+- Improve --get-interfaces USB speed detection using Windows IOCTL instead of PowerShell property
+
 0.1.60 (2026-01-13)
 -------------------
 
