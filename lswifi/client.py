@@ -31,7 +31,7 @@ import winreg
 from ctypes import wintypes
 from threading import Lock, Timer
 from types import SimpleNamespace
-from typing import Union
+from typing import Optional, Union
 
 from lswifi import wlanapi as WLAN_API
 from lswifi.helpers import (
@@ -184,7 +184,7 @@ def _is_usb_device_present(pnp_device_id: str) -> bool:
         return False
 
 
-def _get_usb_parent_device(pnp_device_id: str) -> str | None:
+def _get_usb_parent_device(pnp_device_id: str) -> Optional[str]:
     """Get the immediate parent device (hub) for a USB device.
 
     Args:
@@ -211,7 +211,7 @@ def _get_usb_parent_device(pnp_device_id: str) -> str | None:
     return None
 
 
-def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> int | None:
+def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> Optional[int]:
     """Query USB speed via IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2.
 
     Args:
@@ -296,7 +296,7 @@ def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> int | None:
         _kernel32.CloseHandle(handle)
 
 
-def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
+def _get_usb_speed_from_pnp(pnp_device_id: str) -> Optional[int]:
     """Get USB connection speed for a device using Windows IOCTL.
 
     Uses the Windows USB driver stack to query the actual operating speed
