@@ -12,6 +12,9 @@ lswifi_*.csv
 lswifi_*.json
 out.ies
 
+# AI
+.claude/
+
 #visual studio
 .vs/
 

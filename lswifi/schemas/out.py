@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -41,7 +40,7 @@ class SubHeader:
         return self.description
 
     def __format__(self, format_spec):
-        return format("{}".format(self.description), format_spec)
+        return format(f"{self.description}", format_spec)
 
     def __len__(self):
         return len(self.description)
@@ -63,7 +62,7 @@ class Header:
         return self.description
 
     def __format__(self, format_spec):
-        return format("{}".format(self.description), format_spec)
+        return format(f"{self.description}", format_spec)
 
     def __len__(self):
         return len(self.description)
@@ -88,7 +87,7 @@ class OUT_TUPLE:
         return f"OUT_TUPLE({self.value},{self.header},{self.subheader})"
 
 
-class OutObject(object):
+class OutObject:
     """Object for printing to stdout"""
 
     def __init__(self, **kwargs):
@@ -97,7 +96,7 @@ class OutObject(object):
             self._value = escape_control_chars(__value)
         else:
             self._value = __value
-        self.header = Header(kwargs.get("header", ""), align=kwargs.get("align", None))
+        self.header = Header(kwargs.get("header", ""), align=kwargs.get("align"))
         self.subheader = SubHeader(kwargs.get("subheader", ""))
 
     def out(self):

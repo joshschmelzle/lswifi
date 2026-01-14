@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -11,7 +10,7 @@ lswifi.completions
 Provides PowerShell tab completion support for lswifi.
 """
 
-from typing import List, Optional
+from typing import Optional
 
 GLOBAL_OPTIONS = [
     "--scans",
@@ -67,7 +66,7 @@ OPTIONS_WITH_VALUES = {
 }
 
 
-def get_completions(args: List[str], current_word: str) -> List[str]:
+def get_completions(args: list[str], current_word: str) -> list[str]:
     """Return context-aware completion suggestions."""
     if not args:
         return _filter_completions(GLOBAL_OPTIONS, current_word)
@@ -89,14 +88,14 @@ def get_completions(args: List[str], current_word: str) -> List[str]:
     return _filter_completions(available_options, current_word)
 
 
-def _filter_completions(options: List[str], prefix: str) -> List[str]:
+def _filter_completions(options: list[str], prefix: str) -> list[str]:
     """Filter options by prefix."""
     if not prefix:
         return options
     return [opt for opt in options if opt.startswith(prefix)]
 
 
-def _find_command(args: List[str]) -> Optional[str]:
+def _find_command(args: list[str]) -> Optional[str]:
     """Find the subcommand if present."""
     for arg in args:
         if arg == "completion":

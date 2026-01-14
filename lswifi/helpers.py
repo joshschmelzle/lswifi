@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -32,7 +31,7 @@ from lswifi.constants import (
 __control_chars = "".join(
     map(chr, itertools.chain(range(0x00, 0x20), range(0x7F, 0xA0)))
 )
-__control_char_re = re.compile("[%s]" % re.escape(__control_chars))
+__control_char_re = re.compile(f"[{re.escape(__control_chars)}]")
 
 
 def remove_control_chars(text: str) -> str:
@@ -135,7 +134,7 @@ def convert_mac_address_to_string(mac) -> str:
     """returns a MAC address in string format
     input can be a list or a c_ubyte from the wlanapi.h
     """
-    return ":".join("%02x" % x for x in mac)
+    return ":".join(f"{x:02x}" for x in mac)
 
 
 def strip_mac_address_format(mac):
@@ -156,44 +155,37 @@ def __num_digits(num: int):
 def is_two_four_band(frequency: str) -> bool:
     """determines if a channel frequency is in the 2.4 GHz ISM band"""
     _frequency = int(float(frequency))
-    if __get_digit(_frequency, __num_digits(_frequency) - 1) == 2:
-        return True
-    else:
-        return False
+    return __get_digit(_frequency, __num_digits(_frequency) - 1) == 2
 
 
 def is_five_band(frequency: str) -> bool:
     """determines if a channel frequency is in the 5.0 GHz ISM band"""
-    if type(frequency) == float:
-        if frequency > 5 and frequency < 5.955:
-            return True
-        return False
+    if isinstance(frequency, float):
+        return 5 < frequency < 5.955
 
     try:
         _frequency = int(frequency)
-        if _frequency >= 5000 and _frequency < 5955:
+        if 5000 <= _frequency < 5955:
             return True
     except ValueError:
         _frequency = float(frequency)
-        if _frequency >= 5 and _frequency < 5.955:
+        if 5 <= _frequency < 5.955:
             return True
     return False
 
 
 def is_six_band(frequency: str) -> bool:
     """determines if a channel frequency is in the 5.95-7.125 GHz ISM band"""
-    if type(frequency) == float:
-        if frequency >= 5.955 and frequency < 7.125:
-            return True
-        return False
+    if isinstance(frequency, float):
+        return 5.955 <= frequency < 7.125
 
     try:
         _frequency = int(frequency)
-        if _frequency >= 5955 and _frequency < 7125:
+        if 5955 <= _frequency < 7125:
             return True
     except ValueError:
         _frequency = float(frequency)
-        if _frequency >= 5.955 and _frequency < 7.125:
+        if 5.955 <= _frequency < 7.125:
             return True
 
     return False
@@ -203,7 +195,7 @@ def get_channel_number_from_frequency(freq):
     """gets the 802.11 channel for a corresponding frequency
     in units of kilohertz (kHz). does not support FHSS."""
     try:
-        if type(freq) == str:
+        if isinstance(freq, str):
             freq = freq.replace(".", "", 1)
             freq = _20MHZ_CHANNEL_LIST.get(freq, "--")
             return freq

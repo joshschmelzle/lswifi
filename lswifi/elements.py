@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -104,7 +103,7 @@ class WirelessNetworkBss:
             )
             self.channel_number = ChannelNumber(bss_entry)
             self.channel_frequency = OutObject(
-                value="{0:.0f}".format(float(bss_entry.ChCenterFrequency / 1000)),
+                value=f"{float(bss_entry.ChCenterFrequency / 1000):.0f}",
                 header="FREQ.",
                 subheader="[GHz]",
             )
@@ -135,9 +134,7 @@ class WirelessNetworkBss:
             )
             self.channel_number_marked = ChannelNumber(bss_entry)
             self.channel_frequency = OutObject(
-                value="{0:.0f}".format(
-                    float(bss_entry.ChCenterFrequency / 1000)
-                ),  # initially unit is MHz but converted to GHz after IEs are parsed below
+                value=f"{float(bss_entry.ChCenterFrequency / 1000):.0f}",  # initially unit is MHz but converted to GHz after IEs are parsed below
                 header="FREQ.",
                 subheader="[GHz]",
             )
@@ -214,8 +211,8 @@ class WirelessNetworkBss:
                     # 2412 to 2.412
                     # 5825 to 5.825
                     # 6855 to 6.855
-                    self.channel_frequency.value = "{0:.3f}".format(
-                        int(self.channel_frequency.value) / 1000
+                    self.channel_frequency.value = (
+                        f"{int(self.channel_frequency.value) / 1000:.3f}"
                     )
 
                     # if self.dtim.value:
@@ -299,7 +296,7 @@ class WirelessNetworkBss:
         index = 0
         for i in outlist[0]:
             max_len = max(len(str(x)) for x in [y[index] for y in outlist])
-            outstring += "{{{}:{}}}  ".format(index, max_len)
+            outstring += f"{{{index}:{max_len}}}  "
             index += 1
 
         for i in outlist:
@@ -367,100 +364,84 @@ class WirelessNetworkBss:
 
         out = ""
         out += "\n"
-        out += "Capabilities: {}\n".format(self.capabilities.hex)
+        out += f"Capabilities: {self.capabilities.hex}\n"
         out += (
-            ".... .... .... ...{} ESS capabilities\n".format(self.capabilities.ess)
+            f".... .... .... ...{self.capabilities.ess} ESS capabilities\n"
             if self.capabilities.ess
             else ""
         )
         out += (
-            ".... .... .... ..{}. IBSS status\n".format(self.capabilities.ibss)
+            f".... .... .... ..{self.capabilities.ibss}. IBSS status\n"
             if self.capabilities.ibss
             else ""
         )
         out += (
-            ".... .... .... .{}.. CF pollable\n".format(self.capabilities.cf_pollable)
+            f".... .... .... .{self.capabilities.cf_pollable}.. CF pollable\n"
             if self.capabilities.cf_pollable
             else ""
         )
         out += (
-            ".... .... .... {}... CF pollable\n".format(self.capabilities.cf_pollable)
+            f".... .... .... {self.capabilities.cf_pollable}... CF pollable\n"
             if self.capabilities.cf_pollable
             else ""
         )
         out += (
-            ".... .... ...{} .... Privacy\n".format(self.capabilities.privacy)
+            f".... .... ...{self.capabilities.privacy} .... Privacy\n"
             if self.capabilities.privacy
             else ""
         )
         out += (
-            ".... .... ..{}. .... Short Preamble\n".format(
-                self.capabilities.short_preamble
-            )
+            f".... .... ..{self.capabilities.short_preamble}. .... Short Preamble\n"
             if self.capabilities.short_preamble
             else ""
         )
         out += (
-            ".... .... .{}.. .... PBCC\n".format(self.capabilities.pbcc)
+            f".... .... .{self.capabilities.pbcc}.. .... PBCC\n"
             if self.capabilities.pbcc
             else ""
         )
         out += (
-            ".... .... {}... .... Channel Agility\n".format(
-                self.capabilities.channel_agility
-            )
+            f".... .... {self.capabilities.channel_agility}... .... Channel Agility\n"
             if self.capabilities.channel_agility
             else ""
         )
         out += (
-            ".... ...{} .... .... Spectrum Management\n".format(
-                self.capabilities.spectrum_management
-            )
+            f".... ...{self.capabilities.spectrum_management} .... .... Spectrum Management\n"
             if self.capabilities.spectrum_management
             else ""
         )
         out += (
-            ".... ..{}. .... .... QoS\n".format(self.capabilities.qos)
+            f".... ..{self.capabilities.qos}. .... .... QoS\n"
             if self.capabilities.qos
             else ""
         )
         out += (
-            ".... .{}.. .... .... Short Slot Time\n".format(
-                self.capabilities.short_slot_time
-            )
+            f".... .{self.capabilities.short_slot_time}.. .... .... Short Slot Time\n"
             if self.capabilities.short_slot_time
             else ""
         )
         out += (
-            ".... {}... .... .... Automatic Power Save Delievery (APSD) \n".format(
-                self.capabilities.automatic_power_save_delivery
-            )
+            f".... {self.capabilities.automatic_power_save_delivery}... .... .... Automatic Power Save Delievery (APSD) \n"
             if self.capabilities.automatic_power_save_delivery
             else ""
         )
         out += (
-            "...{} .... .... .... Radio Measurement\n".format(
-                self.capabilities.radio_measurement
-            )
+            f"...{self.capabilities.radio_measurement} .... .... .... Radio Measurement\n"
             if self.capabilities.radio_measurement
             else ""
         )
         out += (
-            "..{}. .... .... .... DSSS-OFDM\n".format(self.capabilities.dsss_ofdm)
+            f"..{self.capabilities.dsss_ofdm}. .... .... .... DSSS-OFDM\n"
             if self.capabilities.dsss_ofdm
             else ""
         )
         out += (
-            ".{}.. .... .... .... Delayed Block Ack\n".format(
-                self.capabilities.delayed_block_ack
-            )
+            f".{self.capabilities.delayed_block_ack}.. .... .... .... Delayed Block Ack\n"
             if self.capabilities.delayed_block_ack
             else ""
         )
         out += (
-            "{}... .... .... .... Immediate Block Ack\n".format(
-                self.capabilities.immediate_block_ack
-            )
+            f"{self.capabilities.immediate_block_ack}... .... .... .... Immediate Block Ack\n"
             if self.capabilities.immediate_block_ack
             else ""
         )
@@ -580,9 +561,7 @@ class WirelessNetworkBss:
                 )
 
     def process_information_elements(self, bss_entry=None, ie_buffer=None):
-        self.log.debug(
-            "Processing information elements for BSSID {}".format(self.bssid)
-        )
+        self.log.debug(f"Processing information elements for BSSID {self.bssid}")
         if bss_entry:
             bss_entry_pointer = addressof(bss_entry)
             ie_offset = bss_entry.IeOffset
@@ -1187,7 +1166,7 @@ class WirelessNetworkBss:
             )
             return WLAN_API.InformationElement(
                 element_id,
-                WirelessNetworkBss.get_eid_name(element_id) + ": {}".format(ext_name),
+                WirelessNetworkBss.get_eid_name(element_id) + f": {ext_name}",
                 element_length,
                 decoded,
                 element_data,
@@ -1290,7 +1269,6 @@ class WirelessNetworkBss:
         tbtt_count = 0
 
         if tbtt_info_field_type == 0:
-
             for _ in range(tbtt_information_count + 1):  # count is 0-based
                 if buffer_offset >= len(body):
                     break
@@ -1332,7 +1310,7 @@ class WirelessNetworkBss:
         offset += 1
 
         if neighbor_ap_tbtt_offset == 255:
-            base_out += f"\n  TBTT Offset: Unknown (255)"
+            base_out += "\n  TBTT Offset: Unknown (255)"
         else:
             base_out += f"\n  TBTT Offset: {neighbor_ap_tbtt_offset}"
 
@@ -1414,7 +1392,7 @@ class WirelessNetworkBss:
             disabled_link_indication = bool(mld_params & (1 << 21))  # B21
             # B22-B23 are reserved
 
-            base_out += f"\n  MLD Parameters:"
+            base_out += "\n  MLD Parameters:"
             base_out += f"\n    AP MLD ID: {ap_mld_id}"
             base_out += f"\n    Link ID: {link_id}"
             base_out += f"\n    BSS Parameters Change Count: {bss_params_change_count}"
@@ -1466,39 +1444,25 @@ class WirelessNetworkBss:
             width = "40"
         if operating_class == 33:
             width = "40"
-        if operating_class == 81:
+        if operating_class == 81 or operating_class == 82:
             width = "20"
-        elif operating_class == 82:
-            width = "20"
-        elif operating_class == 83:
-            width = "40"
-        elif operating_class == 84:
+        elif operating_class == 83 or operating_class == 84:
             width = "40"
         elif operating_class == 115:
             width = "20"
-        elif operating_class == 116:
-            width = "40"
-        elif operating_class == 117:
+        elif operating_class == 116 or operating_class == 117:
             width = "40"
         elif operating_class == 118:
             width = "20"
-        elif operating_class == 119:
-            width = "40"
-        elif operating_class == 120:
+        elif operating_class == 119 or operating_class == 120:
             width = "40"
         elif operating_class == 121:
             width = "20"
-        elif operating_class == 122:
+        elif operating_class == 122 or operating_class == 123:
             width = "40"
-        elif operating_class == 123:
-            width = "40"
-        elif operating_class == 124:
+        elif operating_class == 124 or operating_class == 125:
             width = "20"
-        elif operating_class == 125:
-            width = "20"
-        elif operating_class == 126:
-            width = "40"
-        elif operating_class == 127:
+        elif operating_class == 126 or operating_class == 127:
             width = "40"
         elif operating_class == 128:
             width = "80"
@@ -1598,7 +1562,7 @@ class WirelessNetworkBss:
         # sae hash-to-element
         sae_hash_to_element = get_bit(body[0], 5)
         if sae_hash_to_element:
-            supported.append(f"SAE hash-to-element")
+            supported.append("SAE hash-to-element")
 
         # reserved
         # get_bit(body[0], 6)
@@ -1672,11 +1636,11 @@ class WirelessNetworkBss:
             owe_bssid = convert_mac_address_to_string([o1, o2, o3, o4, o5, o6])
             int(memoryview_body[10])
             owe_ssid = "".join([chr(i) for i in memoryview_body[11:]])
-            out = f"Wi-Fi Alliance: OWE Transition Mode"
+            out = "Wi-Fi Alliance: OWE Transition Mode"
             out += f"\n  BSSID: {owe_bssid}, SSID: {owe_ssid}"
             return out
         if "00:0b:86" in oui:  # Aruba
-            out = f"OUI: 00:0b:86 (HPE Aruba Networking)"
+            out = "OUI: 00:0b:86 (HPE Aruba Networking)"
             if vendor_oui_type == 1:
                 oui_subtype = int.from_bytes(element_body[4], "little")
                 if oui_subtype == 1:  # CAC
@@ -1782,7 +1746,7 @@ class WirelessNetworkBss:
                         else:
                             gps = "not enough expected data"
                     except Exception as e:
-                        gps = f"parsing error"
+                        gps = "parsing error"
                         log.warning(
                             f"{self.bssid if self is not None else '-- BSSID'}: couldn't parse GPS ellipse IE: {str(e)}"
                         )
@@ -1839,12 +1803,12 @@ class WirelessNetworkBss:
                         log.debug(f"{field_markers}")
 
                         log.debug(
-                            f"Legend: v=version (31-29), i=ip_protocol (28), u=uplink (27), t=uplink_type (26-24),"
+                            "Legend: v=version (31-29), i=ip_protocol (28), u=uplink (27), t=uplink_type (26-24),"
                         )
                         log.debug(
-                            f"        n=network_layer (23-20), p=proxy_server (19-18), a=activate (17-14),"
+                            "        n=network_layer (23-20), p=proxy_server (19-18), a=activate (17-14),"
                         )
-                        log.debug(f"        c=central (13-11), r=reserved (10-0)")
+                        log.debug("        c=central (13-11), r=reserved (10-0)")
 
                         version = (health_value >> 29) & 0x7  # bits 0-2
                         ip_protocol = (health_value >> 28) & 0x1  # bit 3
@@ -1995,7 +1959,7 @@ class WirelessNetworkBss:
                             | reserved
                         )
 
-                        log.debug(f"AP Health IE extracted fields:")
+                        log.debug("AP Health IE extracted fields:")
                         log.debug(
                             f"  version (v): {version} -> {version_map.get(version, f'Unknown ({version})')}"
                         )
@@ -2274,14 +2238,14 @@ class WirelessNetworkBss:
             idx = 0
 
             def get_next_hex(it: iter):
-                return "{:02x}".format(next(it))
+                return f"{next(it):02x}"
 
             for _ in range(ln):
                 attribute_id = ""
                 for _ in range(2):  # id is two bytes
                     attribute_id += get_next_hex(element_data_iterator)
 
-                wps_attribute = WPS_Attributes.get(attribute_id, None)
+                wps_attribute = WPS_Attributes.get(attribute_id)
 
                 if wps_attribute is None:
                     out = f"couldn't decode WPS attribute {attribute_id}"
@@ -2313,7 +2277,7 @@ class WirelessNetworkBss:
                 decoded = bytes.fromhex(data).decode("ISO-8859-1")
 
                 if wps_attribute.desc == "Application Extension":
-                    out += f"\n  Application Extension parser not implemented. Contact developer if you want this supported."
+                    out += "\n  Application Extension parser not implemented. Contact developer if you want this supported."
 
                 if wps_attribute.desc == "Manufacturer":
                     out += f"\n  Manufacturer: {decoded}" if data == 0 else ""
@@ -2369,8 +2333,8 @@ class WirelessNetworkBss:
                         + get_bit(memoryview_body[0], 1)
                         + get_bit(memoryview_body[0], 0)
                     )
-                    out += "Subtype {}, Version {}, QoS 0x{}\n".format(
-                        oui_subtype, version, qos.hex()
+                    out += (
+                        f"Subtype {oui_subtype}, Version {version}, QoS 0x{qos.hex()}\n"
                     )
                     U_APSD = int(get_bit(memoryview_body[6], 7))
                     PARAMETER_SET_FIELD0 = int(get_bit(memoryview_body[6], 0))
@@ -2379,12 +2343,7 @@ class WirelessNetworkBss:
                     PARAMETER_SET_FIELD3 = int(get_bit(memoryview_body[6], 3))
                     PARAMETER_SET = "0x{}".format(
                         int(
-                            "{}{}{}{}".format(
-                                PARAMETER_SET_FIELD3,
-                                PARAMETER_SET_FIELD2,
-                                PARAMETER_SET_FIELD1,
-                                PARAMETER_SET_FIELD0,
-                            ),
+                            f"{PARAMETER_SET_FIELD3}{PARAMETER_SET_FIELD2}{PARAMETER_SET_FIELD1}{PARAMETER_SET_FIELD0}",
                             2,
                         )
                     )
@@ -2393,34 +2352,19 @@ class WirelessNetworkBss:
                     QOS_RESERVED_FIELD6 = int(get_bit(memoryview_body[6], 6))
                     QOS_RESERVED = "0x{}".format(
                         int(
-                            "{}{}{}".format(
-                                QOS_RESERVED_FIELD6,
-                                QOS_RESERVED_FIELD5,
-                                QOS_RESERVED_FIELD4,
-                            ),
+                            f"{QOS_RESERVED_FIELD6}{QOS_RESERVED_FIELD5}{QOS_RESERVED_FIELD4}",
                             2,
                         )
                     )
-                    out += "{}... .... U-APSD\n".format(U_APSD)
-                    out += ".... {}{}{}{} Parameter Set Count: {}\n".format(
-                        PARAMETER_SET_FIELD3,
-                        PARAMETER_SET_FIELD2,
-                        PARAMETER_SET_FIELD1,
-                        PARAMETER_SET_FIELD0,
-                        PARAMETER_SET,
-                    )
-                    out += ".{}{}{} .... Reserved: {}".format(
-                        QOS_RESERVED_FIELD6,
-                        QOS_RESERVED_FIELD5,
-                        QOS_RESERVED_FIELD4,
-                        QOS_RESERVED,
-                    )
+                    out += f"{U_APSD}... .... U-APSD\n"
+                    out += f".... {PARAMETER_SET_FIELD3}{PARAMETER_SET_FIELD2}{PARAMETER_SET_FIELD1}{PARAMETER_SET_FIELD0} Parameter Set Count: {PARAMETER_SET}\n"
+                    out += f".{QOS_RESERVED_FIELD6}{QOS_RESERVED_FIELD5}{QOS_RESERVED_FIELD4} .... Reserved: {QOS_RESERVED}"
                     if self is not None:
                         pass  # print(f"{self.bssid}({self.ssid.value}): WMM subtype 0 - {memoryview_body}\n{out}")
 
                 if oui_subtype == 1:  # WMM/WME Parameter Element
-                    out += "Subtype {}, Version {}, QoS 0x{}\n".format(
-                        oui_subtype, version, qos.hex()
+                    out += (
+                        f"Subtype {oui_subtype}, Version {version}, QoS 0x{qos.hex()}\n"
                     )
                     U_APSD = get_bit(memoryview_body[6], 7)
                     PARAMETER_SET_FIELD0 = get_bit(memoryview_body[6], 0)
@@ -2429,12 +2373,7 @@ class WirelessNetworkBss:
                     PARAMETER_SET_FIELD3 = get_bit(memoryview_body[6], 3)
                     PARAMETER_SET = "0x{}".format(
                         int(
-                            "{}{}{}{}".format(
-                                int(PARAMETER_SET_FIELD3),
-                                int(PARAMETER_SET_FIELD2),
-                                int(PARAMETER_SET_FIELD1),
-                                int(PARAMETER_SET_FIELD0),
-                            ),
+                            f"{int(PARAMETER_SET_FIELD3)}{int(PARAMETER_SET_FIELD2)}{int(PARAMETER_SET_FIELD1)}{int(PARAMETER_SET_FIELD0)}",
                             2,
                         )
                     )
@@ -2443,32 +2382,17 @@ class WirelessNetworkBss:
                     QOS_RESERVED_FIELD6 = get_bit(memoryview_body[6], 6)
                     QOS_RESERVED = "0x{}".format(
                         int(
-                            "{}{}{}".format(
-                                int(QOS_RESERVED_FIELD6),
-                                int(QOS_RESERVED_FIELD5),
-                                int(QOS_RESERVED_FIELD4),
-                            ),
+                            f"{int(QOS_RESERVED_FIELD6)}{int(QOS_RESERVED_FIELD5)}{int(QOS_RESERVED_FIELD4)}",
                             2,
                         )
                     )
                     out += "  {}... .... U-APSD: {}\n".format(
                         int(U_APSD), "Enabled" if U_APSD else "Disabled"
                     )
-                    out += "  .... {}{}{}{} Parameter Set Count: {}\n".format(
-                        int(PARAMETER_SET_FIELD3),
-                        int(PARAMETER_SET_FIELD2),
-                        int(PARAMETER_SET_FIELD1),
-                        int(PARAMETER_SET_FIELD0),
-                        PARAMETER_SET,
-                    )
-                    out += "  .{}{}{} .... Reserved: {}\n".format(
-                        int(QOS_RESERVED_FIELD6),
-                        int(QOS_RESERVED_FIELD5),
-                        int(QOS_RESERVED_FIELD4),
-                        QOS_RESERVED,
-                    )
+                    out += f"  .... {int(PARAMETER_SET_FIELD3)}{int(PARAMETER_SET_FIELD2)}{int(PARAMETER_SET_FIELD1)}{int(PARAMETER_SET_FIELD0)} Parameter Set Count: {PARAMETER_SET}\n"
+                    out += f"  .{int(QOS_RESERVED_FIELD6)}{int(QOS_RESERVED_FIELD5)}{int(QOS_RESERVED_FIELD4)} .... Reserved: {QOS_RESERVED}\n"
                     RESERVED = int.from_bytes(element_body[7], "little")
-                    out += "Reserved: {}".format(hex(RESERVED))
+                    out += f"Reserved: {hex(RESERVED)}"
 
                     def PARSE_AC_PARAMETER(memview_body, element_body):
                         AIFSN_FIELD0 = get_bit(memview_body[0], 0)
@@ -2476,18 +2400,13 @@ class WirelessNetworkBss:
                         AIFSN_FIELD2 = get_bit(memview_body[0], 2)
                         AIFSN_FIELD3 = get_bit(memview_body[0], 3)
                         AIFSN = int(
-                            "{}{}{}{}".format(
-                                int(AIFSN_FIELD3),
-                                int(AIFSN_FIELD2),
-                                int(AIFSN_FIELD1),
-                                int(AIFSN_FIELD0),
-                            ),
+                            f"{int(AIFSN_FIELD3)}{int(AIFSN_FIELD2)}{int(AIFSN_FIELD1)}{int(AIFSN_FIELD0)}",
                             2,
                         )
                         ACM = get_bit(memview_body[0], 4)
                         ACI_FIELD5 = get_bit(memview_body[0], 5)
                         ACI_FIELD6 = get_bit(memview_body[0], 6)
-                        ACI = int("{}{}".format(int(ACI_FIELD6), int(ACI_FIELD5)), 2)
+                        ACI = int(f"{int(ACI_FIELD6)}{int(ACI_FIELD5)}", 2)
 
                         def GET_ACI_TO_AC(ACI):
                             if ACI == 0:
@@ -2521,9 +2440,7 @@ class WirelessNetworkBss:
                         ECWmin3 = get_bit(memview_body[1], 3)
 
                         ECWmin = int(
-                            "{}{}{}{}".format(
-                                int(ECWmin3), int(ECWmin2), int(ECWmin1), int(ECWmin0)
-                            ),
+                            f"{int(ECWmin3)}{int(ECWmin2)}{int(ECWmin1)}{int(ECWmin0)}",
                             2,
                         )
 
@@ -2535,9 +2452,7 @@ class WirelessNetworkBss:
                         ECWmax7 = get_bit(memview_body[1], 7)
 
                         ECWmax = int(
-                            "{}{}{}{}".format(
-                                int(ECWmax7), int(ECWmax6), int(ECWmax5), int(ECWmax4)
-                            ),
+                            f"{int(ECWmax7)}{int(ECWmax6)}{int(ECWmax5)}{int(ECWmax4)}",
                             2,
                         )
 
@@ -2619,25 +2534,25 @@ class WirelessNetworkBss:
 
             htc_he_support = get_bit(body[he_mac_cap_oct1], 0)
             if htc_he_support:
-                out += f"+HTC HE Supported"
+                out += "+HTC HE Supported"
             twt_responder = get_bit(body[he_mac_cap_oct1], 2)
             if twt_responder:
-                out += f", TWT Responder"
+                out += ", TWT Responder"
             trs_support = get_bit(body[he_mac_cap_oct3], 2)
             if trs_support:
-                out += f", TRS Supported"
+                out += ", TRS Supported"
             bsr_support = get_bit(body[he_mac_cap_oct3], 3)
             if bsr_support:
-                out += f", BSR Supported"
+                out += ", BSR Supported"
             broadcast_twt_support = get_bit(body[he_mac_cap_oct3], 4)
             if broadcast_twt_support:
-                out += f", Broadcast TWT Support"
+                out += ", Broadcast TWT Support"
             bqr_support = get_bit(body[he_mac_cap_oct5], 3)
             if bqr_support:
-                out += f", BQR Support"
+                out += ", BQR Support"
             punctured_sounding_support = get_bit(body[he_mac_cap_oct6], 6)
             if punctured_sounding_support:
-                out += f", Punctured Sounding Support"
+                out += ", Punctured Sounding Support"
 
             he_phy_cap_oct1 = 7
 
@@ -2676,7 +2591,7 @@ class WirelessNetworkBss:
             octet7bit6 = get_bit(body[he_phy_cap_oct1], 6)
             twofourtwo_tone_in_5g_and_6g = octet7bit6
             if twofourtwo_tone_in_5g_and_6g:
-                out += f", 242 tone RU supported"
+                out += ", 242 tone RU supported"
 
             he_mcs_oct1 = 18
             he_mcs_oct2 = 19
@@ -2957,27 +2872,27 @@ class WirelessNetworkBss:
                 if "ac" not in self.modes:
                     self.modes.append("ac")
 
-        out = "VHT Operation Info: 0x{:02x}".format(edata[3])
-        out += "{:02x}".format(edata[2])
-        out += "{:02x}".format(edata[1])
-        out += "{:02x}\n".format(edata[0])
+        out = f"VHT Operation Info: 0x{edata[3]:02x}"
+        out += f"{edata[2]:02x}"
+        out += f"{edata[1]:02x}"
+        out += f"{edata[0]:02x}\n"
         out += "MCS Set\n"
-        out += "  Rx MCS Map: 0x{:02x}".format(edata[11])
-        out += "{:02x}".format(edata[10])
-        out += "{:02x}".format(edata[9])
-        out += "{:02x}\n".format(edata[8])
-        out += "    0x{0:0b}".format(edata[11])
-        out += "{0:0b}".format(edata[10])
-        out += "{0:0b}".format(edata[9])
-        out += "{0:0b}\n".format(edata[8])
-        out += "  Tx MCS Map: 0x{:02x}".format(edata[7])
-        out += "{:02x}".format(edata[6])
-        out += "{:02x}".format(edata[5])
-        out += "{:02x}\n".format(edata[4])
-        out += "    0x{0:0b}".format(edata[7])
-        out += "{0:0b}".format(edata[6])
-        out += "{0:0b}".format(edata[5])
-        out += "{0:0b}\n".format(edata[4])
+        out += f"  Rx MCS Map: 0x{edata[11]:02x}"
+        out += f"{edata[10]:02x}"
+        out += f"{edata[9]:02x}"
+        out += f"{edata[8]:02x}\n"
+        out += f"    0x{edata[11]:0b}"
+        out += f"{edata[10]:0b}"
+        out += f"{edata[9]:0b}"
+        out += f"{edata[8]:0b}\n"
+        out += f"  Tx MCS Map: 0x{edata[7]:02x}"
+        out += f"{edata[6]:02x}"
+        out += f"{edata[5]:02x}"
+        out += f"{edata[4]:02x}\n"
+        out += f"    0x{edata[7]:0b}"
+        out += f"{edata[6]:0b}"
+        out += f"{edata[5]:0b}"
+        out += f"{edata[4]:0b}\n"
         return out
 
     def __parse_vht_operation_element(self, edata):
@@ -2992,11 +2907,11 @@ class WirelessNetworkBss:
 
         body = list(memoryview(edata))
         vht_channel_width = bool(body[0])
-        out = "VHT Channel Width: {}, ".format(vht_channel_width)
+        out = f"VHT Channel Width: {vht_channel_width}, "
         channel_center_frequency_segment_zero = body[1]
-        out += "Center Freq. 0: {}, ".format(channel_center_frequency_segment_zero)
+        out += f"Center Freq. 0: {channel_center_frequency_segment_zero}, "
         channel_center_frequency_segment_one = body[2]
-        out += "Center Freq. 1: {}".format(channel_center_frequency_segment_one)
+        out += f"Center Freq. 1: {channel_center_frequency_segment_one}"
         if vht_channel_width:
             if self is not None:
                 self.channel_width.value = "80"
@@ -3110,15 +3025,7 @@ class WirelessNetworkBss:
         obss_scan_active_total_per_channel = edata[8] + edata[9]
         bss_width_channel_transition_delay_factor = edata[10] + edata[11]
         obss_scan_activity_threshold = edata[12] + edata[13]
-        return "Scan Passive Dwell: {}\nScan Active Dwell: {}\nChannel Width Trigger Scan Interval: {}\nScan Passive Total Per Channel: {}\nScan Active Total Per Channel: {}\nWidth Channel Transition Delay Factor: {}\nScan Activity Threshold: {}".format(
-            obss_scan_passive_dwell,
-            obss_scan_active_dwell,
-            bss_channel_width_trigger_scan_interval,
-            obss_scan_passive_total_per_channel,
-            obss_scan_active_total_per_channel,
-            bss_width_channel_transition_delay_factor,
-            obss_scan_activity_threshold,
-        )
+        return f"Scan Passive Dwell: {obss_scan_passive_dwell}\nScan Active Dwell: {obss_scan_active_dwell}\nChannel Width Trigger Scan Interval: {bss_channel_width_trigger_scan_interval}\nScan Passive Total Per Channel: {obss_scan_passive_total_per_channel}\nScan Active Total Per Channel: {obss_scan_active_total_per_channel}\nWidth Channel Transition Delay Factor: {bss_width_channel_transition_delay_factor}\nScan Activity Threshold: {obss_scan_activity_threshold}"
 
     def __parse_management_mic(edata):
         """
@@ -3155,7 +3062,7 @@ class WirelessNetworkBss:
         mic_bytes = bytes(body[8:])
         mic = mic_bytes.hex()
 
-        return f"KeyID: {key_id} ({key_type}), " f"IPN: 0x{ipn:012x}, " f"MIC: {mic}"
+        return f"KeyID: {key_id} ({key_type}), IPN: 0x{ipn:012x}, MIC: {mic}"
 
     def __parse_interworking_element(self, edata):
         """
@@ -3398,9 +3305,8 @@ class WirelessNetworkBss:
         akm_ids = "/".join(map(str, akm_ids))
         akm_ouis = "/".join(map(str, akm_ouis))
         out = (
-            "Version: {} AKM: {} {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
+            "Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
                 str(version) + ",",
-                akm_ouis,
                 "/".join(akm_list),
                 f"({akm_ids})",
                 "/".join(pairwise_list),
@@ -3433,21 +3339,12 @@ class WirelessNetworkBss:
         # )
         RSN_CAP0 = "{}".format(
             int(
-                "{}{}{}{}{}{}{}{}".format(
-                    int(MFPC),
-                    int(MFPR),
-                    int(GTKSA2),
-                    int(GTKSA1),
-                    int(PTKSA2),
-                    int(PTKSA1),
-                    int(NO_PAIRWISE),
-                    int(PREAUTH),
-                ),
+                f"{int(MFPC)}{int(MFPR)}{int(GTKSA2)}{int(GTKSA1)}{int(PTKSA2)}{int(PTKSA1)}{int(NO_PAIRWISE)}{int(PREAUTH)}",
                 2,
             )
         )
         RSN_CAP1 = "{}".format(
-            int("{}{}".format(int(PEERKEY_ENABLED), int(JOINT_MULTIBAND_RSNA)), 2)
+            int(f"{int(PEERKEY_ENABLED)}{int(JOINT_MULTIBAND_RSNA)}", 2)
         )
         if MFPC:
             if self is not None:
@@ -3579,11 +3476,11 @@ class WirelessNetworkBss:
         for _byte in list(memoryview(edata)):
             # if MSB, rate is basic.
             if get_bit(_byte, 7):
-                supported_rates += " {}(B)".format(
-                    format_rate(rate_to_mbps(trim_most_significant_bit(_byte)))
+                supported_rates += (
+                    f" {format_rate(rate_to_mbps(trim_most_significant_bit(_byte)))}(B)"
                 )
             else:
-                supported_rates += " {}".format(format_rate(rate_to_mbps(_byte)))
+                supported_rates += f" {format_rate(rate_to_mbps(_byte))}"
         return supported_rates
 
     def __parse_ssid_element(edata):

@@ -1,2 +1,26 @@
 [tool.isort]
 profile = "black"
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+exclude = [".tox"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E401",   # multiple imports on one line
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["lswifi"]

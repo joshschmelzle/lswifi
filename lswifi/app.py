@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -52,7 +51,7 @@ from lswifi.helpers import (
     strip_mac_address_format,
 )
 from lswifi.pcap import PCAP, parse_radiotap_header
-from lswifi.schemas.out import *
+from lswifi.schemas.out import OUT_TUPLE, SubHeader
 
 
 class lswifi:
@@ -77,22 +76,21 @@ class lswifi:
                 if args.event_watcher:
                     while watching_events:
                         for (
-                            index,
+                            _index,
                             iface,
                         ) in WLAN_API.WLAN.get_wireless_interfaces().items():
-                            if "disabled" not in iface.mac:
-                                if iface.mac not in clients.keys():
-                                    client = Client(args, iface)
-                                    clients[iface.mac] = client
+                            if "disabled" not in iface.mac and iface.mac not in clients:
+                                client = Client(args, iface)
+                                clients[iface.mac] = client
                         sleep(2)
 
                 for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
                     clients[index] = Client(args, iface)
             except Exception as error:
-                log.error("%s" % error)
+                log.error("%s", error)
 
             if len(clients) == 0:
-                log.error(f"no wireless interfaces found")
+                log.error("no wireless interfaces found")
                 sys.exit(-1)
 
             if args.list_interfaces:
@@ -204,11 +202,10 @@ class lswifi:
                 if loops_completed > 1:
                     log.info(f"total number of completed scans is {loops_completed}")
         except KeyboardInterrupt:
-            if not args.event_watcher:
-                if loops_completed > 1:
-                    log.info(
-                        f"total number of completed scans during this session is {loops_completed}"
-                    )
+            if not args.event_watcher and loops_completed > 1:
+                log.info(
+                    f"total number of completed scans during this session is {loops_completed}"
+                )
             log.warning("keyboard interruption detected... stopping...")
             sys.exit(-1)
         except asyncio.CancelledError:
@@ -342,7 +339,7 @@ class lswifi:
         try:
             if os.path.isfile(file):
                 content = ""
-                with open(file, "r") as file_reader:
+                with open(file) as file_reader:
                     content = file_reader.readlines()
                 content = [x.strip() for x in content]
                 print("\n".join(content))
@@ -401,7 +398,7 @@ class lswifi:
         file = os.path.join(appdata_path, "ethers")
         ethers = {}
         if os.path.isfile(file):
-            with open(file, "r") as infile:
+            with open(file) as infile:
                 for line in infile:
                     mac, name = line.split(" ", 1)
                     ethers[mac] = name.strip()
@@ -418,9 +415,8 @@ class lswifi:
         file = os.path.join(appdata_path, APNAMEJSONFILE)
         apnames = {}
         if os.path.isfile(file):
-            with open(file, "r") as fp:
-                with contextlib.suppress(json.decoder.JSONDecodeError):
-                    apnames = json.load(fp)
+            with open(file) as fp, contextlib.suppress(json.decoder.JSONDecodeError):
+                apnames = json.load(fp)
 
         log = logging.getLogger(__name__)
         log.debug(f"<loadAPNames>: len(json_names) {len(apnames)}")
@@ -442,9 +438,7 @@ class lswifi:
         newcount = 0
         for scan_bss, scan_name in scan_names.items():
             if scan_name != "":  # if not ""
-                if (
-                    scan_bss in json_names.keys()
-                ):  # if name from scan is in the json file
+                if scan_bss in json_names:  # if name from scan is in the json file
                     if (
                         json_names[scan_bss] != scan_name
                     ):  # if scan name is different from json name
@@ -460,7 +454,6 @@ class lswifi:
             f"<updateAPNames> len(json_names) {len(json_names)} len(new_names) {len(scan_names)}"
         )
         if newcount > 0:
-            {**json_names, **scan_names}
             with open(file, "w") as fp:
                 json.dump(json_names, fp)
                 log.debug(f"{len(scan_names.items())} new names written to {file}")
@@ -545,7 +538,7 @@ class lswifi:
         bss_len = len(wireless_network_bss_list)
 
         if args.bytes:
-            for index, bss in enumerate(wireless_network_bss_list):
+            for _index, bss in enumerate(wireless_network_bss_list):
                 wlanapi_bss = str(bss.bssid).lower()
                 if args.bytes:
                     user_bss = args.bytes.lower()
@@ -598,28 +591,25 @@ class lswifi:
                         # print(f"{os.path.join(exportpath, bss)}")
                         # print(f"{type(bss.bssbytes.send())}")
                         # print(f"{bss.bssbytes.send()}")
-                        bssfile = open(os.path.join(exportraw_path, bsspath), "wb")
-                        try:
+                        with open(
+                            os.path.join(exportraw_path, bsspath), "wb"
+                        ) as bssfile:
                             bssfile.write(bss.bssbytes.send())
-                        finally:
-                            bssfile.close()
 
                         bsspath = export_bss + ".bss"
-                        bssfile = open(os.path.join(exportraw_path, bsspath), "wb")
-                        try:
+                        with open(
+                            os.path.join(exportraw_path, bsspath), "wb"
+                        ) as bssfile:
                             bssfile.write(bss.bssbytes.send())
-                        finally:
-                            bssfile.close()
 
                         iespath = export_bss + ".ies"
                         # print(f"{os.path.join(exportpath, ies)}")
                         # print(f"{type(bss.iesbytes)}")
                         # print(f"{bss.iesbytes}")
-                        iesfile = open(os.path.join(exportraw_path, iespath), "wb")
-                        try:
+                        with open(
+                            os.path.join(exportraw_path, iespath), "wb"
+                        ) as iesfile:
                             iesfile.write(bss.iesbytes)
-                        finally:
-                            iesfile.close()
 
                         # print(f"{bsspath} {iespath}")
                         if args.export != "all":
@@ -709,31 +699,27 @@ class lswifi:
                             pass
 
                 # handle width filter
-                if args.width is not None:
-                    if int(args.width) != int(bss.channel_width.value):
-                        continue
+                if args.width is not None and int(args.width) != int(
+                    bss.channel_width.value
+                ):
+                    continue
 
                 # handle hidden ssid, and handle ssid filter
-                if args.include is None:
-                    pass
-                elif args.include in str(bss.ssid):
+                if args.include is None or args.include in str(bss.ssid):
                     pass
                 else:
                     continue
 
                 # handle exclude filter
-                if args.exclude:
-                    if args.exclude in str(bss.ssid):
-                        continue
+                if args.exclude and args.exclude in str(bss.ssid):
+                    continue
 
                 # directed scan on BSSID or OUI
                 if args.bssid is not None:
                     input_mac = strip_mac_address_format(args.bssid)
                     bss_mac = strip_mac_address_format(str(bss.bssid))
                 # print("{} {}".format(input_mac, bss_mac))
-                if args.bssid is None:
-                    pass
-                elif input_mac in bss_mac:
+                if args.bssid is None or input_mac in bss_mac:
                     pass
                 else:
                     continue
@@ -752,41 +738,36 @@ class lswifi:
                 if args.ethers:
                     if bss.bssid.value in ethers:
                         bss.apname.value = ethers[bss.bssid.value]
-                elif args.apnames:
-                    if is_caching_acknowledged:
-                        scan_bssid = bss.bssid.value
-                        scan_apname = remove_control_chars(bss.apname.value)
+                elif args.apnames and is_caching_acknowledged:
+                    scan_bssid = bss.bssid.value
+                    scan_apname = remove_control_chars(bss.apname.value)
 
+                    if (
+                        json_names.get(scan_bssid) is not None
+                    ):  # if bssid is in json dict
+                        cachedAP = json_names[scan_bssid]
+                        bss.apname.value = cachedAP  # start with cached
                         if (
-                            json_names.get(scan_bssid) is not None
-                        ):  # if bssid is in json dict
-                            cachedAP = json_names[scan_bssid]
-                            bss.apname.value = cachedAP  # start with cached
-                            if (
-                                scan_apname != ""
-                            ):  # if current AP name is not an empty string
-                                if (
-                                    scan_apname != cachedAP
-                                ):  # if current AP doesn't match whats in the json
-                                    newapnames[scan_bssid] = (
-                                        scan_apname  # then 1) update new hash table with current AP name
-                                    )
-                                    bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
-                            log.debug(
-                                f"BSSID from scan: {scan_bssid}, Name from cache: {cachedAP}, Name from scanned {scan_apname}"
-                            )
-                        elif scan_apname != "":  # working with new AP name
+                            scan_apname != "" and scan_apname != cachedAP
+                        ):  # if current AP name is not empty and doesn't match cached
                             newapnames[scan_bssid] = (
-                                scan_apname  # then 1) update new hash table with new AP name
+                                scan_apname  # then 1) update new hash table with current AP name
                             )
+                            bss.apname.value = scan_apname  # then 2) update the apname that will be displayed
+                        log.debug(
+                            f"BSSID from scan: {scan_bssid}, Name from cache: {cachedAP}, Name from scanned {scan_apname}"
+                        )
+                    elif scan_apname != "":  # working with new AP name
+                        newapnames[scan_bssid] = (
+                            scan_apname  # then 1) update new hash table with new AP name
+                        )
 
                 # bss.element.out() contains a tuple with the following values
                 #   1. value, 2. header and alignment (left, center, right), 3. subheader
 
-                if bss.bssid.connected:
-                    if not args.json and not args.csv:
-                        # if "(*)" not in bss.bssid.value:
-                        bss.bssid.value += "(*)"
+                if bss.bssid.connected and not args.json and not args.csv:
+                    # if "(*)" not in bss.bssid.value:
+                    bss.bssid.value += "(*)"
 
                 if args.json:
                     json_out.append(
@@ -806,10 +787,8 @@ class lswifi:
                             "modes": sorted(bss.modes.elements),
                             "pmf": str(bss.pmf).strip(),
                             "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": [
-                                x for x in bss.wlanrateset.basic.split(" ")
-                            ],
-                            "rates_data": [x for x in bss.wlanrateset.data.split(" ")],
+                            "rates_basic": bss.wlanrateset.basic.split(" "),
+                            "rates_data": bss.wlanrateset.data.split(" "),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
                             "spatial_streams": str(bss.spatial_streams),
@@ -839,12 +818,8 @@ class lswifi:
                             "modes": "/".join(sorted(bss.modes.elements)),
                             "pmf": str(bss.pmf).strip(),
                             "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": "/".join(
-                                [x for x in bss.wlanrateset.basic.split(" ")]
-                            ),
-                            "rates_data": "/".join(
-                                [x for x in bss.wlanrateset.data.split(" ")]
-                            ),
+                            "rates_basic": "/".join(bss.wlanrateset.basic.split(" ")),
+                            "rates_data": "/".join(bss.wlanrateset.data.split(" ")),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
                             "spatial_streams": str(bss.spatial_streams),
@@ -882,9 +857,8 @@ class lswifi:
                     out_results[-1].append(bss.stations.out())
                     out_results[-1].append(bss.utilization.out())
 
-                if args.apnames or args.ethers:
-                    if is_caching_acknowledged:
-                        out_results[-1].append(bss.apname.out())
+                if (args.apnames or args.ethers) and is_caching_acknowledged:
+                    out_results[-1].append(bss.apname.out())
 
         rnr_results = sorted(
             rnr_results,
@@ -913,10 +887,7 @@ class lswifi:
 
         if args.json:
             json_file_exists = os.path.exists(json_file_name)
-            if json_file_exists:
-                mode = "r+"
-            else:
-                mode = "w"
+            mode = "r+" if json_file_exists else "w"
             if not json_out:
                 log.info(f"nothing found to export as JSON to {json_file_name}")
             else:
@@ -943,7 +914,7 @@ class lswifi:
             mode = "w"
             if csv_file_exists:
                 mode = "a"
-                with open(csv_file_name, "r") as f:
+                with open(csv_file_name) as f:
                     try:
                         has_headings = csv.Sniffer().has_header(f.read(4096))
                     except csv.Error:
@@ -976,9 +947,11 @@ class lswifi:
                     )
 
                     for bss in wireless_network_bss_list:
-                        if args.export != "all":
-                            if str(bss.bssid).lower() != args.export.lower():
-                                continue
+                        if (
+                            args.export != "all"
+                            and str(bss.bssid).lower() != args.export.lower()
+                        ):
+                            continue
 
                         if not args.all and bss.rssi.value < args.sensitivity:
                             continue
@@ -1042,18 +1015,12 @@ class lswifi:
                 export_bss = clean_wlanapi_bss.replace(":", "-")
 
                 bsspath = export_bss + ".bss"
-                bssfile = open(os.path.join(exportpath, bsspath), "wb")
-                try:
+                with open(os.path.join(exportpath, bsspath), "wb") as bssfile:
                     bssfile.write(bss.bssbytes.send())
-                finally:
-                    bssfile.close()
 
                 iespath = export_bss + ".ies"
-                iesfile = open(os.path.join(exportpath, iespath), "wb")
-                try:
+                with open(os.path.join(exportpath, iespath), "wb") as iesfile:
                     iesfile.write(bss.iesbytes)
-                finally:
-                    iesfile.close()
 
                 if args.exportraw != "all":
                     log.info(
@@ -1171,8 +1138,8 @@ class lswifi:
 
             with pcap:
                 for (
-                    interface_id,
-                    interface_name,
+                    _interface_id,
+                    _interface_name,
                     timestamp,
                     packet_data,
                 ) in pcap.get_packets():
@@ -1274,8 +1241,8 @@ class lswifi:
                         # convert channel frequency unit from MHz to GHz
                         # 2412 to 2.412, 5825 to 5.825, 6855 to 6.855
                         bss.channel_frequency.value = f"{freq}"
-                        bss.channel_frequency.value = "{0:.3f}".format(
-                            int(bss.channel_frequency.value) / 1000
+                        bss.channel_frequency.value = (
+                            f"{int(bss.channel_frequency.value) / 1000:.3f}"
                         )
 
                         bss.ie_rates.value = bss.parse_rates(bss.ie_rates)
@@ -1456,9 +1423,8 @@ class lswifi:
                 headers.append(tup.header)
 
             for tup in scan_results[0]:
-                if "BSSID" in tup.header.value:
-                    if connected:
-                        tup.subheader = SubHeader("(*): connected")
+                if "BSSID" in tup.header.value and connected:
+                    tup.subheader = SubHeader("(*): connected")
                 subheaders.append(tup.subheader)
 
             result_indexes_string = ""
@@ -1517,32 +1483,27 @@ class lswifi:
             else:
                 print(json.dumps(json_out))
 
-        duplicates = set([x for x in bssid_list if bssid_list.count(x) > 1])
+        duplicates = {x for x in bssid_list if bssid_list.count(x) > 1}
         if duplicates:
             log.warning("***BSSIDS WITH DUPLICATE MACs***")
             log.warning(duplicates)
             log.warning("***BSSIDS WITH DUPLICATE MACs***")
 
-        if args.apnames:
-            if is_caching_acknowledged:
-                self.updateAPNames(json_names, newapnames)
+        if args.apnames and is_caching_acknowledged:
+            self.updateAPNames(json_names, newapnames)
 
     def decode_bytefile(self, args):
         if os.path.isfile(args.decoderaw):
             if args.decoderaw.lower().rsplit(".", 1)[1] == "ies":
-                fh = open(args.decoderaw, "rb")
-                ies = ""
-                try:
+                with open(args.decoderaw, "rb") as fh:
                     _bytearray = bytearray(fh.read())
-                    print(
-                        f"Raw Information Elements ({len(_bytearray)} "
-                        f"bytes):\n{format_bytes_as_hex(_bytearray)}"
-                    )
+                print(
+                    f"Raw Information Elements ({len(_bytearray)} "
+                    f"bytes):\n{format_bytes_as_hex(_bytearray)}"
+                )
 
-                    print()
-                    ies = WirelessNetworkBss.decode_bytefile_ies(_bytearray)
-                finally:
-                    fh.close()
+                print()
+                ies = WirelessNetworkBss.decode_bytefile_ies(_bytearray)
 
                 out = "Decoded Information Elements:\n"
 
@@ -1550,7 +1511,6 @@ class lswifi:
                 id_len = get_attr_max_len(ies, "eid")
                 names_len = get_attr_max_len(ies, "name")
                 data_len = get_attr_max_len(ies, "pbody")
-                get_attr_max_len(ies, "decoded")
 
                 out += "{0:<{length_len}}  {1:<{id_len}}  {2:<{names_len}}  {3:<{data_len}}  {4}\n".format(
                     "Length",
@@ -1588,22 +1548,18 @@ class lswifi:
                 return
 
             if args.decoderaw.lower().rsplit(".", 1)[1] == "bss":
-                fh = open(args.decoderaw, "rb")
-                ies = ""
-                try:
+                with open(args.decoderaw, "rb") as fh:
                     _bytearray = bytearray(fh.read())
-                    print(
-                        f"Raw BSS ({len(_bytearray)} bytes):\n{format_bytes_as_hex(_bytearray)}"
-                    )
-                    print()
-                    print(
-                        "Decoded BSS Information (NOTE: this is missing information found in .ies file):"
-                    )
-                    bss_entry = WLAN_API.WLANBSSEntry.from_buffer(_bytearray)
-                    data = WirelessNetworkBss(bss_entry, is_byte_input_file=True)
-                    print(data)
-                finally:
-                    fh.close()
+                print(
+                    f"Raw BSS ({len(_bytearray)} bytes):\n{format_bytes_as_hex(_bytearray)}"
+                )
+                print()
+                print(
+                    "Decoded BSS Information (NOTE: this is missing information found in .ies file):"
+                )
+                bss_entry = WLAN_API.WLANBSSEntry.from_buffer(_bytearray)
+                data = WirelessNetworkBss(bss_entry, is_byte_input_file=True)
+                print(data)
         else:
             print(f"{args.decoderaw} file does not exist on file system... exiting...")
 

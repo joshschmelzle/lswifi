@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -164,7 +163,11 @@ def get_adapter_infos_by_guid(interface_guid):
     # Call with 0 size to get required buffer size first
     buffer_size = c_ulong(0)
     result = IPHLP_API.GetAdaptersAddresses(
-        0, 0, None, None, byref(buffer_size)  # Family  # Flags  # Reserved  # Buffer
+        0,
+        0,
+        None,
+        None,
+        byref(buffer_size),  # Family  # Flags  # Reserved  # Buffer
     )
 
     adapter_addresses = create_string_buffer(buffer_size.value)
@@ -205,10 +208,10 @@ def get_adapter_infos_by_guid(interface_guid):
 
 # DOT11_AUTH_ALGORITHM enumeration
 
-""" The DOT11_AUTH_ALGORITHM enumerated type defines a wireless LAN 
+""" The DOT11_AUTH_ALGORITHM enumerated type defines a wireless LAN
 authentication algorithm.
 
-typedef enum _DOT11_AUTH_ALGORITHM { 
+typedef enum _DOT11_AUTH_ALGORITHM {
   DOT11_AUTH_ALGO_80211_OPEN        = 1,
   DOT11_AUTH_ALGO_80211_SHARED_KEY  = 2,
   DOT11_AUTH_ALGO_WPA               = 3,
@@ -241,10 +244,10 @@ DOT11_AUTH_ALGORITHM_DICT = {
 
 # DOT11_BSS_TYPE enumeration
 
-""" The DOT11_BSS_TYPE enumerated type defines a basic service set (BSS) 
+""" The DOT11_BSS_TYPE enumerated type defines a basic service set (BSS)
 network type.
 
-typedef enum _DOT11_BSS_TYPE { 
+typedef enum _DOT11_BSS_TYPE {
   dot11_BSS_type_infrastructure  = 1,
   dot11_BSS_type_independent     = 2,
   dot11_BSS_type_any             = 3
@@ -256,10 +259,10 @@ DOT11_BSS_TYPE_DICT = {0: None, 1: "Infrastructure", 2: "Independent", 3: "Any"}
 
 # DOT11_CIPHER_ALGORITHM enumeration
 
-""" The DOT11_CIPHER_ALGORITHM enumerated type defines a cipher algorithm for 
+""" The DOT11_CIPHER_ALGORITHM enumerated type defines a cipher algorithm for
 data encryption and decryption.
 
-typedef enum _DOT11_CIPHER_ALGORITHM { 
+typedef enum _DOT11_CIPHER_ALGORITHM {
   DOT11_CIPHER_ALGO_NONE           = 0x00,
   DOT11_CIPHER_ALGO_WEP40          = 0x01,
   DOT11_CIPHER_ALGO_TKIP           = 0x02,
@@ -274,14 +277,12 @@ typedef enum _DOT11_CIPHER_ALGORITHM {
 """
 DOT11_CIPHER_ALGORITHM = c_uint
 DOT11_CIPHER_ALGORITHM_DICT = {
-    0: None,
     0x00: "NONE",
     0x01: "WEP40",
     0x02: "TKIP",
     0x04: "CCMP",
     0x05: "WEP104",
-    0x100: "WPA_USE_GROUP",
-    0x100: "RSN_USE_GROUP",
+    0x100: "WPA_USE_GROUP/RSN_USE_GROUP",
     0x101: "WEP",
     0x80000000: "DOT11_CIPHER_ALGO_IHV_START",
     0xFFFFFFFF: "DOT11_CIPHER_ALGO_IHV_END",
@@ -292,7 +293,7 @@ DOT11_CIPHER_ALGORITHM_DICT = {
 
 """ The DOT11_PHY_TYPE enumeration defines an 802.11 PHY and media type.
 
-typedef enum _DOT11_PHY_TYPE { 
+typedef enum _DOT11_PHY_TYPE {
   dot11_phy_type_unknown     = 0,
   dot11_phy_type_any         = 0,
   dot11_phy_type_fhss        = 1,
@@ -470,7 +471,7 @@ WLAN_INTF_OPCODE_DICT = {
 
 # WLAN_OPCODE_VALUE_TYPE Enumeration
 
-""" The WLAN_OPCODE_VALUE_TYPE enumeration specifies the origin of automatic 
+""" The WLAN_OPCODE_VALUE_TYPE enumeration specifies the origin of automatic
 configuration (auto config) settings.
 
 typedef enum _WLAN_OPCODE_VALUE_TYPE {
@@ -983,9 +984,7 @@ class WLANRawData(Structure):
     _fields_ = [("DataSize", DWORD), ("DataBlob", c_byte * 1)]
 
 
-class InformationElement(
-    object
-):  # TODO: MOVE THIS TO ELEMENTS.PY DOES NOT BELONG IN WLANAPI
+class InformationElement:  # TODO: MOVE THIS TO ELEMENTS.PY DOES NOT BELONG IN WLANAPI
     """Data class for an 802.11 Information Element"""
 
     def __init__(self, eid, name, length, decoded, body, pbody):
@@ -997,12 +996,10 @@ class InformationElement(
         self.pbody = pbody
 
     def __str__(self):
-        return "Element ID: {}\nName: {}\nLength: {}\nDecoded: {}\nBody: {}\nPretty Body: {}".format(
-            self.eid, self.name, self.length, self.decoded, self.body, self.pbody
-        )
+        return f"Element ID: {self.eid}\nName: {self.name}\nLength: {self.length}\nDecoded: {self.decoded}\nBody: {self.body}\nPretty Body: {self.pbody}"
 
 
-class WirelessInterface(object):
+class WirelessInterface:
     """Data class for the wireless interface"""
 
     def __init__(self, wlan_iface_info):
@@ -1659,7 +1656,7 @@ class WLAN:
         wlan_interfaces = None
         handle = None
         try:
-            threads = list()
+            threads = []
             handle = WLAN.open_handle()
             wlan_interfaces = WLAN.enumerate_interfaces(handle)
             data_type = wlan_interfaces.contents.InterfaceInfo._type_
@@ -1684,7 +1681,7 @@ class WLAN:
                 threads.append(t)
                 t.start()
 
-            for index, t in enumerate(threads):
+            for _index, t in enumerate(threads):
                 t.join()
 
             ifaces = {

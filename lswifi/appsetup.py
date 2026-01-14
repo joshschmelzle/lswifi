@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -26,14 +25,14 @@ import sys
 import textwrap
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from lswifi import slog
 from lswifi.__version__ import __version__
 from lswifi.completions import get_completions
 
 
-def parse_completion_args(argv: List[str]) -> Optional[Tuple[str, str]]:
+def parse_completion_args(argv: list[str]) -> Optional[tuple[str, str]]:
     """Parse hidden completion arguments and return (args_string, current_word)."""
     if "--_complete" not in argv:
         return None
@@ -57,7 +56,7 @@ def parse_completion_args(argv: List[str]) -> Optional[Tuple[str, str]]:
 
 def handle_completion(args_str: str, current_word: str) -> None:
     """Output completions for the given arguments."""
-    args: List[str] = []
+    args: list[str] = []
     if args_str.strip():
         args = args_str.strip().split()
     completions = get_completions(args, current_word)
@@ -128,8 +127,8 @@ def VerifyPath(_path, _extension):
                 Path(_path).parent.absolute()
                 / f"lswifi_write_test_{int(time.time() * 1000)}.tmp"
             )
-            file_out = open(temp_file_path, "w")
-            file_out.close()
+            with open(temp_file_path, "w"):
+                pass
             os.remove(temp_file_path)
         except PermissionError:
             if Path(_path).is_absolute():
@@ -140,12 +139,11 @@ def VerifyPath(_path, _extension):
                 )
             sys.exit(-1)
     # does the parent directory of the path provided actually exist?
-    if Path(_path).is_absolute():
-        if not Path(_path).parent.absolute().exists():
-            print(
-                f"Parent directory at {Path(_path).parent.absolute()} does not exist. exiting..."
-            )
-            sys.exit(-1)
+    if Path(_path).is_absolute() and not Path(_path).parent.absolute().exists():
+        print(
+            f"Parent directory at {Path(_path).parent.absolute()} does not exist. exiting..."
+        )
+        sys.exit(-1)
 
 
 class WriteToCSVAction(argparse.Action):
@@ -206,8 +204,8 @@ def sensitivity(value):
             raise argparse.ArgumentTypeError(
                 "rssi sensitivity threshold must be a value from -1 to -110"
             )
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"{value} not a valid threshold")
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"{value} not a valid threshold") from err
     return display_sensitivity
 
 
@@ -219,8 +217,10 @@ def json_indent(value):
         indent_level = int(value)
         if indent_level not in range(0, 5):
             raise argparse.ArgumentTypeError("JSON indent level must be less than 5")
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"{value} not a valid JSON indent level")
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(
+            f"{value} not a valid JSON indent level"
+        ) from err
     return indent_level
 
 
@@ -249,8 +249,8 @@ def syslog_ip(value):
             servers.append(ip)
         slog.SYSLOG_SERVERS = servers
         return servers  # return something so the arg is not None
-    except ValueError:
-        raise argparse.ArgumentTypeError("IP address {} is not valid".format(value))
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"IP address {value} is not valid") from err
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -262,7 +262,7 @@ def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent(
-            """   
+            """
                                ..:--==+++++++++++++==--:.
                           .-=++++++++++++++++++++++++++++++=-:.
                       :-++++++++++++++++++++++++++++++++++++++++=-.
@@ -325,19 +325,19 @@ def setup_parser() -> argparse.ArgumentParser:
 
             Print additional details (inc. information elements) for a provided BSSID (MAC address must be exact match):
               >lswifi -ies 06:6D:15:88:81:59
-              
+
             Print and add detected AP names column in output:
               >lswifi --ap-names
-              
+
             Print and add QBSS stations and utilization columns in output:
               >lswifi --qbss
 
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
-            
+
             Print a special table for BSSes which contain Reduced Neighbor Reports:
               >lswifi -rnr
-            
+
             Export results to pcapng:
               >lswifi -export
 """

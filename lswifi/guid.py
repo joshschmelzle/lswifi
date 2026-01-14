@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Extracted from from comtypes.py
 
@@ -32,7 +31,7 @@ class GUID(Structure):
             _CLSIDFromString(str(name), byref(self))
 
     def __repr__(self):
-        return 'GUID("%s")' % str(self)
+        return f'GUID("{self}")'
 
     def __unicode__(self):
         p = c_wchar_p()
