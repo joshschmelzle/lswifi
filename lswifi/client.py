@@ -60,11 +60,19 @@ USB_SPEEDS = {
 }
 
 
-def get_adapter_bus_info(adapter_description: str) -> tuple:
-    """Get bus type and speed info for a network adapter."""
+def get_adapter_bus_info(adapter_guid: str) -> tuple:
+    """Get bus type and speed info for a network adapter.
 
-    ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterHardwareInfoSettingData |
-        Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
+    Args:
+        adapter_guid: The adapter GUID (without braces)
+
+    Returns:
+        Tuple of (bus_type, bus_info) or (None, None) if not found
+    """
+
+    ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter |
+        Where-Object {{ $_.InterfaceGuid -eq '{{{adapter_guid}}}' }} |
+        Get-CimAssociatedInstance -ResultClassName MSFT_NetAdapterHardwareInfoSettingData |
         Select-Object BusType, PciExpressCurrentLinkSpeedEncoded, PciExpressCurrentLinkWidth, UsbCurrentSpeedEncoded |
         ConvertTo-Json"""
 
@@ -96,7 +104,7 @@ def get_adapter_bus_info(adapter_description: str) -> tuple:
         pass
 
     ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter |
-        Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
+        Where-Object {{ $_.InterfaceGuid -eq '{{{adapter_guid}}}' }} |
         Select-Object PnpDeviceId |
         ConvertTo-Json"""
 
@@ -126,9 +134,20 @@ def get_adapter_bus_info(adapter_description: str) -> tuple:
 
 
 def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
-    """Get USB speed from PnP device property."""
-    ps_cmd = f"""Get-PnpDeviceProperty -InstanceId '{pnp_device_id}' -KeyName '{{8DBC9C86-97A9-4BFF-9BC6-BFE95D3E6DAD}} 5' |
-        Select-Object -ExpandProperty Data"""
+    """Get USB speed from PnP device location path.
+
+    Uses DEVPKEY_Device_LocationPaths to determine USB speed based on the
+    port type identifier in the ACPI path:
+    - SS (SuperSpeed) = USB 3.0+
+    - HS (High-Speed) = USB 2.0
+    - FS (Full-Speed) = USB 1.1
+    - LS (Low-Speed) = USB 1.1
+    """
+    ps_cmd = f"""$paths = (Get-PnpDeviceProperty -InstanceId '{pnp_device_id}' -KeyName 'DEVPKEY_Device_LocationPaths' -ErrorAction SilentlyContinue).Data
+if ($paths -match 'SS\\d+') {{ Write-Output '3' }}
+elseif ($paths -match 'HS\\d+') {{ Write-Output '2' }}
+elseif ($paths -match 'FS\\d+') {{ Write-Output '1' }}
+elseif ($paths -match 'LS\\d+') {{ Write-Output '0' }}"""
 
     try:
         result = subprocess.run(
@@ -422,7 +441,8 @@ def get_interface_info(args, iface) -> str:
                     f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
                 )
                 outstr += f"    MAC: {iface.mac}\n"
-                bus_type, bus_info = get_adapter_bus_info(iface.description)
+                guid_no_braces = iface.guid_string.strip("{}").lower()
+                bus_type, bus_info = get_adapter_bus_info(guid_no_braces)
                 if bus_type:
                     if bus_info:
                         outstr += f"    {bus_type}: {bus_info}\n"
