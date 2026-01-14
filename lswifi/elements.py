@@ -3304,16 +3304,14 @@ class WirelessNetworkBss:
             )
         akm_ids = "/".join(map(str, akm_ids))
         akm_ouis = "/".join(map(str, akm_ouis))
-        out = (
-            "Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
-                str(version) + ",",
-                "/".join(akm_list),
-                f"({akm_ids})",
-                "/".join(pairwise_list),
-                f"({pairwise_cipher_suite})",
-                CIPHER_SUITE_DICT[group_cipher_suite],
-                f"({group_cipher_suite})",
-            )
+        out = "Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
+            str(version) + ",",
+            "/".join(akm_list),
+            f"({akm_ids})",
+            "/".join(pairwise_list),
+            f"({pairwise_cipher_suite})",
+            CIPHER_SUITE_DICT[group_cipher_suite],
+            f"({group_cipher_suite})",
         )
         PREAUTH = get_bit(body[index], 0)
         NO_PAIRWISE = get_bit(body[index + 1], 1)
