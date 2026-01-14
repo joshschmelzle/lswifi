@@ -18,9 +18,11 @@ client side code for requesting a scan, waiting for scan complete, and getting t
 
 import datetime
 import functools
+import json
 import logging
 import os
 import pprint
+import subprocess
 import sys
 import time
 import traceback
@@ -30,31 +32,16 @@ from typing import Union
 
 from lswifi import wlanapi as WLAN_API
 from lswifi.helpers import (
-    get_2ghz5ghz_frequency_from_channel_number,
-    get_6ghz_frequency_from_channel_number,
     is_five_band,
     is_six_band,
     is_two_four_band,
 )
 from lswifi.slog import message as syslog
 
-
-def get_band_from_channel(channel: int) -> str:
-    """Determine the band (2GHz, 5GHz, 6GHz) from a channel number."""
-    channel_str = str(channel)
-    freq = get_2ghz5ghz_frequency_from_channel_number(channel_str)
-    if freq != "Unknown":
-        if is_two_four_band(freq):
-            return "2.4 GHz"
-        elif is_five_band(freq):
-            return "5 GHz"
-    freq = get_6ghz_frequency_from_channel_number(channel_str)
-    if freq != "Unknown":
-        if is_six_band(freq):
-            return "6 GHz"
-    return "Unknown"
-
-
+# PCI Express Link Speed Encoding (PciExpressCurrentLinkSpeedEncoded)
+# https://learn.microsoft.com/en-us/windows/win32/fwp/wmi/netadaptercimprov/msft-netadapterhardwareinfosettingdata
+# Microsoft documents: 1=2.5Gbps (Gen1), 2=5Gbps (Gen2)
+# Gen3-Gen5 values follow the same pattern per PCI-SIG specifications
 PCIE_SPEEDS = {
     1: "2.5 GT/s",
     2: "5.0 GT/s",
@@ -63,7 +50,8 @@ PCIE_SPEEDS = {
     5: "32.0 GT/s",
 }
 
-# USB_DEVICE_SPEED enumeration from usbspec.h
+# USB Device Speed Enumeration
+# Values from USB_DEVICE_SPEED (usbspec.h) in Windows Driver Kit
 # https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/usbspec/ne-usbspec-_usb_device_speed
 USB_SPEEDS = {
     0: "Low Speed (USB 1.1)",
@@ -74,15 +62,8 @@ USB_SPEEDS = {
 
 
 def get_adapter_bus_info(adapter_description: str) -> tuple:
-    """Get bus type and speed info for a network adapter.
+    """Get bus type and speed info for a network adapter."""
 
-    Returns:
-        tuple: (bus_type, info_string) where bus_type is 'PCIe', 'USB', or None
-    """
-    import json
-    import subprocess
-
-    # Use InterfaceDescription to match the adapter since Name may differ
     ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterHardwareInfoSettingData |
         Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
         Select-Object BusType, PciExpressCurrentLinkSpeedEncoded, PciExpressCurrentLinkWidth, UsbCurrentSpeedEncoded |
@@ -95,33 +76,74 @@ def get_adapter_bus_info(adapter_description: str) -> tuple:
             text=True,
             timeout=5,
         )
-        if result.returncode != 0 or not result.stdout.strip():
-            return None, None
-        data = json.loads(result.stdout)
-        if not data:
-            return None, None
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            if data:
+                speed_encoded = data.get("PciExpressCurrentLinkSpeedEncoded")
+                width = data.get("PciExpressCurrentLinkWidth")
+                if speed_encoded is not None and width is not None:
+                    speed = PCIE_SPEEDS.get(speed_encoded, f"Gen{speed_encoded}")
+                    return "PCIe", f"{speed} x{width}"
 
-        # Check for PCIe properties first (BusType may be null even for PCIe adapters)
-        speed_encoded = data.get("PciExpressCurrentLinkSpeedEncoded")
-        width = data.get("PciExpressCurrentLinkWidth")
-        if speed_encoded is not None and width is not None:
-            speed = PCIE_SPEEDS.get(speed_encoded, f"Gen{speed_encoded}")
-            return "PCIe", f"{speed} x{width}"
+                usb_speed = data.get("UsbCurrentSpeedEncoded")
+                if usb_speed is not None:
+                    speed = USB_SPEEDS.get(usb_speed, f"Unknown ({usb_speed})")
+                    return "USB", speed
 
-        # Check for USB
-        usb_speed = data.get("UsbCurrentSpeedEncoded")
-        if usb_speed is not None:
-            speed = USB_SPEEDS.get(usb_speed, f"Unknown ({usb_speed})")
-            return "USB", speed
-
-        # Fallback to BusType if properties aren't available
-        bus_type = data.get("BusType")
-        if bus_type == 15:  # USB
-            return "USB", None
-
-        return None, None
+                bus_type = data.get("BusType")
+                if bus_type == 15:
+                    return "USB", None
     except Exception:
-        return None, None
+        pass
+
+    ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter |
+        Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
+        Select-Object PnpDeviceId |
+        ConvertTo-Json"""
+
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            if data:
+                pnp_id = data.get("PnpDeviceId", "")
+                if pnp_id and pnp_id.upper().startswith("USB\\"):
+                    usb_speed = _get_usb_speed_from_pnp(pnp_id)
+                    if usb_speed is not None:
+                        speed = USB_SPEEDS.get(usb_speed, f"Unknown ({usb_speed})")
+                        return "USB", speed
+                    return "USB", None
+                if pnp_id and pnp_id.upper().startswith("PCI\\"):
+                    return "PCI", None
+    except Exception:
+        pass
+
+    return None, None
+
+
+def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
+    """Get USB speed from PnP device property."""
+    ps_cmd = f"""Get-PnpDeviceProperty -InstanceId '{pnp_device_id}' -KeyName '{{8DBC9C86-97A9-4BFF-9BC6-BFE95D3E6DAD}} 5' |
+        Select-Object -ExpandProperty Data"""
+
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return int(result.stdout.strip())
+    except Exception:
+        pass
+
+    return None
 
 
 class TimerEx(object):
@@ -273,7 +295,6 @@ def get_interface_info(args, iface) -> str:
     outstr = ""
     interface_info = {}
 
-    # query interface for supported info
     params = ["current_connection", "channel_number", "statistics", "rssi"]
     for param in params:
         result = WLAN_API.WLAN.query_interface(iface, param)
@@ -372,7 +393,6 @@ def get_interface_info(args, iface) -> str:
                         data="dot11CipherAlgorithm",
                     )
 
-                    # Get RSSI, channel, and band from BSS list using connected BSSID
                     rssi = None
                     channel = None
                     band = None
@@ -384,7 +404,6 @@ def get_interface_info(args, iface) -> str:
                             if str(bss.bssid) == bssid:
                                 rssi = bss.rssi
                                 channel = bss.channel_number.value
-                                # Determine band from frequency (more reliable than channel number)
                                 freq = bss.channel_frequency.value
                                 if is_two_four_band(freq):
                                     band = "2.4 GHz"
@@ -402,8 +421,11 @@ def get_interface_info(args, iface) -> str:
                     )
                     outstr += f"    MAC: {iface.mac}\n"
                     bus_type, bus_info = get_adapter_bus_info(iface.description)
-                    if bus_type and bus_info:
-                        outstr += f"    {bus_type}: {bus_info}\n"
+                    if bus_type:
+                        if bus_info:
+                            outstr += f"    {bus_type}: {bus_info}\n"
+                        else:
+                            outstr += f"    Bus: {bus_type}\n"
                     outstr += f"    State: {state}\n"
                     if "wlan_connection_mode_" in wlanConnectionMode:
                         wlanConnectionMode = wlanConnectionMode[21:]
