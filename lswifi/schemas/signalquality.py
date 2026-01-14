@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle

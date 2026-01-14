@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -29,11 +28,9 @@ else:
     sys.exit(-1)
 
 # hard set no support for Python versions < 3.9
-if sys.version_info < (3, 9):
+if sys.version_info < (3, 9):  # noqa: UP036
     print(
-        "lswifi requires Python 3.9+. \nyour active Python version is {0}.\nexiting...".format(
-            platform.python_version()
-        )
+        f"lswifi requires Python 3.9+. \nyour active Python version is {platform.python_version()}.\nexiting..."
     )
     sys.exit(-1)
 
@@ -48,7 +45,7 @@ def app_path():
     path_exists = os.path.isdir(appdata_path)
     if not path_exists:
         os.mkdir(appdata_path)
-    print("{0}".format(appdata_path))
+    print(f"{appdata_path}")
 
 
 def main():
@@ -64,8 +61,8 @@ def main():
     args = parser.parse_args()
     appsetup.setup_logger(args)
     log = logging.getLogger(__name__)
-    log.debug("args {0}".format(args))
-    log.debug("{0}".format(sys.version))
+    log.debug(f"args {args}")
+    log.debug(f"{sys.version}")
 
     if hasattr(args, "command") and args.command == "completion":
         script = appsetup.get_completion_script(args.shell)
@@ -82,9 +79,8 @@ def main():
     if args.apnames:
         is_apname_ack_stored = user_ack_apnames_disclaimer()
         log.debug(
-            "is there a stored acknowledgement for caching apnames on local machine? {0}".format(
-                "Yes" if is_apname_ack_stored else "No"
-            )
+            "is there a stored acknowledgement for caching apnames on local machine? %s",
+            "Yes" if is_apname_ack_stored else "No",
         )
 
     app.run(args, storedack=is_apname_ack_stored)
@@ -117,7 +113,7 @@ def user_ack_apnames_disclaimer():
             "Where?\n"
             "  - Cached data is stored and read from a JSON file on your device here:\n\n"
         )
-        print("{0}".format(apnames))
+        print(f"{apnames}")
         try:
             text = input(
                 "Please acknowledge storage and caching of AP names to enable feature (yes/no): "
@@ -126,12 +122,12 @@ def user_ack_apnames_disclaimer():
             print("\n\nDetected KeyboardInterrupt... Exiting...")
             sys.exit(-1)
         if "y" in text.lower()[:1]:
-            with open(ack, "w") as file:
+            with open(ack, "w"):
                 pass  # we only need a placeholder file
             print(
                 "\nAP name caching is now enabled and we've recorded your response here: \n\n"
             )
-            print("{0}\n\n".format(ack))
+            print(f"{ack}\n\n")
             print("If you'd like to disable this feature delete the file.\n")
             return True
         else:

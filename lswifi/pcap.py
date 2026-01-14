@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -198,7 +197,7 @@ class PCAP:
         self.interface_map = {}
 
     def open(self):
-        self.file = open(self.file_path, self.mode + "b")
+        self.file = open(self.file_path, self.mode + "b")  # noqa: SIM115
         if self.mode == "w":
             self.write_section_header()
         return self
@@ -375,9 +374,7 @@ class PCAP:
         header += struct.pack("B", 0x0C)
 
         freq = int(float(bss.channel_frequency.value) * 1000)
-        if freq >= 5950:
-            channel_flags = 0x0140
-        elif freq >= 5150:
+        if freq >= 5950 or freq >= 5150:
             channel_flags = 0x0140
         elif freq >= 2401:
             channel_flags = 0x00B0

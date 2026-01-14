@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # lswifi - a CLI-centric Wi-Fi scanning tool for Windows
 # Copyright (c) 2025 Josh Schmelzle
@@ -30,5 +29,5 @@ class BSSID(OutObject):
         self.connected = False
         if self.value == self.connected_bssid:
             self.connected = True
-        self.header = Header(kwargs.get("header", ""), align=kwargs.get("align", None))
+        self.header = Header(kwargs.get("header", ""), align=kwargs.get("align"))
         self.subheader = SubHeader(kwargs.get("subheader", ""))
