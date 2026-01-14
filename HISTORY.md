@@ -4,7 +4,14 @@ Release History
 RELEASED
 --------
 
+0.1.60 (2026-01-13)
+-------------------
+
+- Migrate tooling to ruff and add more tests
+- Improve --get-interfaces output with additional connection details
+
 0.1.59 (2026-01-12)
+-------------------
 
 - Add Alcatel-Lucent AP name parsing
 - Add PowerShell tab completion
