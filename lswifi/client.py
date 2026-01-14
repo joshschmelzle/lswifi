@@ -15,19 +15,23 @@ lswifi.client
 client side code for requesting a scan, waiting for scan complete, and getting the results.
 """
 
+import ctypes
 import datetime
 import functools
 import json
 import logging
 import os
 import pprint
+import struct
 import subprocess
 import sys
 import time
 import traceback
+import winreg
+from ctypes import wintypes
 from threading import Lock, Timer
 from types import SimpleNamespace
-from typing import Union
+from typing import Optional, Union
 
 from lswifi import wlanapi as WLAN_API
 from lswifi.helpers import (
@@ -57,14 +61,45 @@ USB_SPEEDS = {
     1: "Full Speed (USB 1.1)",
     2: "High Speed (USB 2.0)",
     3: "SuperSpeed (USB 3.0)",
+    4: "SuperSpeed+ (USB 3.1+)",
 }
 
+# Windows API constants for USB speed detection via IOCTL
+GENERIC_READ = 0x80000000
+GENERIC_WRITE = 0x40000000
+FILE_SHARE_READ = 0x00000001
+FILE_SHARE_WRITE = 0x00000002
+OPEN_EXISTING = 3
+IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2 = 0x22045C
+GUID_DEVINTERFACE_USB_HUB = "{f18a0e88-c30c-11d0-8815-00a0c906bed8}"
 
-def get_adapter_bus_info(adapter_description: str) -> tuple:
-    """Get bus type and speed info for a network adapter."""
+_kernel32 = ctypes.windll.kernel32
+_kernel32.CreateFileW.restype = wintypes.HANDLE
+_kernel32.CreateFileW.argtypes = [
+    wintypes.LPCWSTR,
+    wintypes.DWORD,
+    wintypes.DWORD,
+    wintypes.LPVOID,
+    wintypes.DWORD,
+    wintypes.DWORD,
+    wintypes.HANDLE,
+]
+_INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
 
-    ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterHardwareInfoSettingData |
-        Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
+
+def get_adapter_bus_info(adapter_guid: str) -> tuple:
+    """Get bus type and speed info for a network adapter.
+
+    Args:
+        adapter_guid: The adapter GUID (without braces)
+
+    Returns:
+        Tuple of (bus_type, bus_info) or (None, None) if not found
+    """
+
+    ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter |
+        Where-Object {{ $_.InterfaceGuid -eq '{{{adapter_guid}}}' }} |
+        Get-CimAssociatedInstance -ResultClassName MSFT_NetAdapterHardwareInfoSettingData |
         Select-Object BusType, PciExpressCurrentLinkSpeedEncoded, PciExpressCurrentLinkWidth, UsbCurrentSpeedEncoded |
         ConvertTo-Json"""
 
@@ -96,7 +131,7 @@ def get_adapter_bus_info(adapter_description: str) -> tuple:
         pass
 
     ps_cmd = f"""Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapter |
-        Where-Object {{ $_.InterfaceDescription -eq '{adapter_description}' }} |
+        Where-Object {{ $_.InterfaceGuid -eq '{{{adapter_guid}}}' }} |
         Select-Object PnpDeviceId |
         ConvertTo-Json"""
 
@@ -125,12 +160,42 @@ def get_adapter_bus_info(adapter_description: str) -> tuple:
     return None, None
 
 
-def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
-    """Get USB speed from PnP device property."""
-    ps_cmd = f"""Get-PnpDeviceProperty -InstanceId '{pnp_device_id}' -KeyName '{{8DBC9C86-97A9-4BFF-9BC6-BFE95D3E6DAD}} 5' |
-        Select-Object -ExpandProperty Data"""
+def _is_usb_device_present(pnp_device_id: str) -> bool:
+    """Check if USB device is currently present/connected.
 
+    Args:
+        pnp_device_id: The PnP device instance ID (e.g., USB\\VID_0E8D&PID_7961\\000000000)
+
+    Returns:
+        True if device is present, False otherwise
+    """
+    log = logging.getLogger(__name__)
     try:
+        ps_cmd = f"""(Get-PnpDeviceProperty -InstanceId '{pnp_device_id}' -KeyName 'DEVPKEY_Device_IsPresent' -ErrorAction SilentlyContinue).Data"""
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.stdout.strip().lower() == "true"
+    except Exception as e:
+        log.debug("Failed to check device presence for %s: %s", pnp_device_id, e)
+        return False
+
+
+def _get_usb_parent_device(pnp_device_id: str) -> Optional[str]:
+    """Get the immediate parent device (hub) for a USB device.
+
+    Args:
+        pnp_device_id: The PnP device instance ID
+
+    Returns:
+        Parent device instance ID or None if not found
+    """
+    log = logging.getLogger(__name__)
+    try:
+        ps_cmd = f"""(Get-PnpDeviceProperty -InstanceId '{pnp_device_id}' -KeyName 'DEVPKEY_Device_Parent' -ErrorAction SilentlyContinue).Data"""
         result = subprocess.run(
             ["powershell", "-NoProfile", "-Command", ps_cmd],
             capture_output=True,
@@ -138,11 +203,156 @@ def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
             timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return int(result.stdout.strip())
-    except Exception:
-        pass
-
+            parent = result.stdout.strip()
+            log.debug("USB parent device for %s: %s", pnp_device_id, parent)
+            return parent
+    except Exception as e:
+        log.debug("Failed to get parent device for %s: %s", pnp_device_id, e)
     return None
+
+
+def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> Optional[int]:
+    """Query USB speed via IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2.
+
+    Args:
+        hub_path: The device interface path to the USB hub
+        port_index: The port number on the hub
+
+    Returns:
+        USB speed value (2=USB2.0, 3=USB3.0, 4=USB3.1+) or None on failure
+    """
+    log = logging.getLogger(__name__)
+
+    handle = _kernel32.CreateFileW(
+        hub_path,
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        None,
+        OPEN_EXISTING,
+        0,
+        None,
+    )
+
+    if handle == _INVALID_HANDLE_VALUE:
+        error = ctypes.GetLastError()
+        log.debug("CreateFileW failed for hub %s: error code %d", hub_path, error)
+        return None
+
+    log.debug("CreateFileW succeeded for hub %s, handle: %s", hub_path, handle)
+
+    try:
+        input_buffer = struct.pack("<IIII", port_index, 16, 0x04, 0)
+        output_buffer = ctypes.create_string_buffer(16)
+        bytes_returned = wintypes.DWORD()
+
+        success = _kernel32.DeviceIoControl(
+            handle,
+            IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2,
+            input_buffer,
+            len(input_buffer),
+            output_buffer,
+            len(output_buffer),
+            ctypes.byref(bytes_returned),
+            None,
+        )
+
+        if not success:
+            error = ctypes.GetLastError()
+            log.debug("DeviceIoControl failed: error code %d", error)
+            return None
+
+        conn_index, length, protocols, flags = struct.unpack("<IIII", output_buffer.raw)
+
+        log.debug(
+            "IOCTL result: conn_index=%d, length=%d, protocols=0x%04x, flags=0x%04x",
+            conn_index,
+            length,
+            protocols,
+            flags,
+        )
+        log.debug("  protocols.Usb110: %s", bool(protocols & 0x01))
+        log.debug("  protocols.Usb200: %s", bool(protocols & 0x02))
+        log.debug("  protocols.Usb300: %s", bool(protocols & 0x04))
+        log.debug(
+            "  flags.DeviceIsOperatingAtSuperSpeedOrHigher: %s", bool(flags & 0x01)
+        )
+        log.debug("  flags.DeviceIsSuperSpeedCapableOrHigher: %s", bool(flags & 0x02))
+        log.debug(
+            "  flags.DeviceIsOperatingAtSuperSpeedPlusOrHigher: %s", bool(flags & 0x04)
+        )
+        log.debug(
+            "  flags.DeviceIsSuperSpeedPlusCapableOrHigher: %s", bool(flags & 0x08)
+        )
+
+        # Interpret flags to determine operating speed
+        if flags & 0x04:  # DeviceIsOperatingAtSuperSpeedPlusOrHigher
+            return 4
+        elif flags & 0x01:  # DeviceIsOperatingAtSuperSpeedOrHigher
+            return 3
+        else:
+            return 2  # High Speed (USB 2.0)
+
+    finally:
+        _kernel32.CloseHandle(handle)
+
+
+def _get_usb_speed_from_pnp(pnp_device_id: str) -> Optional[int]:
+    """Get USB connection speed for a device using Windows IOCTL.
+
+    Uses the Windows USB driver stack to query the actual operating speed
+    of a USB device by communicating with its parent hub.
+
+    Args:
+        pnp_device_id: The PnP device instance ID (e.g., USB\\VID_0E8D&PID_7961\\000000000)
+
+    Returns:
+        USB speed value (0-4) or None if unable to determine:
+        - 0: Low Speed (USB 1.1)
+        - 1: Full Speed (USB 1.1)
+        - 2: High Speed (USB 2.0)
+        - 3: SuperSpeed (USB 3.0)
+        - 4: SuperSpeed+ (USB 3.1+)
+    """
+    log = logging.getLogger(__name__)
+
+    # Check if device is present first
+    if not _is_usb_device_present(pnp_device_id):
+        log.debug("USB device %s is not present/connected", pnp_device_id)
+        return None
+
+    try:
+        # Get location info from registry to determine port number
+        reg_path = f"SYSTEM\\CurrentControlSet\\Enum\\{pnp_device_id}"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, reg_path) as key:
+            location_info = winreg.QueryValueEx(key, "LocationInformation")[0]
+
+        log.debug("USB device %s LocationInformation: %s", pnp_device_id, location_info)
+
+        # Parse port number from "Port_#0002.Hub_#0003"
+        port_match = location_info.split(".")[0]  # "Port_#0002"
+        port_index = int(port_match.replace("Port_#", ""))
+
+        log.debug("Parsed port_index: %d", port_index)
+
+        # Get immediate parent hub
+        parent_id = _get_usb_parent_device(pnp_device_id)
+        if not parent_id:
+            log.debug("Could not find parent hub for %s", pnp_device_id)
+            return None
+
+        # Build hub device interface path
+        hub_path = (
+            f"\\\\?\\{parent_id.replace(chr(92), '#')}#{GUID_DEVINTERFACE_USB_HUB}"
+        )
+
+        log.debug("Hub path: %s", hub_path)
+
+        # Query speed via IOCTL
+        return _query_usb_speed_ioctl(hub_path, port_index)
+
+    except Exception as e:
+        log.debug("Exception getting USB speed for %s: %s", pnp_device_id, e)
+        return None
 
 
 class TimerEx:
@@ -422,7 +632,8 @@ def get_interface_info(args, iface) -> str:
                     f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
                 )
                 outstr += f"    MAC: {iface.mac}\n"
-                bus_type, bus_info = get_adapter_bus_info(iface.description)
+                guid_no_braces = iface.guid_string.strip("{}").lower()
+                bus_type, bus_info = get_adapter_bus_info(guid_no_braces)
                 if bus_type:
                     if bus_info:
                         outstr += f"    {bus_type}: {bus_info}\n"
