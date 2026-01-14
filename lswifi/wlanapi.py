@@ -223,15 +223,19 @@ typedef enum _DOT11_AUTH_ALGORITHM {
 DOT11_AUTH_ALGORITHM = c_uint
 DOT11_AUTH_ALGORITHM_DICT = {
     0: None,
-    1: "80211_OPEN",
-    2: "80211_SHARED_KEY",
-    3: "WPA",
-    4: "WPA_PSK",
-    5: "WPA_NONE",
-    6: "RSNA",
-    7: "RSNA_PSK",
-    0x80000000: "DOT11_AUTH_ALGO_IHV_START",
-    0xFFFFFFFF: "DOT11_AUTH_ALGO_IHV_END",
+    1: "Open",
+    2: "Shared Key",
+    3: "WPA-Enterprise",
+    4: "WPA-PSK",
+    5: "WPA-NONE",
+    6: "WPA2-Enterprise",
+    7: "WPA2-PSK",
+    8: "WPA3-Enterprise 192-bit",
+    9: "WPA3-SAE",
+    10: "OWE",
+    11: "WPA3-Enterprise",
+    0x80000000: "IHV_START",
+    0xFFFFFFFF: "IHV_END",
 }
 
 
@@ -247,7 +251,7 @@ typedef enum _DOT11_BSS_TYPE {
 } DOT11_BSS_TYPE, *PDOT11_BSS_TYPE;
 """
 DOT11_BSS_TYPE = c_uint
-DOT11_BSS_TYPE_DICT = {0: None, 1: "Infra.", 2: "Indep.", 3: "Any"}
+DOT11_BSS_TYPE_DICT = {0: None, 1: "Infrastructure", 2: "Independent", 3: "Any"}
 
 
 # DOT11_CIPHER_ALGORITHM enumeration
@@ -312,14 +316,14 @@ DOT11_PHY_TYPE_DICT = {
     1: "FHSS",  # Specifies a frequency-hopping spread-spectrum (FHSS) PHY.
     2: "DSSS",  # Specifies a direct sequence spread spectrum (DSSS) PHY.
     3: "IR baseband",  # Specifies an infrared (IR) baseband PHY.
-    4: "OFDM",  # Specifies an orthogonal frequency division multiplexing (OFDM) 802.11a PHY.
-    5: "HR-DSSS",  # Specifies a high-rate DSSS (HRDSSS) 802.11b PHY.
-    6: "ERP",  # Specifies an extended-rate 802.11g PHY (ERP).
-    7: "HT",  # Specifies a high-throughput (HT) 802.11n PHY. Each 802.11n PHY, whether dual-band or not, is specified as this PHY type.
-    8: "VHT",  # Specifies a very high-throughput (VHT) 802.11ac PHY.
-    9: "DMG",  # Specifies a Directional Multi-Gigabit (DMG) 802.11ad PHY.
-    10: "HE",  # Specifies a High Efficiency (HE) 802.11ax PHY.
-    11: "BE",  # Specifies an extremely high-throughput (EHT) 802.11be PHY.
+    4: "OFDM (802.11a)",  # Specifies an orthogonal frequency division multiplexing (OFDM) 802.11a PHY.
+    5: "HR-DSSS (802.11b)",  # Specifies a high-rate DSSS (HRDSSS) 802.11b PHY.
+    6: "ERP (802.11g)",  # Specifies an extended-rate 802.11g PHY (ERP).
+    7: "HT (802.11n)",  # Specifies a high-throughput (HT) 802.11n PHY. Each 802.11n PHY, whether dual-band or not, is specified as this PHY type.
+    8: "VHT (802.11ac)",  # Specifies a very high-throughput (VHT) 802.11ac PHY.
+    9: "DMG (802.11ad)",  # Specifies a Directional Multi-Gigabit (DMG) 802.11ad PHY.
+    10: "HE (802.11ax)",  # Specifies a High Efficiency (HE) 802.11ax PHY.
+    11: "EHT (802.11be)",  # Specifies an extremely high-throughput (EHT) 802.11be PHY.
     0x80000000: "dot11_phy_type_IHV_start",  # should this be 2147483648?
     0xFFFFFFFF: "dot11_phy_type_IHV_end",  # should this be 4294967295?
 }
@@ -1880,10 +1884,12 @@ class WLAN:
                     "bSecurityEnabled": secAttribs.bSecurityEnabled,
                     "bOneXEnabled": secAttribs.bOneXEnabled,
                     "dot11AuthAlgorithm": DOT11_AUTH_ALGORITHM_DICT.get(
-                        secAttribs.dot11AuthAlgorithm, 0
+                        secAttribs.dot11AuthAlgorithm,
+                        f"Unknown ({secAttribs.dot11AuthAlgorithm})",
                     ),
                     "dot11CipherAlgorithm": DOT11_CIPHER_ALGORITHM_DICT.get(
-                        secAttribs.dot11CipherAlgorithm, 0
+                        secAttribs.dot11CipherAlgorithm,
+                        f"Unknown ({secAttribs.dot11CipherAlgorithm})",
                     ),
                 }
                 ext_out = {
