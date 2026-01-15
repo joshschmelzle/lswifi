@@ -512,7 +512,9 @@ class lswifi:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             if args.export != "all":
                 # Strip characters not compatible with filenames (colons, etc.)
-                bssid_clean = args.export.replace(":", "").replace("-", "").replace(".", "")
+                bssid_clean = (
+                    args.export.replace(":", "").replace("-", "").replace(".", "")
+                )
                 filename = f"lswifi_{bssid_clean}_{timestamp}.pcapng"
             else:
                 filename = f"lswifi_{timestamp}.pcapng"
@@ -944,27 +946,22 @@ class lswifi:
             for bss in wireless_network_bss_list:
                 if (
                     args.export != "all"
-                    and str(bss.bssid).lower().replace("(*)", "")
-                    != args.export.lower()
+                    and str(bss.bssid).lower().replace("(*)", "") != args.export.lower()
                 ):
                     continue
 
                 if not args.all and bss.rssi.value < args.sensitivity:
                     continue
 
-                if (
-                    args.a or args.g or args.six
-                ) and not self._bss_matches_band_filter(bss, args):
-                    continue
-
-                if args.width is not None and args.width not in str(
-                    bss.channel_width
+                if (args.a or args.g or args.six) and not self._bss_matches_band_filter(
+                    bss, args
                 ):
                     continue
 
-                if args.include is not None and args.include not in str(
-                    bss.ssid
-                ):
+                if args.width is not None and args.width not in str(bss.channel_width):
+                    continue
+
+                if args.include is not None and args.include not in str(bss.ssid):
                     continue
 
                 if args.exclude and args.exclude in str(bss.ssid):
@@ -998,7 +995,9 @@ class lswifi:
                         log.info(f"Exported BSSID {args.export} to {pcap_path}")
                         print(f"Exported BSSID {args.export} to {pcap_path}")
                     else:
-                        log.info(f"Exported {len(matching_bss_list)} networks to {pcap_path}")
+                        log.info(
+                            f"Exported {len(matching_bss_list)} networks to {pcap_path}"
+                        )
 
                 except Exception as e:
                     log.error(f"Error exporting to pcapng: {str(e)}")
