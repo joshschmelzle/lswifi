@@ -260,25 +260,45 @@ class WirelessNetworkBss:
             f"{str(timestamp).rpartition(',')[2].strip()}"
         )
 
+    # BSS membership selector names for parse_rates filtering
+    BSS_MEMBERSHIP_SELECTOR_NAMES = {
+        "ht phy",
+        "vht phy",
+        "glk",
+        "epd",
+        "sae-h2e",
+        "he phy",
+        "eht phy",
+    }
+
     @staticmethod
     def parse_rates(ie_rates) -> str:
         """
         takes a list of rates including basic rates, and orders them.
+        BSS membership selectors are preserved but not sorted with rates.
 
         :param ie_rates: list of unordered rates
-        :return: str of ordered rates
+        :return: str of ordered rates followed by BSS membership selectors
         """
         if len(ie_rates.value) > 0:
             ie_rates.value = ie_rates.value.replace("(b)", "*")
             basics = []
             supported = []
+            selectors = []
             for rate in ie_rates.value.strip().split(" "):
-                rate = rate.lower()
-                if "*" in rate or "(b)" in rate:
-                    rate = rate.replace("*", "").replace("(b)", "")
-                    basics.append(float(rate) if "." in rate else int(rate))
+                rate_lower = rate.lower()
+                # Check if this is a BSS membership selector
+                if rate_lower in WirelessNetworkBss.BSS_MEMBERSHIP_SELECTOR_NAMES:
+                    selectors.append(rate)
+                elif "*" in rate_lower or "(b)" in rate_lower:
+                    rate_clean = rate_lower.replace("*", "").replace("(b)", "")
+                    basics.append(
+                        float(rate_clean) if "." in rate_clean else int(rate_clean)
+                    )
                 else:
-                    supported.append(float(rate) if "." in rate else int(rate))
+                    supported.append(
+                        float(rate_lower) if "." in rate_lower else int(rate_lower)
+                    )
             rates = basics + supported
             rates.sort(key=float)
 
@@ -287,6 +307,9 @@ class WirelessNetworkBss:
             for index, value in enumerate(rates_out):
                 if value in basics_out:
                     rates_out[index] = f"{value}(B)"
+            # Append BSS membership selectors at the end
+            if selectors:
+                rates_out.extend(selectors)
             return " ".join(rates_out)
         return ""
 
@@ -3465,20 +3488,43 @@ class WirelessNetworkBss:
             self.dtim.value = dtim
         return f"DTIM Period: {dtim}"
 
+    # BSS membership selector values (bits 0-6, without MSB)
+    # Per IEEE 802.11-2020 Table 9-93 and 802.11ax/be amendments
+    BSS_MEMBERSHIP_SELECTORS = {
+        127: "HT PHY",
+        126: "VHT PHY",
+        125: "GLK",
+        124: "EPD",
+        123: "SAE-H2E",
+        122: "HE PHY",
+        121: "EHT PHY",
+    }
+
     def __parse_rates(edata):
         """
-        A BSS membership selector that has the MSB(bit 7) set to 1 in the Supported Rates and BSS Membership Selectors element is defined to be basic.
-        This method supports either IE 1 or IE 50
+        Parse Supported Rates and BSS Membership Selectors element (IE 1 or IE 50).
+
+        Per IEEE 802.11-2020 Section 9.4.2.3:
+        - Each octet encodes either a rate or a BSS membership selector
+        - MSB (bit 7) set to 1 indicates basic rate or basic BSS membership selector
+        - Bits 6-0 contain the rate value (in 500 kb/s units) or selector value
+        - BSS membership selector values are 121-127 (see Table 9-93)
         """
         supported_rates = ""
         for _byte in list(memoryview(edata)):
-            # if MSB, rate is basic.
-            if get_bit(_byte, 7):
-                supported_rates += (
-                    f" {format_rate(rate_to_mbps(trim_most_significant_bit(_byte)))}(B)"
-                )
+            is_basic = get_bit(_byte, 7)
+            value = trim_most_significant_bit(_byte)
+
+            # Check if this is a BSS membership selector (values 121-127)
+            if value in WirelessNetworkBss.BSS_MEMBERSHIP_SELECTORS:
+                selector_name = WirelessNetworkBss.BSS_MEMBERSHIP_SELECTORS[value]
+                supported_rates += f" {selector_name}"
             else:
-                supported_rates += f" {format_rate(rate_to_mbps(_byte))}"
+                # This is a rate value
+                if is_basic:
+                    supported_rates += f" {format_rate(rate_to_mbps(value))}(B)"
+                else:
+                    supported_rates += f" {format_rate(rate_to_mbps(_byte))}"
         return supported_rates
 
     def __parse_ssid_element(edata):
