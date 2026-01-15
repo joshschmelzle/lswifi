@@ -4,9 +4,11 @@ Release History
 RELEASED
 --------
 
-0.1.61 (TBD)
-------------
+0.1.61 (2026-01-14)
+-------------------
 
+- Add BSS membership selector support to rate parsing
+- Fix -export BSSID filtering and improve pcap file handling
 - Improve --get-interfaces USB speed detection using Windows IOCTL instead of PowerShell property
 
 0.1.60 (2026-01-13)
