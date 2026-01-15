@@ -508,6 +508,15 @@ class lswifi:
                 os.makedirs(exportraw_path)
 
         if args.export:
+            # Build filename with optional BSSID suffix
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            if args.export != "all":
+                # Strip characters not compatible with filenames (colons, etc.)
+                bssid_clean = args.export.replace(":", "").replace("-", "").replace(".", "")
+                filename = f"lswifi_{bssid_clean}_{timestamp}.pcapng"
+            else:
+                filename = f"lswifi_{timestamp}.pcapng"
+
             if args.export_path:
                 pcap_path = args.export_path
                 if not os.path.isabs(pcap_path):
@@ -515,20 +524,14 @@ class lswifi:
 
                 os.makedirs(os.path.dirname(pcap_path), exist_ok=True)
                 if os.path.isdir(pcap_path):
-                    pcap_path = os.path.join(
-                        pcap_path,
-                        f"lswifi_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pcapng",
-                    )
+                    pcap_path = os.path.join(pcap_path, filename)
             else:
                 appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
                 is_path = os.path.isdir(appdata_path)
                 if not is_path:
                     os.makedirs(appdata_path)
 
-                pcap_path = os.path.join(
-                    appdata_path,
-                    f"lswifi_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pcapng",
-                )
+                pcap_path = os.path.join(appdata_path, filename)
             # print(datetime.date.today())
             # print(str(datetime.datetime.now().replace(microsecond=0).time()).replace(":",""))
             # print(datetime.datetime.now().replace(microsecond=0).isoformat().replace(":",""))
@@ -936,68 +939,73 @@ class lswifi:
                         writer.writerow(result)
 
         if args.export and len(wireless_network_bss_list) > 0:
-            pcap = PCAP(pcap_path)
-            networks_exported = 0
+            # First, collect matching BSS entries without creating the file
+            matching_bss_list = []
+            for bss in wireless_network_bss_list:
+                if (
+                    args.export != "all"
+                    and str(bss.bssid).lower().replace("(*)", "")
+                    != args.export.lower()
+                ):
+                    continue
 
-            try:
-                with pcap:
-                    interface_id = pcap.add_interface(
-                        name=client.iface.description,
-                        description=f"{client.mac}",
-                    )
+                if not args.all and bss.rssi.value < args.sensitivity:
+                    continue
 
-                    for bss in wireless_network_bss_list:
-                        if (
-                            args.export != "all"
-                            and str(bss.bssid).lower() != args.export.lower()
-                        ):
-                            continue
+                if (
+                    args.a or args.g or args.six
+                ) and not self._bss_matches_band_filter(bss, args):
+                    continue
 
-                        if not args.all and bss.rssi.value < args.sensitivity:
-                            continue
+                if args.width is not None and args.width not in str(
+                    bss.channel_width
+                ):
+                    continue
 
-                        if (
-                            args.a or args.g or args.six
-                        ) and not self._bss_matches_band_filter(bss, args):
-                            continue
+                if args.include is not None and args.include not in str(
+                    bss.ssid
+                ):
+                    continue
 
-                        if args.width is not None and args.width not in str(
-                            bss.channel_width
-                        ):
-                            continue
+                if args.exclude and args.exclude in str(bss.ssid):
+                    continue
 
-                        if args.include is not None and args.include not in str(
-                            bss.ssid
-                        ):
-                            continue
+                if args.bssid is not None:
+                    input_mac = strip_mac_address_format(args.bssid)
+                    bss_mac = strip_mac_address_format(str(bss.bssid))
+                    if input_mac not in bss_mac:
+                        continue
 
-                        if args.exclude and args.exclude in str(bss.ssid):
-                            continue
+                matching_bss_list.append(bss)
 
-                        if args.bssid is not None:
-                            input_mac = strip_mac_address_format(args.bssid)
-                            bss_mac = strip_mac_address_format(str(bss.bssid))
-                            if input_mac not in bss_mac:
-                                continue
-
-                        frame_data = pcap.create_radiotap_frame(bss)
-                        pcap.write_packet(
-                            interface_id, client.last_scan_time_epoch, frame_data
+            # Only create the file if we have matching networks
+            if len(matching_bss_list) > 0:
+                pcap = PCAP(pcap_path)
+                try:
+                    with pcap:
+                        interface_id = pcap.add_interface(
+                            name=client.iface.description,
+                            description=f"{client.mac}",
                         )
-                        networks_exported += 1
 
-                if args.export != "all":
-                    if networks_exported > 0:
+                        for bss in matching_bss_list:
+                            frame_data = pcap.create_radiotap_frame(bss)
+                            pcap.write_packet(
+                                interface_id, client.last_scan_time_epoch, frame_data
+                            )
+
+                    if args.export != "all":
                         log.info(f"Exported BSSID {args.export} to {pcap_path}")
                         print(f"Exported BSSID {args.export} to {pcap_path}")
                     else:
-                        log.info(f"BSSID {args.export} not found or filtered out")
-                else:
-                    log.info(f"Exported {networks_exported} networks to {pcap_path}")
+                        log.info(f"Exported {len(matching_bss_list)} networks to {pcap_path}")
 
-            except Exception as e:
-                log.error(f"Error exporting to pcapng: {str(e)}")
-                print(f"Error exporting to pcapng: {str(e)}")
+                except Exception as e:
+                    log.error(f"Error exporting to pcapng: {str(e)}")
+                    print(f"Error exporting to pcapng: {str(e)}")
+            else:
+                if args.export != "all":
+                    log.info(f"BSSID {args.export} not found or filtered out")
 
         if args.exportraw:
             for index, bss in enumerate(wireless_network_bss_list):
