@@ -4,7 +4,7 @@
 
 `lswifi` is a CLI-centric Wi-Fi scanning tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh wlan show networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, decoding 802.11 IEs, revealing 6 GHz Reduced Neighbor Reports, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
 
-Note: Recent versions of Windows add OFDM rates, RSSI, AKMs and ciphers, QBSS, and RNR information to `netsh wlan`. `lswifi` still offers additional parsing, filtering, and output options.
+Note: Recent versions of Windows add OFDM rates, RSSI, AKMs and ciphers, QBSS, and limited RNR information to `netsh wlan` output. `lswifi` still offers additional information, parsing, filtering, and output options.
 
 Installation
 ------------
@@ -118,7 +118,7 @@ CLI options
 ```ascii
 positional arguments:
   {completion}          commands
-    completion          Generate shell completion script 
+    completion          Generate shell completion script
 
 CLI options
 -----------
@@ -126,7 +126,7 @@ CLI options
 ```ascii
 positional arguments:
   {completion}          commands
-    completion          Generate shell completion script 
+    completion          Generate shell completion script
 
 options:
   -h, --help            show this help message and exit

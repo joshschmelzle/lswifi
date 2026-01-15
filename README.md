@@ -7,7 +7,7 @@
 
 `lswifi` is a CLI-centric Wi-Fi scanning tool for Windows that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh wlan show networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, decoding 802.11 IEs, revealing 6 GHz Reduced Neighbor Reports, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
 
-Note: Recent versions of Windows add OFDM rates, RSSI, AKMs and ciphers, QBSS, and RNR information to `netsh wlan`. `lswifi` still offers additional parsing, filtering, and output options.
+Note: Recent versions of Windows add OFDM rates, RSSI, AKMs and ciphers, QBSS, and limited RNR information to `netsh wlan` output. `lswifi` still offers additional information, parsing, filtering, and output options.
 
 Installation
 ------------
@@ -121,7 +121,7 @@ CLI options
 ```ascii
 positional arguments:
   {completion}          commands
-    completion          Generate shell completion script 
+    completion          Generate shell completion script
 
 options:
   -h, --help            show this help message and exit
@@ -178,7 +178,7 @@ Upgrading
 
 Here is how to upgrade `lswifi` using `pip3` when there is a new version available.
 
-First check where and if the executable exists: 
+First check where and if the executable exists:
 
 ```bash
 > where.exe pip3
@@ -230,7 +230,7 @@ FAQs
    - Either `lswifi` is not installed, or the Python Scripts directory is not in the PATH environment variable.
    - To fix ensure the Scripts directory is included in the [PATH environment variable](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_environment_variables) and `lswifi.exe` exists in said folder.
    - Here is an example for how to find the Scripts directory (this directory needs to be on the PATH):
-   
+
    ```bash
    > python
    Python 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 15:28:43) [MSC v.1943 64 bit (ARM64)] on win32
