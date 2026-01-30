@@ -29,7 +29,7 @@ from typing import Optional
 
 from lswifi import slog
 from lswifi.__version__ import __version__
-from lswifi.completions import get_completions
+from lswifi.completions import get_completions, get_completion_script
 
 
 def parse_completion_args(argv: list[str]) -> Optional[tuple[str, str]]:
