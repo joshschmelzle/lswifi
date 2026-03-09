@@ -4,6 +4,16 @@ Release History
 RELEASED
 --------
 
+0.1.63 (2026-03-09)
+-------------------
+
+- Fix AP Health IE bit field parsing
+
+0.1.62 (2026-01-30)
+-------------------
+
+- Fix PowerShell completions
+
 0.1.61 (2026-01-14)
 -------------------
 
