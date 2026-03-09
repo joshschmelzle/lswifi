@@ -1777,7 +1777,7 @@ class WirelessNetworkBss:
                 elif oui_subtype == 10:  # AP Health
                     check = memoryview_body[5:]
                     if len(check) >= 5:
-                        health_bytes = bytes(memoryview_body[6:9])
+                        health_bytes = bytes(memoryview_body[6:10])
                         health_value = int.from_bytes(health_bytes, byteorder="big")
                         if health_value > 0xFFFFFFFF:
                             log.warning(
@@ -1789,7 +1789,7 @@ class WirelessNetworkBss:
                             out += f", Version: {vendor_oui_type}, Subtype {oui_subtype}, AP Health IE: parser error"
                             return out
 
-                        binary_repr = format(health_value, "032b")
+                        binary_repr = format(health_value, "032b")[::-1]
                         log.debug(f"AP Health IE value: 0x{health_value:08x}")
                         log.debug(f"Binary representation: {binary_repr}")
 
@@ -1804,19 +1804,19 @@ class WirelessNetworkBss:
                         log.debug(f"{binary_display}")
 
                         field_ranges = [
-                            ("v", 31, 29),  # version
-                            ("i", 28, 28),  # ip_protocol
-                            ("u", 27, 27),  # uplink
-                            ("t", 26, 24),  # uplink_type
-                            ("n", 23, 20),  # network_layer
-                            ("p", 19, 18),  # proxy_server
+                            ("v", 2, 0),  # version
+                            ("i", 3, 3),  # ip_protocol
+                            ("u", 4, 4),  # uplink
+                            ("t", 7, 5),  # uplink_type
+                            ("n", 11, 8),  # network_layer
+                            ("p", 13, 12),  # proxy_server
                             ("a", 17, 14),  # activate
-                            ("c", 13, 11),  # central
-                            ("r", 10, 0),  # reserved
+                            ("c", 20, 18),  # central
+                            ("r", 31, 21),  # reserved
                         ]
 
                         field_markers = "Field: "
-                        for i in range(31, -1, -1):
+                        for i in range(0, 32):
                             field_char = " "
                             for code, high, low in field_ranges:
                                 if low <= i <= high:
@@ -1826,22 +1826,22 @@ class WirelessNetworkBss:
                         log.debug(f"{field_markers}")
 
                         log.debug(
-                            "Legend: v=version (31-29), i=ip_protocol (28), u=uplink (27), t=uplink_type (26-24),"
+                            "Legend: v=version (2-0), i=ip_protocol (3), u=uplink (4), t=uplink_type (7-5),"
                         )
                         log.debug(
-                            "        n=network_layer (23-20), p=proxy_server (19-18), a=activate (17-14),"
+                            "        n=network_layer (11-8), p=proxy_server (13-12), a=activate (17-14),"
                         )
-                        log.debug("        c=central (13-11), r=reserved (10-0)")
+                        log.debug("        c=central (20-18), r=reserved (31-21)")
 
-                        version = (health_value >> 29) & 0x7  # bits 0-2
-                        ip_protocol = (health_value >> 28) & 0x1  # bit 3
-                        uplink = (health_value >> 27) & 0x1  # bit 4
-                        uplink_type = (health_value >> 24) & 0x7  # bits 5-7
-                        network_layer = (health_value >> 20) & 0xF  # bits 8-11
-                        proxy_server = (health_value >> 18) & 0x3  # bits 12-13
-                        activate = (health_value >> 14) & 0xF  # bits 14-17
-                        central = (health_value >> 11) & 0x7  # bits 18-20
-                        reserved = health_value & 0x7FF  # bits 21-31
+                        version = health_value & 0x7  # bits 2-0
+                        ip_protocol = (health_value >> 3) & 0x1  # bit 3
+                        uplink = (health_value >> 4) & 0x1  # bit 4
+                        uplink_type = (health_value >> 5) & 0x7  # bits 7-5
+                        network_layer = (health_value >> 8) & 0xF  # bits 11-8
+                        proxy_server = (health_value >> 12) & 0x3  # bits 13-12
+                        activate = (health_value >> 14) & 0xF  # bits 17-14
+                        central = (health_value >> 18) & 0x7  # bits 20-18
+                        reserved = (health_value >> 21) & 0x7FF  # bits 31-21
 
                         version_map = {
                             0: "1",
@@ -1971,15 +1971,15 @@ class WirelessNetworkBss:
                         }
 
                         reconstructed_value = (
-                            (version << 29)
-                            | (ip_protocol << 28)
-                            | (uplink << 27)
-                            | (uplink_type << 24)
-                            | (network_layer << 20)
-                            | (proxy_server << 18)
+                            version
+                            | (ip_protocol << 3)
+                            | (uplink << 4)
+                            | (uplink_type << 5)
+                            | (network_layer << 8)
+                            | (proxy_server << 12)
                             | (activate << 14)
-                            | (central << 11)
-                            | reserved
+                            | (central << 18)
+                            | (reserved << 21)
                         )
 
                         log.debug("AP Health IE extracted fields:")
