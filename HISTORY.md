@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.64 (2026-03-09)
+-------------------
+
+- JSONify more output support for --get-interfaces, --list-interfaces, -ap, -channel, and -rnr commands via --json flag.
+
 0.1.63 (2026-03-09)
 -------------------
 

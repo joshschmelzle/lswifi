@@ -94,15 +94,33 @@ class lswifi:
                 sys.exit(-1)
 
             if args.list_interfaces:
-                print(f"There are {len(clients)} interfaces on this system:")
-                for _index, client in clients.items():
+                if args.json:
+                    interfaces = []
+                    for _index, client in clients.items():
+                        interfaces.append(
+                            {
+                                "connection_name": client.iface.connection_name,
+                                "description": client.iface.description,
+                                "guid": client.iface.guid_string.replace("{", "")
+                                .replace("}", "")
+                                .lower(),
+                                "mac": client.iface.mac,
+                                "state": client.iface.state_string,
+                            }
+                        )
                     print(
-                        f"    Connection Name: {client.iface.connection_name}\n"
-                        f"    Description: {client.iface.description}\n"
-                        f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
-                        f"    MAC: {client.iface.mac}\n"
-                        f"    State: {client.iface.state_string}\n"
+                        json.dumps({"interfaces": interfaces}, indent=args.json_indent)
                     )
+                else:
+                    print(f"There are {len(clients)} interfaces on this system:")
+                    for _index, client in clients.items():
+                        print(
+                            f"    Connection Name: {client.iface.connection_name}\n"
+                            f"    Description: {client.iface.description}\n"
+                            f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
+                            f"    MAC: {client.iface.mac}\n"
+                            f"    State: {client.iface.state_string}\n"
+                        )
                 sys.exit(0)
 
             if args.append:
@@ -1349,6 +1367,17 @@ class lswifi:
             )
 
         if len(rnr_results) > 0:
+            if args.json:
+                json_rnr = []
+                for row in rnr_results:
+                    entry = {}
+                    for tup in row:
+                        key = str(tup.header).lower().replace(" ", "_")
+                        entry[key] = tup.value
+                    json_rnr.append(entry)
+                print(json.dumps(json_rnr, indent=args.json_indent))
+                return
+
             headers = []
             subheaders = []
 

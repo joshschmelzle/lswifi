@@ -627,21 +627,56 @@ def get_interface_info(args, iface) -> str:
                 except Exception:
                     pass
 
-                outstr += f"    Description: {iface.description}\n"
-                outstr += (
-                    f"    GUID: {iface.guid_string.strip('{').strip('}').lower()}\n"
-                )
-                outstr += f"    MAC: {iface.mac}\n"
+                if "wlan_connection_mode_" in wlanConnectionMode:
+                    wlanConnectionMode = wlanConnectionMode[21:]
+
                 guid_no_braces = iface.guid_string.strip("{}").lower()
                 bus_type, bus_info = get_adapter_bus_info(guid_no_braces)
+
+                if (
+                    args.json
+                    and args.get_interface_info
+                    and not args.get_current_ap
+                    and not args.get_current_channel
+                ):
+                    info = {
+                        "interface": iface.connection_name,
+                        "description": iface.description,
+                        "guid": guid_no_braces,
+                        "mac": iface.mac,
+                        "state": state,
+                        "connection_mode": wlanConnectionMode,
+                        "profile_name": strProfileName,
+                        "ssid": bytes.decode(connected_ssid),
+                        "bssid": bssid,
+                        "channel": channel,
+                        "band": band,
+                        "bss_type": dot11BssType,
+                        "phy": dot11PhyType,
+                        "signal_quality": wlanSignalQuality,
+                        "rssi": str(rssi) if rssi is not None else None,
+                        "rx_rate_mbps": ulRxRate / 1000,
+                        "tx_rate_mbps": ulTxRate / 1000,
+                        "security": SecurityEnabled,
+                        "dot1x": oneXEnabled,
+                        "authentication": dot11AuthAlgorithm or None,
+                        "cipher": dot11CipherAlgorithm or None,
+                    }
+                    if bus_type:
+                        info["bus_type"] = bus_type
+                        if bus_info:
+                            info["bus_info"] = bus_info
+                    return json.dumps(info, indent=args.json_indent)
+
+                outstr += f"    Description: {iface.description}\n"
+                outstr += f"    GUID: {guid_no_braces}\n"
+                outstr += f"    MAC: {iface.mac}\n"
                 if bus_type:
                     if bus_info:
                         outstr += f"    {bus_type}: {bus_info}\n"
                     else:
                         outstr += f"    Bus: {bus_type}\n"
                 outstr += f"    State: {state}\n"
-                if "wlan_connection_mode_" in wlanConnectionMode:
-                    wlanConnectionMode = wlanConnectionMode[21:]
                 outstr += (
                     f"    Connection Mode: {wlanConnectionMode}\n"
                     f"    Profile Name: {strProfileName}\n"
@@ -673,19 +708,47 @@ def get_interface_info(args, iface) -> str:
                 channel_from_query = result[0].value
 
                 if args.get_current_ap and args.get_current_channel:
-                    if args.raw:
+                    if args.json:
+                        return json.dumps(
+                            {
+                                "interface": iface.connection_name,
+                                "mac": iface.mac,
+                                "bssid": bssid,
+                                "channel": channel_from_query,
+                            },
+                            indent=args.json_indent,
+                        )
+                    elif args.raw:
                         return f"{bssid}, {channel_from_query}"
                     else:
                         return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel_from_query}"
 
                 if args.get_current_ap:
-                    if args.raw:
+                    if args.json:
+                        return json.dumps(
+                            {
+                                "interface": iface.connection_name,
+                                "mac": iface.mac,
+                                "bssid": bssid,
+                            },
+                            indent=args.json_indent,
+                        )
+                    elif args.raw:
                         return bssid
                     else:
                         return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}"
 
                 if args.get_current_channel:
-                    if args.raw:
+                    if args.json:
+                        return json.dumps(
+                            {
+                                "interface": iface.connection_name,
+                                "mac": iface.mac,
+                                "channel": channel_from_query,
+                            },
+                            indent=args.json_indent,
+                        )
+                    elif args.raw:
                         return channel_from_query
                     else:
                         return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, CHANNEL: {channel_from_query}"
