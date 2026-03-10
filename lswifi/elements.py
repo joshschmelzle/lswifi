@@ -3469,10 +3469,9 @@ class WirelessNetworkBss:
         )
 
     def __parse_country_information_element(self, edata):
-        cc_fmt = "3s"
-        country = unpack_from(cc_fmt, edata)
-        country = b" ".join(country)
-        country = country.decode("utf-8").strip()
+        country_string = unpack_from("3s", edata)[0]
+        country = country_string[:2].decode("utf-8").strip()
+        environment = country_string[2:3]
         if self is not None:
             self.country_code.value = country
             self.amendments.append("d")

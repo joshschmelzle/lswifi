@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.66 (2026-03-10)
+-------------------
+
+- Fix country IE parsing to extract only the two-character ISO 3166-1 country code and ignore the third octet.
+
 0.1.65 (2026-03-10)
 -------------------
 
