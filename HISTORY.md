@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.1.65 (2026-03-10)
+-------------------
+
+- Add `-d`/`--country` flag to display two-letter country code (CC) from the 802.11d IE found in scan results.
+
 0.1.64 (2026-03-09)
 -------------------
 

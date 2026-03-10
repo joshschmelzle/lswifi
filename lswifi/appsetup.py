@@ -472,6 +472,13 @@ def setup_parser() -> argparse.ArgumentParser:
         help="sort output by access point uptime based on beacon timestamp",
     )
     parser.add_argument(
+        "-d",
+        "--country",
+        dest="country",
+        action="store_true",
+        help="adds country code column to output using information from AP beacon country IE",
+    )
+    parser.add_argument(
         "-rnr",
         "--rnr",
         dest="rnr",

@@ -154,7 +154,7 @@ class WirelessNetworkBss:
             )
             self.capabilities = Capabilities(bss_entry)
             self.ie_size = bss_entry.IeSize
-            self.country_code = "--"
+            self.country_code = OutObject(value="--", header="CC", subheader="A2")
             self.apname = OutObject(header="AP NAME")
             self.security = Security(self.capabilities)
             self.auth = Auth(self.capabilities)
@@ -3474,7 +3474,7 @@ class WirelessNetworkBss:
         country = b" ".join(country)
         country = country.decode("utf-8").strip()
         if self is not None:
-            self.country_code = country
+            self.country_code.value = country
             self.amendments.append("d")
         return f"{country}"
 

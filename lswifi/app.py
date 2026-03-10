@@ -805,6 +805,7 @@ class lswifi:
                             "channel_number": str(bss.channel_number).strip(),
                             "channel_width": str(bss.channel_width).strip(),
                             "connected": bss.bssid.connected,
+                            "country_code": str(bss.country_code).strip(),
                             "ies": sorted(bss.ie_numbers.elements),
                             "ies_extension": sorted(bss.exie_numbers.elements),
                             "modes": sorted(bss.modes.elements),
@@ -834,6 +835,7 @@ class lswifi:
                             "channel_number": str(bss.channel_number).strip(),
                             "channel_width": str(bss.channel_width).strip(),
                             "connected": bss.bssid.connected,
+                            "country_code": str(bss.country_code).strip(),
                             "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
                             "ies_extension": "/".join(
                                 map(str, sorted(bss.exie_numbers.elements))
@@ -869,6 +871,10 @@ class lswifi:
                         bss.uptime.out(),
                     ]
                 )
+
+                if args.country:
+                    # insert between amendments and auth columns
+                    out_results[-1].insert(8, bss.country_code.out())
 
                 if args.period:
                     out_results[-1].append(bss.beacon_interval.out())
