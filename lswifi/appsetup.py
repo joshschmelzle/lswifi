@@ -25,14 +25,13 @@ import sys
 import textwrap
 import time
 from pathlib import Path
-from typing import Optional
 
 from lswifi import slog
 from lswifi.__version__ import __version__
 from lswifi.completions import get_completions, get_completion_script
 
 
-def parse_completion_args(argv: list[str]) -> Optional[tuple[str, str]]:
+def parse_completion_args(argv: list[str]) -> tuple[str, str] | None:
     """Parse hidden completion arguments and return (args_string, current_word)."""
     if "--_complete" not in argv:
         return None

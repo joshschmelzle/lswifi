@@ -10,8 +10,8 @@ WORKFLOW
 
 3. Develop feature or hotfix (recommend adding tests where applicable)
 4. Test with `tox` which will run the test driver, check coverage, and generate a new coverage-badge for us automatically.
-5. (recommended) check lint with `tox -e lint` which checks repo with black and isort.
-6. (recommended) check format with `tox -e format` which runs flake8 on repo.
+5. (recommended) check lint with `tox -e lint` which runs `ruff check` and `ruff format --check`.
+6. (recommended) check format with `tox -e format` which runs `ruff format`.
 7. (recommended) check types with `tox -e typing` which runs mypy on repo.
 8. Sanity checks
 9. Push code

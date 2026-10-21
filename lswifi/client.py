@@ -31,7 +31,6 @@ import winreg
 from ctypes import wintypes
 from threading import Lock, Timer
 from types import SimpleNamespace
-from typing import Optional, Union
 
 from lswifi import wlanapi as WLAN_API
 from lswifi.helpers import (
@@ -184,7 +183,7 @@ def _is_usb_device_present(pnp_device_id: str) -> bool:
         return False
 
 
-def _get_usb_parent_device(pnp_device_id: str) -> Optional[str]:
+def _get_usb_parent_device(pnp_device_id: str) -> str | None:
     """Get the immediate parent device (hub) for a USB device.
 
     Args:
@@ -211,7 +210,7 @@ def _get_usb_parent_device(pnp_device_id: str) -> Optional[str]:
     return None
 
 
-def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> Optional[int]:
+def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> int | None:
     """Query USB speed via IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2.
 
     Args:
@@ -296,7 +295,7 @@ def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> Optional[int]:
         _kernel32.CloseHandle(handle)
 
 
-def _get_usb_speed_from_pnp(pnp_device_id: str) -> Optional[int]:
+def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
     """Get USB connection speed for a device using Windows IOCTL.
 
     Uses the Windows USB driver stack to query the actual operating speed
@@ -766,7 +765,7 @@ class Client:
             self.data = None
             self.last_event = ""
             now = datetime.datetime.now()
-            nowutc = now.now(datetime.timezone.utc)
+            nowutc = now.now(datetime.UTC)
             self.last_scan_time_epoch = now.timestamp()
             self.last_scan_time_epoch_utc = nowutc.timestamp()
             self.last_scan_time_iso = now.astimezone().isoformat(
@@ -816,7 +815,7 @@ class Client:
                     "problem closing %s with result", self.client_handle, result
                 )
 
-    def get_bss_list(self, interface, bytes=False) -> Union[list, None]:
+    def get_bss_list(self, interface, bytes=False) -> list | None:
         if interface:
             try:
                 wireless_network_bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
@@ -961,7 +960,7 @@ class Client:
                     self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
                     self.scan_finished = True
                     now = datetime.datetime.now()
-                    nowutc = now.now(datetime.timezone.utc)
+                    nowutc = now.now(datetime.UTC)
                     self.last_scan_time_epoch = now.timestamp()
                     self.last_scan_time_epoch_utc = nowutc.timestamp()
                     self.last_scan_time_iso = now.astimezone().isoformat(

@@ -12,6 +12,8 @@ import pytest
 
 from lswifi import wlanapi as WLAN_API
 
+from tests.support import wireless_interfaces
+
 
 @pytest.mark.skipif(not WLAN_API.WLAN_API_EXISTS, reason="WLAN API not available")
 class TestCurrentConnectionInfo:
@@ -19,7 +21,7 @@ class TestCurrentConnectionInfo:
 
     def test_query_interface_returns_tuple(self):
         """Test that query_interface returns expected format."""
-        interfaces = WLAN_API.WLAN.get_wireless_interfaces()
+        interfaces = wireless_interfaces(WLAN_API)
         if not interfaces:
             pytest.skip("No wireless interfaces available")
 

@@ -27,10 +27,10 @@ else:
     print("lswifi currently only works on win32 ... exiting ...")
     sys.exit(-1)
 
-# hard set no support for Python versions < 3.9
-if sys.version_info < (3, 9):  # noqa: UP036
+# hard set no support for Python versions < 3.13
+if sys.version_info < (3, 13):  # noqa: UP036
     print(
-        f"lswifi requires Python 3.9+. \nyour active Python version is {platform.python_version()}.\nexiting..."
+        f"lswifi requires Python 3.13+. \nyour active Python version is {platform.python_version()}.\nexiting..."
     )
     sys.exit(-1)
 

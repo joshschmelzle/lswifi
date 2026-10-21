@@ -6,6 +6,8 @@ import pytest
 
 from lswifi import wlanapi as WLAN_API
 
+from tests.support import wireless_interfaces
+
 
 def dequote(s):
     """
@@ -36,12 +38,12 @@ class TestDequote:
 class TestGetAvailableNetworks:
     def test_get_wireless_interfaces(self):
         """Test that we can get wireless interfaces."""
-        interfaces = WLAN_API.WLAN.get_wireless_interfaces()
+        interfaces = wireless_interfaces(WLAN_API)
         assert isinstance(interfaces, dict)
 
     def test_scan_and_get_bss_list(self):
         """Test scanning and getting BSS list from available interfaces."""
-        interfaces = WLAN_API.WLAN.get_wireless_interfaces()
+        interfaces = wireless_interfaces(WLAN_API)
         if not interfaces:
             pytest.skip("No wireless interfaces available")
 
