@@ -334,7 +334,7 @@ class WirelessNetworkBss:
             self.phy_type.amendment,
             self.phy_type.name,
             self.security.value,
-            self.country_code,
+            self.country_code.value,
             f"{self.beacon_interval.value}ms",
             self.uptime.value,
         ]
@@ -365,7 +365,7 @@ class WirelessNetworkBss:
                 self.phy_type.amendment,
                 self.phy_type.name,
                 self.security.value,
-                self.country_code,
+                self.country_code.value,
                 f"{self.beacon_interval.value}ms",
                 self.uptime.value,
             ]
