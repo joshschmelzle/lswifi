@@ -10,8 +10,6 @@ lswifi.completions
 Provides PowerShell tab completion support for lswifi.
 """
 
-from typing import Optional
-
 GLOBAL_OPTIONS = [
     "--scans",
     "--interval",
@@ -95,7 +93,7 @@ def _filter_completions(options: list[str], prefix: str) -> list[str]:
     return [opt for opt in options if opt.startswith(prefix)]
 
 
-def _find_command(args: list[str]) -> Optional[str]:
+def _find_command(args: list[str]) -> str | None:
     """Find the subcommand if present."""
     for arg in args:
         if arg == "completion":
@@ -165,7 +163,7 @@ def generate_powershell_script() -> str:
 """
 
 
-def get_completion_script(shell: str) -> Optional[str]:
+def get_completion_script(shell: str) -> str | None:
     """Get the completion script for the specified shell."""
     if shell == "powershell":
         return generate_powershell_script()

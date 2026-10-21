@@ -71,6 +71,16 @@ class lswifi:
 
         watching_events = True
         try:
+            # Decoding a capture does not need a local adapter. Do it before
+            # WlanOpenHandle, which fails when the WLAN service is stopped.
+            if args.decoderaw:
+                self.decode_bytefile(args)
+                sys.exit(0)
+
+            if args.decode:
+                self.decode_pcap_file(args)
+                sys.exit(0)
+
             clients = {}
             try:
                 if args.event_watcher:
@@ -129,14 +139,6 @@ class lswifi:
 
             if args.display_ethers:
                 self.displayEthers()
-                sys.exit(0)
-
-            if args.decoderaw:
-                self.decode_bytefile(args)
-                sys.exit(0)
-
-            if args.decode:
-                self.decode_pcap_file(args)
                 sys.exit(0)
 
             scanning = True

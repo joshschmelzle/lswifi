@@ -4,6 +4,8 @@ import pytest
 
 from lswifi import wlanapi as WLAN_API
 
+from tests.support import wireless_interfaces
+
 
 class TestWlanApiConstants:
     """Test WLAN API constants and dictionaries."""
@@ -42,5 +44,5 @@ class TestWlanApiLive:
 
     def test_get_wireless_interfaces(self):
         """Test getting wireless interfaces."""
-        interfaces = WLAN_API.WLAN.get_wireless_interfaces()
+        interfaces = wireless_interfaces(WLAN_API)
         assert isinstance(interfaces, dict)
