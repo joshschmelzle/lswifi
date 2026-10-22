@@ -1,0 +1,61 @@
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Check the tag matches the package version
+        if: github.event_name == 'release'
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          # Windows CPython turns print()'s trailing \n into \r\n. Bash command
+          # substitution deletes the LF and leaves the CR, so VERSION never
+          # equals the release tag. Write no newline, then drop any CR.
+          VERSION=$(python -c "import lswifi.__version__ as v; print(v.__version__, end='')" | tr -d '\r')
+          if [ "${TAG#v}" != "$VERSION" ]; then
+            echo "Release tag $TAG does not match lswifi.__version__ $(printf '%q' "$VERSION")"
+            exit 1
+          fi
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install build twine
+          python -m build
+          python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  pypi:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/lswifi/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
