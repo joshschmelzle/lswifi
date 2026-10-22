@@ -28,7 +28,7 @@ coverage==7.16.2
     # via -r tests.in
 defusedxml==0.7.1
     # via genbadge
-distlib==0.3.9
+distlib==0.4.4
     # via virtualenv
 filelock==4.2.4
     # via
@@ -110,7 +110,7 @@ typing-extensions==4.13.2
     # via mypy
 urllib3==2.8.0
     # via requests
-virtualenv==21.14.5
+virtualenv==21.14.9
     # via
     #   pre-commit
     #   tox
