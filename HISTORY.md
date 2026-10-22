@@ -4,6 +4,14 @@ Release History
 RELEASED
 --------
 
+0.1.67 (2026-10-21)
+-------------------
+
+- Require Python 3.13 or newer.
+- Run the test suite on Windows in GitHub Actions for Python 3.13 and 3.14.
+- Publish releases to PyPI from GitHub Actions with Trusted Publishing.
+- Update development and build dependencies, including PyInstaller 6.22.3 and mypy 2.4.0.
+
 0.1.66 (2026-03-10)
 -------------------
 
