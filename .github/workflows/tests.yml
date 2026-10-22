@@ -34,3 +34,24 @@ jobs:
 
       - name: Run tests
         run: python -m pytest
+
+  typing:
+    name: Type check (mypy)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install package and typing dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install -r requirements/typing.txt
+
+      - name: Run mypy
+        run: python -m mypy lswifi/

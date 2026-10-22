@@ -168,8 +168,8 @@ def is_five_band(frequency: str) -> bool:
         if 5000 <= _frequency < 5955:
             return True
     except ValueError:
-        _frequency = float(frequency)
-        if 5 <= _frequency < 5.955:
+        _frequency_ghz = float(frequency)
+        if 5 <= _frequency_ghz < 5.955:
             return True
     return False
 
@@ -184,8 +184,8 @@ def is_six_band(frequency: str) -> bool:
         if 5955 <= _frequency < 7125:
             return True
     except ValueError:
-        _frequency = float(frequency)
-        if 5.955 <= _frequency < 7.125:
+        _frequency_ghz = float(frequency)
+        if 5.955 <= _frequency_ghz < 7.125:
             return True
 
     return False
