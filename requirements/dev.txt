@@ -76,7 +76,7 @@ pluggy==1.5.0
     # via
     #   pytest
     #   tox
-pre-commit==4.2.0
+pre-commit==4.7.0
     # via -r dev.in
 pyinstaller==6.22.3
     # via -r dev.in
