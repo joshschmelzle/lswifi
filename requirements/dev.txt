@@ -6,6 +6,8 @@
 #
 altgraph==0.17.4
     # via pyinstaller
+ast-serialize==0.13.1
+    # via mypy
 build==1.2.2.post1
     # via pip-tools
 cachetools==5.5.2
@@ -42,9 +44,11 @@ idna==3.20
     # via requests
 iniconfig==2.1.0
     # via pytest
+librt==0.16.0
+    # via mypy
 mock==5.2.0
     # via -r tests.in
-mypy==1.15.0
+mypy==2.4.0
     # via -r typing.in
 mypy-extensions==1.1.0
     # via mypy
@@ -58,6 +62,8 @@ packaging==25.0
     #   pyproject-api
     #   pytest
     #   tox
+pathspec==1.1.1
+    # via mypy
 pillow==13.0.0
     # via genbadge
 pip-tools==7.6.2
