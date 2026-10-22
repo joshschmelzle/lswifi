@@ -26,9 +26,12 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
         run: |
-          VERSION=$(python -c "import lswifi.__version__ as v; print(v.__version__)")
+          # Windows CPython turns print()'s trailing \n into \r\n. Bash command
+          # substitution deletes the LF and leaves the CR, so VERSION never
+          # equals the release tag. Write no newline, then drop any CR.
+          VERSION=$(python -c "import lswifi.__version__ as v; print(v.__version__, end='')" | tr -d '\r')
           if [ "${TAG#v}" != "$VERSION" ]; then
-            echo "Release tag $TAG does not match lswifi.__version__ $VERSION"
+            echo "Release tag $TAG does not match lswifi.__version__ $(printf '%q' "$VERSION")"
             exit 1
           fi
       - name: Build sdist and wheel
