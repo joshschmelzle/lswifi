@@ -31,6 +31,7 @@ import winreg
 from ctypes import wintypes
 from threading import Lock, Timer
 from types import SimpleNamespace
+from typing import Any
 
 from lswifi import wlanapi as WLAN_API
 from lswifi.helpers import (
@@ -475,8 +476,8 @@ class Event:
         return self.notificationCode
 
 
-callbacks = []
-handles = []
+callbacks: list[Any] = []
+handles: list[Any] = []
 
 
 class NotificationObject:
@@ -828,16 +829,18 @@ class Client:
                 return wireless_network_bss_list
             except Exception:
                 exception_type, exception_object, exception_traceback = sys.exc_info()
-                fname = os.path.split(exception_traceback.tb_frame.f_code.co_filename)[
-                    1
-                ]
+                if exception_traceback is not None:
+                    fname = os.path.split(
+                        exception_traceback.tb_frame.f_code.co_filename
+                    )[1]
+                    lineno = exception_traceback.tb_lineno
+                else:
+                    fname, lineno = "unknown", 0
                 self.log.error(
                     "unexpected error when trying to get the BSS list on interface with MAC %s",
                     interface.mac,
                 )
-                self.log.error(
-                    f"{exception_object} {exception_type} {fname}:{exception_traceback.tb_lineno}"
-                )
+                self.log.error(f"{exception_object} {exception_type} {fname}:{lineno}")
                 return None
         else:
             return None

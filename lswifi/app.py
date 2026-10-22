@@ -1398,7 +1398,7 @@ class lswifi:
             rnr_results.insert(0, headers)
             rnr_results.insert(1, subheaders)
 
-            border = ()
+            border: tuple[str, ...] = ()
             rnr_results_len = len(rnr_results[0]) - 1
             for index, _item in enumerate(rnr_results[0]):
                 if index == rnr_results_len:

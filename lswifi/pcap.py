@@ -18,6 +18,7 @@ import logging
 import platform
 import struct
 import sys
+from typing import Any
 
 from lswifi.__version__ import __title__, __version__
 
@@ -55,7 +56,7 @@ def parse_radiotap_header(packet_data: bytes) -> dict:
 
     Handles extended present flags, field alignment, and vendor namespaces.
     """
-    result = {
+    result: dict[str, Any] = {
         "rssi": -99,
         "noise": None,
         "frequency": 0,

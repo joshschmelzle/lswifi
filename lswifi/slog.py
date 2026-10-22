@@ -19,7 +19,7 @@ import contextlib
 import socket
 from datetime import datetime
 
-SYSLOG_SERVERS = []
+SYSLOG_SERVERS: list[str] = []
 
 # Log level mapping
 SYSLOG_LEVEL = {
