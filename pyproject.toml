@@ -5,9 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lswifi"
 dynamic = ["version", "optional-dependencies"]
-description = "a CLI-centric Wi-Fi scanning tool for Windows"
+description = "a CLI-centric Wi-Fi scanning tool for Windows and macOS"
 readme = "README-PYPI.md"
 requires-python = ">=3.13"
+dependencies = [
+    'pyobjc-framework-CoreWLAN>=12.0; sys_platform == "darwin"',
+]
 license = "BSD-3-Clause"
 authors = [{ name = "Josh Schmelzle", email = "josh@joshschmelzle.com" }]
 keywords = [
@@ -38,6 +41,7 @@ classifiers = [
     "Environment :: Win32 (MS Windows)",
     "Operating System :: Microsoft :: Windows :: Windows 10",
     "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Operating System :: MacOS",
 ]
 
 [project.urls]
@@ -55,6 +59,7 @@ version = { attr = "lswifi.__version__.__version__" }
 
 [tool.setuptools.dynamic.optional-dependencies]
 dev = { file = ["requirements/dev.txt"] }
+# back-compat alias: CoreWLAN is now a default dependency on macOS
 macos = { file = ["requirements/macos.txt"] }
 
 [tool.isort]

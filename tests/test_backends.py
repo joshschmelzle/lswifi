@@ -250,7 +250,7 @@ class TestFactory:
     def test_darwin_without_pyobjc(self, monkeypatch):
         # a None entry makes "import CoreWLAN" raise ImportError on any OS
         monkeypatch.setitem(sys.modules, "CoreWLAN", None)
-        with pytest.raises(BackendUnavailableError, match=r"lswifi\[macos\]"):
+        with pytest.raises(BackendUnavailableError, match="pyobjc-framework-CoreWLAN"):
             get_backend("darwin")
 
     def test_windows_without_wlanapi(self, monkeypatch):

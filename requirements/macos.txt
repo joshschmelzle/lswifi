@@ -1,2 +1,2 @@
-# macOS backend (CoreWLAN via PyObjC); no-op on other platforms
+# back-compat for lswifi[macos]; CoreWLAN is now a default dependency on macOS
 pyobjc-framework-CoreWLAN>=12.0; sys_platform == "darwin"
