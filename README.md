@@ -34,6 +34,16 @@ macOS hides SSIDs, BSSIDs, and information elements from apps that have not been
 - Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.13 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
 - Allow Python in System Settings > Privacy & Security > Location Services.
 
+macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but in testing the Developer ID-signed python.org interpreter (and venvs created from it) could still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay `notDetermined` and never get the prompt.
+
+Known limitations on macOS:
+
+- CoreWLAN has no public Capability Information field, so capability bits decode as 0. For networks without an RSN or WPA element, `lswifi` asks CoreWLAN (`supportsSecurity:`) whether the network is open or WEP, and shows `NONE?` when it cannot tell.
+- PHY type, supported rate set, link quality, and TSF are not exposed, so those columns are blank or `--`, and AP uptime is unavailable. Bus info is unsupported.
+- Channel width comes from the information elements when they are available. CoreWLAN's own width tops out at 160 MHz and is only used when the elements are hidden.
+- CoreWLAN does not say whether the elements came from a beacon or a probe response.
+- `beaconInterval` is reported in TU (100 for a typical AP), despite the API docs saying milliseconds.
+
 `--watchevents` on macOS prints a timestamped line for each CoreWLAN event: power on/off, connect and disconnect, roams (current values plus `old_bssid`, `old_freq`, `old_rssi` and `old_channel` fields), reconnects (a `connected` line gets `old_bssid` when it lands on a different AP), SSID, channel, mode and country code changes, and notable signal quality changes. Scan cache updates (`scan_cache_updated`, several a minute) print only with `--debug`, in text and JSON. If your account is an admin, it also reads airportd's log (`log stream`, no `sudo`) to add roam requests (`roam_requested` with `trigger`, `roam_target_bssid`, and `roam_target_channel`/`roam_reason` when macOS logs them), deauth/disassoc reason codes, join timing, and `system_sleep`, `system_wake` (`wake: dark|full`) and `lid_opened`/`lid_closed` markers; otherwise those lines are skipped. macOS powers Wi-Fi off while asleep (including Power Nap dark wakes), so a `disconnected`/`connected` pair to the same BSSID next to a `system_wake` line is sleep, not the AP. Without Location Services, BSSIDs and SSIDs are left out but link and power events still print. Add `--json` for the same events as NDJSON on stdout (see Usage).
 
 Usage

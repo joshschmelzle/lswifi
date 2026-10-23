@@ -65,9 +65,11 @@ class FakeNetwork:
         beacon=100,
         ies=None,
         ibss=False,
+        security=(),
     ):
         self._ssid, self._bssid, self._rssi = ssid, bssid, rssi
         self._channel, self._beacon, self._ies, self._ibss = channel, beacon, ies, ibss
+        self._security = security  # CWSecurity values supportsSecurity: accepts
 
     def ssidData(self):
         return self._ssid
@@ -89,6 +91,9 @@ class FakeNetwork:
 
     def ibss(self):
         return self._ibss
+
+    def supportsSecurity_(self, security):
+        return security in self._security
 
 
 def granted_network(**kw):
@@ -328,7 +333,45 @@ class TestBackend:
         backend = MacOSBackend(fake_corewlan(cw))
         session = backend.open_session(parse([]), backend.list_interfaces()[0])
         asyncio.run(session.scan())
-        assert str(session.data[0].security) == "NONE?"
+        bss = session.data[0]
+        assert (str(bss.security), str(bss.auth), str(bss.encryption)) == (
+            "NONE?",
+            "NONE?",
+            "NONE?",
+        )
+
+    @pytest.mark.parametrize(
+        "security, expected",
+        [
+            # observed on a WEP BSS: WEP, Personal, DynamicWEP, Enterprise
+            ((1, 5, 6, 10), ("WEP", "WEP", "NONE")),
+            ((0,), ("NONE", "NONE", "NONE")),
+            # both or neither: no verdict
+            ((0, 1), ("NONE?", "NONE?", "NONE?")),
+            ((), ("NONE?", "NONE?", "NONE?")),
+        ],
+    )
+    def test_open_vs_wep_from_supports_security(self, security, expected):
+        """no RSN/WPA IE: supportsSecurity: stands in for the Privacy bit"""
+        ies = bytes([0, 4]) + b"open" + bytes([1, 1, 0x82])
+        network = granted_network(security=security)
+        network._ies = ies
+        cw = FakeInterface(networks=[network])
+        backend = MacOSBackend(fake_corewlan(cw))
+        session = backend.open_session(parse([]), backend.list_interfaces()[0])
+        asyncio.run(session.scan())
+        bss = session.data[0]
+        assert (str(bss.security), str(bss.auth), str(bss.encryption)) == expected
+
+    def test_rsn_ignores_supports_security(self):
+        """an RSN IE decides security even if supportsSecurity: says WEP"""
+        network = granted_network(security=(1,))
+        assert macos.network_to_record(network).privacy is True
+        cw = FakeInterface(networks=[network])
+        backend = MacOSBackend(fake_corewlan(cw))
+        session = backend.open_session(parse([]), backend.list_interfaces()[0])
+        asyncio.run(session.scan())
+        assert str(session.data[0].security) == "PSK,SAE/CCMP-128/CCMP-128"
 
     @pytest.mark.parametrize(
         "argv, expected",
