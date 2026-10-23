@@ -61,9 +61,6 @@ class BssRecord:
     raw: bytes | None = None  # backend-native record bytes (Windows WLAN_BSS_ENTRY)
     # width the OS reports, for when there are no IEs; IE-derived width wins
     channel_width_mhz: int | None = None
-    # the OS's own protected/open verdict, for backends with no capability
-    # field (macOS supportsSecurity:); None when unknown
-    privacy: bool | None = None
 
 
 @dataclass

@@ -38,7 +38,7 @@ macOS keys the Location Services grant to the code signature of the process aski
 
 Known limitations on macOS:
 
-- CoreWLAN has no public Capability Information field, so capability bits decode as 0. For networks without an RSN or WPA element, `lswifi` asks CoreWLAN (`supportsSecurity:`) whether the network is open or WEP, and shows `NONE?` when it cannot tell.
+- CoreWLAN has no public Capability Information field, so capability bits decode as 0 and `lswifi` can't tell open from WEP when there is no RSN or WPA element; those networks show `NONE?`.
 - PHY type, supported rate set, link quality, and TSF are not exposed, so those columns are blank or `--`, and AP uptime is unavailable. Bus info is unsupported.
 - Channel width comes from the information elements when they are available. CoreWLAN's own width tops out at 160 MHz and is only used when the elements are hidden.
 - CoreWLAN does not say whether the elements came from a beacon or a probe response.

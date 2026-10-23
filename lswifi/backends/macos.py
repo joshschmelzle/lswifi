@@ -52,11 +52,6 @@ BAND_NAMES = {
     CW_CHANNEL_BAND_6GHZ: "6 GHz",
 }
 
-# CWSecurity values used to tell WEP from open without a capability field
-CW_SECURITY_NONE = 0
-CW_SECURITY_WEP = 1
-CW_SECURITY_DYNAMIC_WEP = 6
-
 UNSUPPORTED = "unsupported on macOS"
 
 LOCATION_HELP = (
@@ -92,23 +87,6 @@ def _nsdata_bytes(data) -> bytes:
     return bytes(data) if data is not None else b""
 
 
-def network_privacy(network) -> bool | None:
-    """Open (False) or WEP (True) from the public CWNetwork supportsSecurity:.
-
-    CoreWLAN has no public capability field, so this stands in for its
-    Privacy bit on networks with no RSN/WPA IE. None when it is not one or
-    the other.
-    """
-    supports = getattr(network, "supportsSecurity_", None)
-    if supports is None:
-        return None
-    wep = bool(supports(CW_SECURITY_WEP) or supports(CW_SECURITY_DYNAMIC_WEP))
-    open_ = bool(supports(CW_SECURITY_NONE))
-    if wep != open_:
-        return wep
-    return None
-
-
 def network_to_record(network, connected_bssid: str | None = None) -> BssRecord:
     """Map a CWNetwork (or anything shaped like one) to a BssRecord.
 
@@ -137,7 +115,6 @@ def network_to_record(network, connected_bssid: str | None = None) -> BssRecord:
         connected=bool(bssid) and bssid == connected_bssid,
         ie_source=None,
         channel_width_mhz=CW_CHANNEL_WIDTH_MHZ.get(width) if width else None,
-        privacy=network_privacy(network),
     )
 
 
@@ -168,13 +145,11 @@ class MacOSScanSession(RecordScanSession):
             for attr in ("security", "auth", "encryption", "pmf", "spatial_streams"):
                 getattr(bss, attr).value = "--"
         elif bss.security.value == "NONE":
-            # no RSN/WPA IE and no capability field: open or WEP, so use
-            # CoreWLAN's own verdict and do not imply open when it has none
-            if record.privacy:
-                bss.security.value = bss.auth.value = "WEP"
-            elif record.privacy is None:
-                for attr in ("security", "auth", "encryption"):
-                    getattr(bss, attr).value = "NONE?"
+            # no RSN/WPA IE and no capability field (no Privacy bit): open
+            # or WEP. supportsSecurity: is not used: it answers whether a
+            # profile could join, not what the BSS advertises (#101)
+            for attr in ("security", "auth", "encryption"):
+                getattr(bss, attr).value = "NONE?"
         return bss
 
     async def scan(self) -> None:
