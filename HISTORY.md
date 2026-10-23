@@ -4,6 +4,14 @@ Release History
 RELEASED
 --------
 
+0.2.0 (2026-10-23)
+------------------
+
+- Add macOS support through a CoreWLAN backend. Install with `lswifi[macos]`. Needs Location Services on a signed Python such as the python.org build.
+- Split platform code into backends under `lswifi/backends/`. Windows behavior is unchanged.
+- Add `--watchevents` on macOS, including roams, sleep/wake and airportd deauth reasons.
+- Add `--watchevents --json` NDJSON event output on macOS and Windows.
+
 0.1.67 (2026-10-21)
 -------------------
 
