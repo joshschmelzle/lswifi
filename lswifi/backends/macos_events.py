@@ -22,8 +22,13 @@ Two sources, neither needs root:
   bursts CoreWLAN sends for one roam or join print as one line.
 - airportd's unified log (``log stream``), best effort, for what CoreWLAN
   does not report: roam triggers, deauth/disassoc reason codes and join
-  timing. ``log stream`` needs an admin account; if it cannot start, one
-  info line says so and the CoreWLAN events still print.
+  timing, and system sleep/wake and lid markers (macOS powers Wi-Fi down
+  in sleep, so a disconnect/connect pair on wake is expected). ``log
+  stream`` needs an admin account; if it cannot start, one info line says
+  so and the CoreWLAN events still print.
+
+scan_cache_updated lines (several a minute on macOS) print only with
+--debug.
 
 The design follows the iairport Swift rewrite (MIT,
 github.com/samwiseg0/iAirport): CoreWLAN events for state, airportd log
@@ -230,6 +235,9 @@ class EventFormatter:
         self.mac = mac
         self.clock = clock
         self.last: LinkState | None = None
+        # last snapshot that had a BSSID: CoreWLAN can report a nil BSSID for
+        # a moment mid-roam, and the roam must still compare against the old AP
+        self.last_link: LinkState | None = None
         self.last_lq: LinkState | None = None
         self.last_lq_time = 0.0
         self.last_line = ""
@@ -305,6 +313,9 @@ class EventFormatter:
         """Lines for whatever changed since the last state printed"""
         old = self.last
         self.last = new
+        known = self.last_link
+        if new.connected and new.bssid:
+            self.last_link = new
         if old is None:
             self.last_lq, self.last_lq_time = new, self.clock()
             return [
@@ -318,14 +329,23 @@ class EventFormatter:
             if not new.power:
                 return lines
         if old.connected and not new.connected:
-            lines.append(self._fields(old, "", "disconnected"))
+            gone = old if old.bssid or known is None else known
+            lines.append(self._fields(gone, "", "disconnected"))
         elif new.connected and not old.connected:
-            lines.append(
-                self._fields(
-                    new, self._link_extra(new), "connected", **self._link_json(new)
-                )
-            )
+            extra, fields = self._link_extra(new), self._link_json(new)
+            if known and known.bssid and new.bssid and known.bssid != new.bssid:
+                # a reconnect to a different AP (not a roam: the link went down)
+                extra += f", old_bssid: ({known.bssid})"
+                fields["old_bssid"] = known.bssid
+            lines.append(self._fields(new, extra, "connected", **fields))
+            if not new.bssid:
+                # BSSID not known yet: do not call its later arrival a roam
+                self.last_link = None
+        elif new.connected and old.bssid and not new.bssid:
+            pass  # nil BSSID mid-roam; wait for the next snapshot
         elif new.connected:
+            if not old.bssid and new.bssid and known is not None:
+                old = known  # BSSID is back after a nil burst
             if old.bssid and new.bssid and old.bssid != new.bssid:
                 lines.append(self._roam(old, new))
             elif old.ssid and new.ssid and old.ssid != new.ssid:
@@ -427,7 +447,19 @@ _TIMING = re.compile(
     r"\b(assoc|auth|linkup|ipv4|ipv4Primary|ipv6|ipv6Primary)=[^(]*\((\d+)ms\)"
 )
 _JOIN_UUID = re.compile(r"uuid=([^,)\s]+)")
-_ROAM_PREFIX = re.compile(r"Roam: <airport\[\d+\]> ")
+# "Roam: <airport[423]> -[CWXPCInterfaceContext __trigger...]: BEST CONNECTED ROAM triggered"
+_ROAM_TRIGGER = re.compile(r"(?:\]:|>)\s*([A-Z][A-Z0-9 _-]*?)\s+ROAM triggered(.*)$")
+# "...: Requesting Roam : {" then "    KEY = value;" lines then "}"
+_ROAM_REQUEST = "Requesting Roam : {"
+_ROAM_BLOCK_ITEM = re.compile(r"^\s*([A-Za-z0-9_]+)\s*=\s*(.*?);?\s*$")
+_NSDATA_BYTES = re.compile(r"bytes\s*=\s*0x([0-9A-Fa-f]{12})")
+# a new unified log entry (compact style) starts with a timestamp
+_TRIGGER_REASON = re.compile(r"reason\s*[=:]\s*([A-Za-z0-9_]+)")
+_LOG_ENTRY = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+_WAKE = re.compile(r"airportdProcessWake: Received (dark|full) wake event")
+_CLAMSHELL = re.compile(r"Clamshell state changed \(closed=(\d)")
+# the same airportd marker logged twice within this window prints once
+LOG_REPEAT_WINDOW = 2.0
 _TIMING_ORDER = ["assoc", "auth", "linkup", "ipv4", "ipv6", "ipv4Primary", "ipv6Primary"]
 
 
@@ -444,13 +476,135 @@ class LogEvent:
     fields: dict = field(default_factory=dict, compare=False)
 
 
-class AirportdLogClassifier:
-    """Picks the few airportd lines worth a --watchevents line"""
+def _one_line(text: str, limit: int = 160) -> str:
+    """Never let log text put a newline (or a run of spaces) in an event line"""
+    return " ".join(text.split())[:limit]
 
-    def __init__(self) -> None:
+
+def _roam_target_bssid(value: str) -> str | None:
+    match = _NSDATA_BYTES.search(value)
+    if not match:
+        return None
+    raw = match.group(1).lower()
+    if raw in ("ffffffffffff", "000000000000"):
+        return "any"  # no target: let the driver pick the best BSS
+    return ":".join(raw[i : i + 2] for i in range(0, 12, 2))
+
+
+class AirportdLogClassifier:
+    """Picks the few airportd lines worth a --watchevents line
+
+    ``feed()`` takes raw ``log stream`` lines, including the continuation
+    lines of multi-line messages (the "Requesting Roam : { ... }" block), and
+    returns finished events. ``classify()`` handles one complete line.
+    """
+
+    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+        self.clock = clock
         self.seen_joins: set[str] = set()
+        self.pending_trigger: str | None = None
+        self.pending_reason: str | None = None
+        self.roam_block: list[str] | None = None
+        self.last_marker = ""
+        self.last_marker_time = 0.0
+
+    def feed(self, line: str) -> list[LogEvent]:
+        line = line.rstrip("\r\n")
+        events: list[LogEvent] = []
+        if self.roam_block is not None:
+            if not _LOG_ENTRY.match(line):
+                if line.strip().startswith("}"):
+                    events.append(self._roam_request(self.roam_block))
+                    self.roam_block = None
+                else:
+                    self.roam_block.append(line)
+                return events
+            # a new entry before the closing brace: emit what we have
+            events.append(self._roam_request(self.roam_block))
+            self.roam_block = None
+        elif not _LOG_ENTRY.match(line) and line[:1].isspace():
+            return events  # continuation of a message we do not parse
+        if _ROAM_REQUEST in line:
+            rest = line.split(_ROAM_REQUEST, 1)[1]
+            if "}" in rest:  # whole block on one line
+                events.append(self._roam_request(rest.split("}", 1)[0].split(";")))
+            else:
+                self.roam_block = [rest] if rest.strip() else []
+            return events
+        if self.pending_trigger is not None:
+            # a trigger with no "Requesting Roam" right after it
+            events.append(self._roam_triggered(self.pending_trigger))
+            self.pending_trigger = None
+        trigger = _ROAM_TRIGGER.search(line)
+        if trigger:
+            name = "_".join(trigger.group(1).lower().replace("-", " ").split())
+            self.pending_trigger = f"{name}_roam"
+            reason = _TRIGGER_REASON.search(trigger.group(2))
+            self.pending_reason = reason.group(1) if reason else None
+            return events
+        event = self.classify(line)
+        if event is not None:
+            events.append(event)
+        return events
+
+    def flush(self) -> list[LogEvent]:
+        """Whatever a roam block or trigger still holds (end of stream)"""
+        events = []
+        if self.roam_block is not None:
+            events.append(self._roam_request(self.roam_block))
+            self.roam_block = None
+        elif self.pending_trigger is not None:
+            events.append(self._roam_triggered(self.pending_trigger))
+        self.pending_trigger = self.pending_reason = None
+        return events
+
+    def _trigger_parts(self, parts: list[str], fields: dict[str, Any]) -> None:
+        if self.pending_trigger is not None:
+            parts.append(f"trigger: ({self.pending_trigger})")
+            fields["trigger"] = self.pending_trigger
+        if self.pending_reason:
+            parts.append(f"roam_reason: ({self.pending_reason})")
+            fields["roam_reason"] = self.pending_reason
+        self.pending_trigger = self.pending_reason = None
+
+    def _roam_triggered(self, trigger: str) -> LogEvent:
+        parts: list[str] = []
+        fields: dict[str, Any] = {}
+        self._trigger_parts(parts, fields)
+        return LogEvent("roam_triggered", ", ".join(parts), fields)
+
+    def _roam_request(self, items: list[str]) -> LogEvent:
+        parts: list[str] = []
+        fields: dict[str, Any] = {}
+        self._trigger_parts(parts, fields)
+        for item in items:
+            match = _ROAM_BLOCK_ITEM.match(item)
+            if not match:
+                continue
+            key, value = match.group(1).upper(), match.group(2).strip()
+            if key == "BSSID":
+                bssid = _roam_target_bssid(value)
+                if bssid:
+                    parts.append(f"roam_target_bssid: ({bssid})")
+                    fields["roam_target_bssid"] = bssid
+            elif "CHANNEL" in key and value.isdigit():
+                parts.append(f"roam_target_channel: ({value})")
+                fields["roam_target_channel"] = int(value)
+            elif "REASON" in key and "roam_reason" not in fields:
+                reason = _one_line(value.strip('"'), 60)
+                parts.append(f"roam_reason: ({reason})")
+                fields["roam_reason"] = int(reason) if reason.isdigit() else reason
+        return LogEvent("roam_requested", ", ".join(parts), fields)
+
+    def _repeat(self, marker: str) -> bool:
+        """airportd logs sleep/wake markers twice; print the first"""
+        now = self.clock()
+        repeat = marker == self.last_marker and now - self.last_marker_time < LOG_REPEAT_WINDOW
+        self.last_marker, self.last_marker_time = marker, now
+        return repeat
 
     def classify(self, line: str) -> LogEvent | None:
+        line = line.rstrip("\r\n")
         match = _DEAUTH.search(line)
         if match:
             kind, source, code = match.group(1), match.group(2), int(match.group(3))
@@ -463,11 +617,23 @@ class AirportdLogClassifier:
             return LogEvent(
                 "deauth" if kind == "Deauth" else "disassoc", detail, fields
             )
-        if "BEST CONNECTED ROAM triggered" in line or "Requesting Roam : {" in line:
-            text = line.split("Roam:", 1)[-1]
-            text = _ROAM_PREFIX.sub("", "Roam:" + text).strip(" {")
-            event = "roam_requested" if "Requesting Roam" in line else "roam_triggered"
-            return LogEvent(event, f"detail: ({text[:160]})", {"detail": text[:160]})
+        if "_acknowledgeSleepEvent: Acknowledging sleep event" in line:
+            # the Mac is going to sleep; Wi-Fi powers down until the next wake
+            if self._repeat("sleep"):
+                return None
+            return LogEvent("system_sleep", "", {})
+        wake = _WAKE.search(line)
+        if wake:
+            kind = wake.group(1)
+            if self._repeat(f"wake:{kind}"):
+                return None
+            return LogEvent("system_wake", f"wake: ({kind})", {"wake": kind})
+        clamshell = _CLAMSHELL.search(line)
+        if clamshell:
+            event = "lid_closed" if clamshell.group(1) == "1" else "lid_opened"
+            if self._repeat(event):
+                return None
+            return LogEvent(event, "", {})
         if "AUTO-JOIN: Updated join status" in line:
             values = dict(_TIMING.findall(line))
             if not all(key in values for key in ("assoc", "auth", "linkup")):
@@ -529,9 +695,10 @@ class AirportdLogReader:
         try:
             for line in process.stdout:
                 last = line.strip() or last
-                event = self.classifier.classify(line)
-                if event is not None:
+                for event in self.classifier.feed(line):
                     self.on_event(event)
+            for event in self.classifier.flush():
+                self.on_event(event)
             code = process.wait()
         except (OSError, ValueError):  # pipe closed during shutdown
             return
@@ -634,6 +801,9 @@ class MacOSEventWatcher:
         self.emit = emit or self._emit
         # --watchevents --json: NDJSON records on stdout instead of log lines
         self.json_writer = shared_writer() if watch_json_requested(args) else None
+        # macOS refreshes its scan cache several times a minute; those lines
+        # bury the real events, so they print only with --debug
+        self.scan_events = getattr(args, "debug", logging.INFO) == logging.DEBUG
         self.log_reader: AirportdLogReader | None = None
         self.delegate: Any = None
 
@@ -674,9 +844,12 @@ class MacOSEventWatcher:
                 if kind == "link_quality":
                     lines = formatter.link_quality(state)
                 elif kind == "scan_cache":
+                    # still compare state: a scan callback can be the first
+                    # sign of a join or roam
                     lines = formatter.state_change(state)
-                    cached = cw_iface.cachedScanResults()
-                    lines += formatter.scan_cache(state, len(cached or ()))
+                    if self.scan_events:
+                        cached = cw_iface.cachedScanResults()
+                        lines += formatter.scan_cache(state, len(cached or ()))
                 else:
                     lines = formatter.state_change(state)
                 self._print(formatter, lines)
@@ -691,7 +864,9 @@ class MacOSEventWatcher:
                 text = f"({formatter.mac}), "
                 if state.bssid:
                     text += f"bssid: ({state.bssid}), "
-                text += f"event: ({event.event}), {event.detail}"
+                text += f"event: ({event.event})"
+                if event.detail:
+                    text += f", {event.detail}"
                 record = event_record(
                     formatter.mac, event.event, bssid=state.bssid, **event.fields
                 )

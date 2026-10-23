@@ -346,7 +346,7 @@ class FakeCW:
         return [object()] * 3
 
 
-def make_watcher(monkeypatch, syslog=None):
+def make_watcher(monkeypatch, syslog=None, debug=logging.DEBUG):
     stream = io.StringIO()
     monkeypatch.setattr(watchjson, "_writer", NDJSONWriter(stream))
     sent = []
@@ -361,7 +361,9 @@ def make_watcher(monkeypatch, syslog=None):
         state_string="connected",
         native=FakeCW(),
     )
-    args = SimpleNamespace(event_watcher=True, json="lswifi_x.json", syslog=syslog)
+    args = SimpleNamespace(
+        event_watcher=True, json="lswifi_x.json", syslog=syslog, debug=debug
+    )
     watcher = MacOSEventWatcher(SimpleNamespace(), [info], args, clock=Clock())
     return watcher, stream, sent
 
@@ -390,6 +392,42 @@ class TestMacOSWatcherJSON:
         )
         assert all(r["timestamp"][-6] in "+-" for r in records)
         assert "event: (" not in caplog.text
+
+    def test_scan_cache_quiet_without_debug(self, monkeypatch):
+        watcher, stream, _ = make_watcher(monkeypatch, debug=logging.INFO)
+        watcher.on_event("watching", "en0")
+        watcher.on_event("scan_cache", "en0")
+        records = [json.loads(line) for line in stream.getvalue().splitlines()]
+        assert [r["event"] for r in records] == ["watching"]
+
+    def test_roam_and_wake_records(self, monkeypatch):
+        watcher, stream, _ = make_watcher(monkeypatch)
+        watcher.on_event("watching", "en0")
+        classifier = AirportdLogClassifier()
+        lines = [
+            "2026-10-22 20:12:38.519 Df airportd[423:1] Roam: <airport[423]> "
+            "-[CWXPCInterfaceContext __triggerRoamWithInterface:]: BEST CONNECTED ROAM triggered",
+            "2026-10-22 20:12:38.519 Df airportd[423:1] Roam: <airport[423]> "
+            "-[CWXPCInterfaceContext __triggerRoamWithInterface:]: Requesting Roam : {",
+            "    BSSID = {length = 6, bytes = 0xffffffffffff};",
+            "}",
+            "2026-10-22 20:13:34.339 Df airportd[423:1] AutoJoin: <airport[423]> "
+            "airportdProcessWake: Received dark wake event for en0",
+        ]
+        for line in lines:
+            for event in classifier.feed(line + "\n"):
+                watcher.on_log_event(event)
+        out = stream.getvalue().splitlines()
+        records = [json.loads(line) for line in out]
+        assert records[1] == {
+            "timestamp": records[1]["timestamp"],
+            "interface_mac": MAC,
+            "event": "roam_requested",
+            "bssid": "02:00:00:00:00:14",
+            "trigger": "best_connected_roam",
+            "roam_target_bssid": "any",
+        }
+        assert records[2]["event"] == "system_wake" and records[2]["wake"] == "dark"
 
     def test_syslog_still_gets_text(self, monkeypatch):
         watcher, stream, sent = make_watcher(monkeypatch, syslog="192.0.2.1")
