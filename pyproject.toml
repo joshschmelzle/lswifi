@@ -55,6 +55,7 @@ version = { attr = "lswifi.__version__.__version__" }
 
 [tool.setuptools.dynamic.optional-dependencies]
 dev = { file = ["requirements/dev.txt"] }
+macos = { file = ["requirements/macos.txt"] }
 
 [tool.isort]
 profile = "black"

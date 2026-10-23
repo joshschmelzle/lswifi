@@ -20,13 +20,6 @@ import os
 import platform
 import sys
 
-# hard set no support for non win32 platforms
-if sys.platform == "win32":
-    pass
-else:
-    print("lswifi currently only works on win32 ... exiting ...")
-    sys.exit(-1)
-
 # hard set no support for Python versions < 3.13
 if sys.version_info < (3, 13):  # noqa: UP036
     print(
@@ -36,15 +29,17 @@ if sys.version_info < (3, 13):  # noqa: UP036
 
 # app imports
 from lswifi import app, appsetup
-from lswifi.__version__ import __title__
+from lswifi.backends.base import BackendError
+from lswifi.backends.factory import get_backend, needs_backend
 from lswifi.constants import APNAMEACKFILE, APNAMEJSONFILE
+from lswifi.helpers import app_data_dir
 
 
 def app_path():
-    appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
+    appdata_path = app_data_dir()
     path_exists = os.path.isdir(appdata_path)
     if not path_exists:
-        os.mkdir(appdata_path)
+        os.makedirs(appdata_path)
     print(f"{appdata_path}")
 
 
@@ -76,6 +71,17 @@ def main():
     if args.data_location:
         app_path()
         sys.exit()
+
+    # parse args first; only commands that scan or query an adapter need a
+    # backend. -decode and -decoderaw work on any OS.
+    backend = None
+    if needs_backend(args):
+        try:
+            backend = get_backend()
+        except BackendError as error:
+            print(f"lswifi: {error}", file=sys.stderr)
+            sys.exit(-1)
+
     if args.apnames:
         is_apname_ack_stored = user_ack_apnames_disclaimer()
         log.debug(
@@ -83,19 +89,16 @@ def main():
             "Yes" if is_apname_ack_stored else "No",
         )
 
-    app.run(args, storedack=is_apname_ack_stored)
+    app.run(args, storedack=is_apname_ack_stored, backend=backend)
 
 
 def user_ack_apnames_disclaimer():
     """retrieve ack from user that BSSIDs and discovered apnames will be cached in appdata"""
     logger = logging.getLogger(__name__)
-    if os.getenv("LOCALAPPDATA"):
-        appdata_folder = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
-    else:
-        raise OSError
+    appdata_folder = app_data_dir()
     is_path = os.path.isdir(appdata_folder)
     if not is_path:
-        os.mkdir(appdata_folder)
+        os.makedirs(appdata_folder)
         logger.debug("%s created? %s", appdata_folder, os.path.isdir(appdata_folder))
     ack = os.path.join(appdata_folder, APNAMEACKFILE)
     apnames = os.path.join(appdata_folder, APNAMEJSONFILE)

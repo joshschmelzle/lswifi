@@ -20,6 +20,22 @@ Note: The Python Scripts directory must be added to the PATH environment variabl
 
 ![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/pip_install.gif "animation showing install of lswifi")
 
+macOS (preview)
+---------------
+
+`lswifi` can scan on macOS through Apple's CoreWLAN framework. Install the `macos` extra:
+
+``` {.sourceCode .bash}
+$ python3 -m pip install 'lswifi[macos]'
+```
+
+macOS hides SSIDs, BSSIDs, and information elements from apps that have not been granted Location Services. Without that grant, `lswifi` only sees RSSI and channel, and prints a warning. `sudo` does not help.
+
+- Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.13 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
+- Allow Python in System Settings > Privacy & Security > Location Services.
+
+`--watchevents` on macOS prints a timestamped line for each CoreWLAN event: power on/off, connect and disconnect, roams (current values plus `old_bssid`, `old_freq`, `old_rssi` and `old_channel` fields), SSID, channel, mode and country code changes, notable signal quality changes, and scan cache updates. If your account is an admin, it also reads airportd's log (`log stream`, no `sudo`) to add roam triggers, deauth/disassoc reason codes, and join timing; otherwise those lines are skipped. Without Location Services, BSSIDs and SSIDs are left out but link and power events still print. Add `--json` for the same events as NDJSON on stdout (see Usage).
+
 Usage
 -----
 
@@ -80,6 +96,15 @@ Watch event notifications (inc. roaming, connection, scanning, etc.):
 ``` {.sourceCode .bash}
 > lswifi --watchevents
 ```
+
+Add `--json` to get one JSON object per event on stdout (NDJSON) instead of log lines; logging stays on stderr, `--syslog` still gets the text line, and no file is written:
+
+``` {.sourceCode .bash}
+> lswifi --watchevents --json
+{"timestamp": "2026-10-22T15:41:07.512-04:00", "interface_mac": "aa:bb:cc:dd:ee:ff", "event": "roamed", "bssid": "11:22:33:44:55:66", "freq_mhz": 5180, "ssid": "corp", "rssi": -52, "channel": 36, "width_mhz": 80, "band": "5 GHz", "tx_rate_mbps": 864, "old_bssid": "11:22:33:44:55:77", "old_freq_mhz": 5745, "old_rssi": -71, "old_channel": 149, "old_width_mhz": 80, "old_band": "5 GHz"}
+```
+
+Every object has `timestamp` (local time with UTC offset, like the scan export), `interface_mac` and `event`, then `bssid`, `freq_mhz`, `ssid` and `rssi` when known, then event-specific keys such as `channel`, `width_mhz`, `band`, `noise`, `tx_rate_mbps`, `scan_bssid_count`, `old_*` values, `reason_code`/`reason_text` and `*_ms` join timing. Keys that are unknown or do not apply are left out rather than set to `null`. Numbers are numbers. If the SSID is not valid UTF-8, `ssid` uses replacement characters and `ssid_hex` has the raw octets.
 
 Export scan results to pcap:
 

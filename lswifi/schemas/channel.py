@@ -23,10 +23,9 @@ from .out import *
 class ChannelNumber(OutObject):
     """Base class for Channel Number"""
 
-    def __init__(self, bss_entry):
-        self.frequency = str(bss_entry.ChCenterFrequency)
-        self.value = get_channel_number_from_frequency(
-            str(int(bss_entry.ChCenterFrequency / 1000))
-        )
+    def __init__(self, frequency_mhz: int):
+        """:param frequency_mhz: channel center frequency in MHz"""
+        self.frequency = str(frequency_mhz)
+        self.value = get_channel_number_from_frequency(str(int(frequency_mhz)))
         self.header = Header("CHANNEL")
         self.subheader = SubHeader("[#@MHz]")

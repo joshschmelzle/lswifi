@@ -2,7 +2,10 @@
 
 import json
 import struct
+import sys
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from lswifi.client import (
     _get_usb_speed_from_pnp,
@@ -11,6 +14,9 @@ from lswifi.client import (
     _query_usb_speed_ioctl,
     get_adapter_bus_info,
 )
+
+# bus info uses PowerShell CIM, kernel32 IOCTLs, and winreg
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 
 
 class TestIsUsbDevicePresent:

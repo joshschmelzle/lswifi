@@ -17,11 +17,13 @@ Provides helper functions that are consumed internally.
 
 import itertools
 import json
+import os
 import random
 import re
 import sys
 from base64 import b64encode
 
+from lswifi.__version__ import __title__
 from lswifi.constants import (
     _2GHZ_5GHZ_20MHZ_CHANNEL_LIST,
     _6GHZ_20MHZ_CHANNEL_LIST,
@@ -50,6 +52,24 @@ def escape_control_chars(text: str) -> str:
         except UnicodeDecodeError:
             return text.decode("latin-1").encode("unicode_escape").decode("latin-1")
     return text
+
+
+def app_data_dir() -> str:
+    """Return lswifi's data directory; does not create it.
+
+    %LOCALAPPDATA%\\lswifi on Windows, $XDG_DATA_HOME/lswifi or
+    ~/.local/share/lswifi elsewhere. Holds ethers, the AP name cache,
+    -exportraw output, and -export pcapng files.
+    """
+    if sys.platform == "win32":
+        local_app_data = os.getenv("LOCALAPPDATA")
+        if local_app_data is None:
+            raise OSError("LOCALAPPDATA is not set")
+        return os.path.join(local_app_data, __title__)
+    data_home = os.getenv("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share"
+    )
+    return os.path.join(data_home, __title__)
 
 
 def generate_pretty_separator(_len, separators, begin, end):
@@ -158,7 +178,7 @@ def is_two_four_band(frequency: str) -> bool:
     return __get_digit(_frequency, __num_digits(_frequency) - 1) == 2
 
 
-def is_five_band(frequency: str) -> bool:
+def is_five_band(frequency: str | float) -> bool:
     """determines if a channel frequency is in the 5.0 GHz ISM band"""
     if isinstance(frequency, float):
         return 5 < frequency < 5.955
@@ -174,7 +194,7 @@ def is_five_band(frequency: str) -> bool:
     return False
 
 
-def is_six_band(frequency: str) -> bool:
+def is_six_band(frequency: str | float) -> bool:
     """determines if a channel frequency is in the 5.95-7.125 GHz ISM band"""
     if isinstance(frequency, float):
         return 5.955 <= frequency < 7.125

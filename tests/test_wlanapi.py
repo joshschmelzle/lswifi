@@ -1,10 +1,14 @@
 # -*- encoding: utf-8
 
+import sys
+
 import pytest
 
 from lswifi import wlanapi as WLAN_API
 
 from tests.support import wireless_interfaces
+
+pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 
 
 class TestWlanApiConstants:

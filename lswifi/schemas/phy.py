@@ -15,16 +15,19 @@ lswifi.phy
 schema definition for phytype
 """
 
-from lswifi import wlanapi as WLAN_API
-
 from .out import *
 
 
 class PHYType:
     """Base class for PHY Type"""
 
-    def __init__(self, bss_entry):
-        self.value = WLAN_API.DOT11_PHY_TYPE_DICT[bss_entry.dot11BssPhyType]
+    def __init__(self, phy_name: str | None):
+        """
+        :param phy_name: PHY name from the OS, e.g. Windows DOT11_PHY_TYPE_DICT
+          value "HE (802.11ax)". None when the OS has no such enum; HE and EHT
+          are still set later from the IEs.
+        """
+        self.value = phy_name if phy_name is not None else ""
         self.header = Header("PHY")
         self.subheader = SubHeader(".11")
 

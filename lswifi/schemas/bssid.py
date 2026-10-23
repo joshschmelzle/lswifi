@@ -15,19 +15,18 @@ lswifi.bssid
 schema definition for bssid
 """
 
-from lswifi.helpers import convert_mac_address_to_string
-
 from .out import *
 
 
 class BSSID(OutObject):
     """Base class for BSSID"""
 
-    def __init__(self, bss_entry, connected_bssid, **kwargs):
-        self.value = convert_mac_address_to_string(bss_entry.dot11Bssid)
-        self.connected_bssid = connected_bssid
-        self.connected = False
-        if self.value == self.connected_bssid:
-            self.connected = True
+    def __init__(self, bssid: str, connected: bool = False, **kwargs):
+        """
+        :param bssid: MAC address string, aa:bb:cc:dd:ee:ff
+        :param connected: whether the scanning interface is associated to it
+        """
+        self.value = bssid
+        self.connected = connected
         self.header = Header(kwargs.get("header", ""), align=kwargs.get("align"))
         self.subheader = SubHeader(kwargs.get("subheader", ""))

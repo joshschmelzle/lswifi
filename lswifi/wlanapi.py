@@ -21,6 +21,11 @@ import sys
 import threading
 from collections import namedtuple
 from ctypes import (
+    CFUNCTYPE,
+    POINTER,
+    Structure,
+    addressof,
+    byref,
     c_bool,
     c_byte,
     c_char,
@@ -36,22 +41,21 @@ from ctypes import (
     c_wchar_p,
     cast,
     create_string_buffer,
+    pointer,
 )
-from enum import Enum
-
-from lswifi.guid import GUID
-
-if sys.platform == "win32":
-    from ctypes import windll
-else:
-    print("ERROR: win32 support only")
-    sys.exit(-1)
-
-from ctypes import CFUNCTYPE, POINTER, Structure, Union, addressof, byref, pointer
 from ctypes.wintypes import BOOL, DWORD, HANDLE
+from enum import Enum
+from typing import Any
 
-from lswifi.elements import WirelessNetworkBss
+from lswifi.elements import InformationElement, WirelessNetworkBss  # noqa: F401
+from lswifi.guid import GUID
 from lswifi.helpers import convert_mac_address_to_string
+
+# moved to lswifi.schemas.capabilities; re-exported for existing callers
+from lswifi.schemas.capabilities import (  # noqa: F401
+    CapabilityInformation,
+    CapabilityInformationBits,
+)
 
 # wlantypes.h
 
@@ -97,25 +101,33 @@ WLAN_REASON_CODE = DWORD
 ## (MAC) address: `typedef UCHAR DOT11_MAC_ADDRESS[6];`
 DOT11_MAC_ADDRESS = c_ubyte * 6
 
-# load wlanapi.dll into memory
+# load wlanapi.dll and iphlpapi.dll into memory. off Windows the module still
+# imports, so the struct layouts and enums are available, but every WLAN call
+# fails; lswifi.backends.windows checks WLAN_API_EXISTS before scanning.
 
-WLAN_API_EXISTS = True
+WLAN_API: Any = None
+WLAN_API_EXISTS = False
+IPHLP_API: Any = None
+IPHLP_API_EXISTS = False
 
-try:
-    WLAN_API = windll.LoadLibrary("wlanapi.dll")
-except OSError:
-    WLAN_API_EXISTS = False
-    print("!!! wlanapi.dll not foud !!!")
+if sys.platform == "win32":
+    from ctypes import windll
 
-# load iphlpapi.dll into memory
+    WLAN_API_EXISTS = True
 
-IPHLP_API_EXISTS = True
+    try:
+        WLAN_API = windll.LoadLibrary("wlanapi.dll")
+    except OSError:
+        WLAN_API_EXISTS = False
+        print("!!! wlanapi.dll not foud !!!")
 
-try:
-    IPHLP_API = windll.LoadLibrary("iphlpapi.dll")
-except OSError:
-    IPHLP_API_EXISTS = False
-    print("!!! iphlpapi.dll not foud !!!")
+    IPHLP_API_EXISTS = True
+
+    try:
+        IPHLP_API = windll.LoadLibrary("iphlpapi.dll")
+    except OSError:
+        IPHLP_API_EXISTS = False
+        print("!!! iphlpapi.dll not foud !!!")
 
 MAX_ADAPTER_NAME_LENGTH = 256
 MAX_ADAPTER_DESCRIPTION_LENGTH = 128
@@ -490,44 +502,6 @@ WLAN_OPCODE_VALUE_TYPE_DICT = {
     3: "wlan_opcode_value_type_invalid",
     4: "v1_enum",
 }
-
-
-class CapabilityInformationBits(Structure):
-    """802.11-2016 9.4.1.4 Capability Information field
-
-    The 16-bit Capability Information field is used in
-      Beacon transmissions to advertise the network’s capabilities.
-    Capability Information is also used in Probe Request
-      and Probe Response frames. In this field, each bit is used as a flag
-      to advertise a particular function of the network.
-    Stations use the capability advertisement to determine
-      whether they can support all the features in the BSS.
-    Stations that do not implement all the features in the capability
-      advertisement are not allowed to join.
-    """
-
-    _fields_ = [
-        ("ESS", c_ushort, 1),  # bit 0
-        ("IBSS", c_ushort, 1),  # bit 1
-        ("CF_POLLABLE", c_ushort, 1),  # bit 2
-        ("CF_POLL_REQUEST", c_ushort, 1),  # bit 3
-        ("PRIVACY", c_ushort, 1),  # bit 4
-        ("SHORT_PREAMBLE", c_ushort, 1),  # bit 5
-        ("PBCC", c_ushort, 1),  # bit 6 - Packet Binary Convolutional Code
-        ("CHANNEL_AGILITY", c_ushort, 1),  # bit 7
-        ("SPECTRUM_MANAGEMENT", c_ushort, 1),  # bit 8
-        ("QOS", c_ushort, 1),  # bit 9
-        ("SHORT_SLOT_TIME", c_ushort, 1),  # bit 10
-        ("APSD", c_ushort, 1),  # bit 11 - WMM Automatic Power Save Delievery
-        ("RADIO_MEASUREMENT", c_ushort, 1),  # bit 12
-        ("DSSS_OFDM", c_ushort, 1),  # bit 13
-        ("DELAYED_BLOCK_ACK", c_ushort, 1),  # bit 14
-        ("IMMEDIATE_BLOCK_ACK", c_ushort, 1),  # bit 15
-    ]
-
-
-class CapabilityInformation(Union):
-    _fields_ = [("bits", CapabilityInformationBits), ("asbyte", c_ushort)]
 
 
 class DOT11SSID(Structure):
@@ -982,21 +956,6 @@ class WLANRawData(Structure):
     """
 
     _fields_ = [("DataSize", DWORD), ("DataBlob", c_byte * 1)]
-
-
-class InformationElement:  # TODO: MOVE THIS TO ELEMENTS.PY DOES NOT BELONG IN WLANAPI
-    """Data class for an 802.11 Information Element"""
-
-    def __init__(self, eid, name, length, decoded, body, pbody):
-        self.eid = eid
-        self.name = name
-        self.length = length
-        self.decoded = decoded
-        self.body = body
-        self.pbody = pbody
-
-    def __str__(self):
-        return f"Element ID: {self.eid}\nName: {self.name}\nLength: {self.length}\nDecoded: {self.decoded}\nBody: {self.body}\nPretty Body: {self.pbody}"
 
 
 class WirelessInterface:
@@ -1701,11 +1660,23 @@ class WLAN:
         """Returns a list of WirelessNetworkBss objects based on the wireless
         networks available.
         """
+        return [
+            WirelessNetworkBss(record, is_bytes_arg=is_bytes_arg)
+            for record in WLAN.get_wireless_network_bss_records(interface)
+        ]
+
+    @staticmethod
+    def get_wireless_network_bss_records(interface) -> list:
+        """Returns a list of BssRecord objects copied out of the
+        WlanGetNetworkBssList result before it is freed.
+        """
+        from lswifi.backends.windows import bss_entry_to_record
+
         connected_bssid = None
         with contextlib.suppress(TypeError):
             connected_bssid = WLAN.get_connected_bssid(interface)
 
-        networks = []
+        records = []
         handle = WLAN.open_handle()
         bss_list = None
         with contextlib.suppress(WLANGetNetworkBSSListError):
@@ -1716,16 +1687,7 @@ class WLAN:
             bss_entries_list = (data_type * _numberOfItems).from_address(bss_pointer)
 
             for bss_entry in bss_entries_list:
-                if connected_bssid:
-                    networks.append(
-                        WirelessNetworkBss(
-                            bss_entry, connected_bssid, is_bytes_arg=is_bytes_arg
-                        )
-                    )
-                else:
-                    networks.append(
-                        WirelessNetworkBss(bss_entry, is_bytes_arg=is_bytes_arg)
-                    )
+                records.append(bss_entry_to_record(bss_entry, connected_bssid))
 
         if bss_list is not None:
             # print("if get_wireless_network_bss_list bss_list is not None")
@@ -1733,7 +1695,7 @@ class WLAN:
         if handle is not None:
             # print("if get_wireless_network_bss_list handle is not None")
             WLAN.close_handle(handle)
-        return networks
+        return records
 
     @staticmethod
     def get_network_bss_list(clientHandle, interfaceGuid, ssid=None):
