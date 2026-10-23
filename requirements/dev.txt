@@ -96,7 +96,7 @@ python-discovery==1.6.4
     #   virtualenv
 pyyaml==6.0.2
     # via pre-commit
-requests==2.32.5
+requests==2.33.0
     # via genbadge
 ruff==0.17.1
     # via -r dev.in
