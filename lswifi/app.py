@@ -33,13 +33,13 @@ from operator import itemgetter
 from time import sleep
 
 # app imports
-from lswifi import wlanapi as WLAN_API
-from lswifi.__version__ import __title__, __version__
-from lswifi.client import Client, get_interface_info
+from lswifi.__version__ import __version__
+from lswifi.backends.base import BssRecord
 from lswifi.constants import APNAMEJSONFILE, DECORS, DECORS_END, DECORS_START
 from lswifi.elements import WirelessNetworkBss
 from lswifi.helpers import (
     Base64Encoder,
+    app_data_dir,
     format_bytes_as_hex,
     generate_pretty_separator,
     get_attr_max_len,
@@ -81,21 +81,46 @@ class lswifi:
                 self.decode_pcap_file(args)
                 sys.exit(0)
 
+            backend = kwargs.get("backend")
+            if backend is None:
+                from lswifi.backends.factory import get_backend
+
+                backend = get_backend()
+
+            iface_infos = {}
             clients = {}
             try:
                 if args.event_watcher:
+                    if not backend.supports_events:
+                        log.error(
+                            "--watchevents is unsupported on %s",
+                            getattr(backend, "platform_name", backend.name),
+                        )
+                        sys.exit(-1)
+                    if args.json:
+                        from lswifi.appsetup import BOOT_TIME
+
+                        # --watchevents --json is NDJSON on stdout, no file
+                        if args.json != f"lswifi_{BOOT_TIME}.json":
+                            log.warning(
+                                "--watchevents --json writes events to stdout; "
+                                "ignoring %s (redirect stdout to save them)",
+                                args.json,
+                            )
+                    if hasattr(backend, "watch_events"):
+                        # macOS: blocks on a run loop until Ctrl-C
+                        backend.watch_events(args)
+                        sys.exit(0)
                     while watching_events:
-                        for (
-                            _index,
-                            iface,
-                        ) in WLAN_API.WLAN.get_wireless_interfaces().items():
+                        for iface in backend.list_interfaces():
                             if "disabled" not in iface.mac and iface.mac not in clients:
-                                client = Client(args, iface)
+                                client = backend.open_session(args, iface)
                                 clients[iface.mac] = client
                         sleep(2)
 
-                for index, iface in WLAN_API.WLAN.get_wireless_interfaces().items():
-                    clients[index] = Client(args, iface)
+                for index, iface in enumerate(backend.list_interfaces()):
+                    iface_infos[index] = iface
+                    clients[index] = backend.open_session(args, iface)
             except Exception as error:
                 log.error("%s", error)
 
@@ -152,7 +177,7 @@ class lswifi:
             #     ):
             #         scanning = False
             #         print(get_interface_info(args, interface))
-            for _index, client in clients.items():
+            for _index in clients:
                 if (
                     args.get_interface_info
                     or args.get_current_ap
@@ -160,7 +185,7 @@ class lswifi:
                     or args.supported
                 ):
                     scanning = False
-                    print(get_interface_info(args, client.iface))
+                    print(backend.interface_info(args, iface_infos[_index]))
 
             # TODO move other non-scanning functions here
 
@@ -349,7 +374,7 @@ class lswifi:
 
     def displayEthers(self):
         log = logging.getLogger(__name__)
-        appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+        appdata_path = app_data_dir()
         is_path = os.path.isdir(appdata_path)
         if not is_path:
             log.info("nothing here")
@@ -368,7 +393,7 @@ class lswifi:
 
     def appendEthers(self, data):
         log = logging.getLogger(__name__)
-        appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+        appdata_path = app_data_dir()
         is_path = os.path.isdir(appdata_path)
         if not is_path:
             os.makedirs(appdata_path)
@@ -410,7 +435,7 @@ class lswifi:
             return newethers
 
     def loadEthers(self) -> dict:
-        appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
+        appdata_path = app_data_dir()
         is_path = os.path.isdir(appdata_path)
         if not is_path:
             os.makedirs(appdata_path)
@@ -427,7 +452,7 @@ class lswifi:
 
     def loadAPNames(self) -> dict:
         log = logging.getLogger(__name__)
-        appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
+        appdata_path = app_data_dir()
         is_path = os.path.isdir(appdata_path)
         if not is_path:
             os.makedirs(appdata_path)
@@ -444,7 +469,7 @@ class lswifi:
 
     def updateAPNames(self, json_names, scan_names) -> None:
         log = logging.getLogger(__name__)
-        appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)  # type: ignore
+        appdata_path = app_data_dir()
         is_path = os.path.isdir(appdata_path)
         if not is_path:
             os.makedirs(appdata_path)
@@ -506,7 +531,7 @@ class lswifi:
         pcap_path = None
 
         if args.exportraw:
-            appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+            appdata_path = app_data_dir()
             is_path = os.path.isdir(appdata_path)
             if not is_path:
                 os.makedirs(appdata_path)
@@ -548,7 +573,7 @@ class lswifi:
                 if os.path.isdir(pcap_path):
                     pcap_path = os.path.join(pcap_path, filename)
             else:
-                appdata_path = os.path.join(os.getenv("LOCALAPPDATA"), __title__)
+                appdata_path = app_data_dir()
                 is_path = os.path.isdir(appdata_path)
                 if not is_path:
                     os.makedirs(appdata_path)
@@ -570,12 +595,12 @@ class lswifi:
                 if wlanapi_bss != user_bss:
                     # print("{} {}".format(wlanapi_bss, user_bss))
                     continue
-                print(f"bss bytes:\n{bss.bssbytes.send()}\n\n)")
-                print(f"bss octets:\n{format_bytes_as_hex(bss.bssbytes.send())}\n")
+                print(f"bss bytes:\n{bss.bssbytes}\n\n)")
+                print(f"bss octets:\n{format_bytes_as_hex(bss.bssbytes)}\n")
                 print("bss base64:")
-                bssb64 = str(
-                    json.dumps(bss.bssbytes.send(), cls=Base64Encoder)
-                ).replace('"', "")
+                bssb64 = str(json.dumps(bss.bssbytes, cls=Base64Encoder)).replace(
+                    '"', ""
+                )
                 print(f"{bssb64}\n")
                 print(f"ies bytes:\n{bytes(bss.iesbytes)}\n")
                 print(f"ies octets:\n{format_bytes_as_hex(bss.iesbytes)}\n")
@@ -614,18 +639,18 @@ class lswifi:
 
                         bsspath = export_bss + ".bss"
                         # print(f"{os.path.join(exportpath, bss)}")
-                        # print(f"{type(bss.bssbytes.send())}")
-                        # print(f"{bss.bssbytes.send()}")
+                        # print(f"{type(bss.bssbytes)}")
+                        # print(f"{bss.bssbytes}")
                         with open(
                             os.path.join(exportraw_path, bsspath), "wb"
                         ) as bssfile:
-                            bssfile.write(bss.bssbytes.send())
+                            bssfile.write(bss.bssbytes)
 
                         bsspath = export_bss + ".bss"
                         with open(
                             os.path.join(exportraw_path, bsspath), "wb"
                         ) as bssfile:
-                            bssfile.write(bss.bssbytes.send())
+                            bssfile.write(bss.bssbytes)
 
                         iespath = export_bss + ".ies"
                         # print(f"{os.path.join(exportpath, ies)}")
@@ -1049,7 +1074,7 @@ class lswifi:
 
                 bsspath = export_bss + ".bss"
                 with open(os.path.join(exportpath, bsspath), "wb") as bssfile:
-                    bssfile.write(bss.bssbytes.send())
+                    bssfile.write(bss.bssbytes)
 
                 iespath = export_bss + ".ies"
                 with open(os.path.join(exportpath, iespath), "wb") as iesfile:
@@ -1140,32 +1165,6 @@ class lswifi:
             return
 
         try:
-
-            class MockBssEntry:
-                def __init__(self):
-                    self.dot11Ssid = type("obj", (), {"SSID": b"", "SSIDLength": 0})()
-                    self.PhyId = 0
-                    self.dot11Bssid = None
-                    self.dot11BssType = 1
-                    self.dot11BssPhyType = 7
-                    self.Rssi = -75
-                    self.LinkQuality = 0
-                    self.InRegDomain = True
-                    self.BeaconPeriod = 100
-                    self.Timestamp = 0
-                    self.HostTimestamp = 0
-                    self.CapabilityInformation = 0
-                    self.ChCenterFrequency = 2412
-                    self.WlanRateSet = type(
-                        "obj", (), {"RateSetLength": 0, "RateSet": [0] * 126}
-                    )()
-                    self.IeOffset = 0
-                    self.IeSize = 0
-                    self.iesbytes = None
-
-                def send(self):
-                    return self.iesbytes
-
             pcap = PCAP(args.decode, mode="r")
             networks = []
 
@@ -1247,25 +1246,29 @@ class lswifi:
                         else:
                             ies_data = b""
 
-                        buffer = create_string_buffer(ies_data)
-                        buffer_type = POINTER(type(buffer))
-                        ies_data = cast(buffer, buffer_type).contents
+                        bssid_str = ":".join(f"{b:02x}" for b in bssid)
+                        record = BssRecord(
+                            ssid=bytes(ssid),
+                            bssid=bssid_str,
+                            frequency_mhz=freq,
+                            rssi_dbm=rssi,
+                            beacon_interval_tu=beacon_period,
+                            # capture timestamp, not the beacon TSF (unchanged)
+                            tsf=timestamp,
+                            capability=capabilities,
+                            ies=bytes(ies_data),
+                            ie_source="beacon",
+                        )
 
-                        mock_bss = MockBssEntry()
-                        mock_bss.dot11Bssid = bssid
-                        mock_bss.dot11Ssid.SSID = ssid
-                        mock_bss.dot11Ssid.SSIDLength = len(ssid)
-                        mock_bss.Rssi = rssi
-                        mock_bss.ChCenterFrequency = freq * 1000
-                        mock_bss.BeaconPeriod = beacon_period
-                        mock_bss.CapabilityInformation = capabilities
-                        mock_bss.Timestamp = timestamp
-                        mock_bss.iesbytes = ies_data
+                        # the IE parser walks a NUL-terminated c_char buffer
+                        # for captures; keep that so the output is unchanged
+                        buffer = create_string_buffer(bytes(ies_data))
+                        buffer_type = POINTER(type(buffer))
+                        pcap_ies = cast(buffer, buffer_type).contents
 
                         bss = WirelessNetworkBss(
-                            mock_bss, is_pcap=True, pcap_ies=ies_data
+                            record, is_pcap=True, pcap_ies=pcap_ies
                         )
-                        bssid_str = ":".join(f"{b:02x}" for b in bssid)
 
                         bss.ssid.value = ssid.decode("utf-8", errors="replace")
                         bss.bssid.value = bssid_str
@@ -1527,7 +1530,8 @@ class lswifi:
             else:
                 print(json.dumps(json_out))
 
-        duplicates = {x for x in bssid_list if bssid_list.count(x) > 1}
+        # an empty BSSID is one the OS withheld (macOS without location)
+        duplicates = {x for x in bssid_list if x and bssid_list.count(x) > 1}
         if duplicates:
             log.warning("***BSSIDS WITH DUPLICATE MACs***")
             log.warning(duplicates)
@@ -1592,6 +1596,17 @@ class lswifi:
                 return
 
             if args.decoderaw.lower().rsplit(".", 1)[1] == "bss":
+                if sys.platform != "win32":
+                    # a .bss file is a raw Windows WLAN_BSS_ENTRY; the ctypes
+                    # layout (c_ulong size) only matches on Windows
+                    logging.getLogger(__name__).error(
+                        "decoding a .bss file requires Windows (WLAN_BSS_ENTRY "
+                        "layout); decode the matching .ies file instead"
+                    )
+                    return
+                from lswifi import wlanapi as WLAN_API
+                from lswifi.backends.windows import bss_entry_to_record
+
                 with open(args.decoderaw, "rb") as fh:
                     _bytearray = bytearray(fh.read())
                 print(
@@ -1602,7 +1617,9 @@ class lswifi:
                     "Decoded BSS Information (NOTE: this is missing information found in .ies file):"
                 )
                 bss_entry = WLAN_API.WLANBSSEntry.from_buffer(_bytearray)
-                data = WirelessNetworkBss(bss_entry, is_byte_input_file=True)
+                # the IEs are not in a .bss file; IeOffset points past it
+                record = bss_entry_to_record(bss_entry, include_ies=False)
+                data = WirelessNetworkBss(record, is_byte_input_file=True)
                 print(data)
         else:
             print(f"{args.decoderaw} file does not exist on file system... exiting...")

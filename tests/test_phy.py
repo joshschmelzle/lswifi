@@ -1,91 +1,75 @@
 # -*- encoding: utf-8
 
-import pytest
-from unittest.mock import MagicMock, patch
-
 from lswifi.schemas.phy import PHYType
 
 
 class TestPHYType:
-    """Test PHYType class by mocking WLAN_API."""
+    """Test PHYType with the PHY names a backend can report."""
 
-    @pytest.fixture
-    def mock_bss_entry(self):
-        """Create a mock BSS entry."""
-        entry = MagicMock()
-        entry.dot11BssPhyType = 7  # arbitrary value
-        return entry
-
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_eht(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "EHT"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_eht(self):
+        phy = PHYType("EHT")
         assert phy.amendment == "be"
         assert phy.generation == "7"
         assert str(phy) == "be"
         assert phy.name == "EHT"
         assert repr(phy) == "EHT"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_he(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "HE"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_he(self):
+        phy = PHYType("HE")
         assert phy.amendment == "ax"
         assert phy.generation == "6"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_vht(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "VHT"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_vht(self):
+        phy = PHYType("VHT")
         assert phy.amendment == "ac"
         assert phy.generation == "5"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_ht(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "HT"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_ht(self):
+        phy = PHYType("HT")
         assert phy.amendment == "n"
         assert phy.generation == "4"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_erp(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "ERP"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_erp(self):
+        phy = PHYType("ERP")
         assert phy.amendment == "g"
         assert phy.generation == "3"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_hrdsss(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "HR-DSSS"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_hrdsss(self):
+        phy = PHYType("HR-DSSS")
         assert phy.amendment == "b"
         assert phy.generation == "2"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_ofdm(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "OFDM"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_ofdm(self):
+        phy = PHYType("OFDM")
         assert phy.amendment == "a"
         assert phy.generation == "1"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_unknown(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "UNKNOWN"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_unknown(self):
+        phy = PHYType("UNKNOWN")
         assert phy.amendment == ""
         assert phy.generation == "-"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_out(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "HE"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_windows_dict_value(self):
+        """Windows DOT11_PHY_TYPE_DICT values keep today's blank amendment."""
+        phy = PHYType("HT (802.11n)")
+        assert phy.name == "HT (802.11n)"
+        assert phy.amendment == ""
+
+    def test_phy_none(self):
+        """A backend without a PHY enum leaves the column blank."""
+        phy = PHYType(None)
+        assert phy.name == ""
+        assert phy.amendment == ""
+        assert phy.generation == "-"
+        assert str(phy.out()) == ""
+
+    def test_phy_out(self):
+        phy = PHYType("HE")
         result = phy.out()
         assert str(result) == "ax"
 
-    @patch("lswifi.schemas.phy.WLAN_API")
-    def test_phy_name_setter(self, mock_wlan, mock_bss_entry):
-        mock_wlan.DOT11_PHY_TYPE_DICT = {7: "HE"}
-        phy = PHYType(mock_bss_entry)
+    def test_phy_name_setter(self):
+        phy = PHYType("HE")
         phy.name = "VHT"
         assert phy.name == "VHT"
         assert phy.amendment == "ac"

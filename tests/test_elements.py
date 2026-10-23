@@ -5,6 +5,7 @@ import sys
 import pytest
 
 import lswifi
+import lswifi.elements
 
 # WirelessNetworkBss
 

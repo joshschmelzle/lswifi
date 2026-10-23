@@ -20,6 +20,32 @@ Note: The Python Scripts directory must be added to the PATH environment variabl
 
 ![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/pip_install.gif "animation showing install of lswifi")
 
+macOS (preview)
+---------------
+
+`lswifi` can scan on macOS through Apple's CoreWLAN framework. Install the `macos` extra:
+
+``` {.sourceCode .bash}
+$ python3 -m pip install 'lswifi[macos]'
+```
+
+macOS hides SSIDs, BSSIDs, and information elements from apps that have not been granted Location Services. Without that grant, `lswifi` only sees RSSI and channel, and prints a warning. `sudo` does not help.
+
+- Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.13 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
+- Allow Python in System Settings > Privacy & Security > Location Services.
+
+macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but in testing the Developer ID-signed python.org interpreter (and venvs created from it) could still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay `notDetermined` and never get the prompt.
+
+Known limitations on macOS:
+
+- On macOS, CoreWLAN has no public Capability Information field, so capability bits decode as 0 and `lswifi` can't tell open from WEP when there is no RSN or WPA element; those networks show `NONE?`. Windows reads the Privacy bit and is unaffected.
+- PHY type, supported rate set, link quality, and TSF are not exposed, so those columns are blank or `--`, and AP uptime is unavailable. Bus info is unsupported.
+- Channel width comes from the information elements when they are available. CoreWLAN's own width tops out at 160 MHz and is only used when the elements are hidden.
+- CoreWLAN does not say whether the elements came from a beacon or a probe response.
+- `beaconInterval` is reported in TU (100 for a typical AP), despite the API docs saying milliseconds.
+
+`--watchevents` on macOS prints a timestamped line for each CoreWLAN event: power on/off, connect and disconnect, roams (current values plus `old_bssid`, `old_freq`, `old_rssi` and `old_channel` fields), reconnects (a `connected` line gets `old_bssid` when it lands on a different AP), SSID, channel, mode and country code changes, and notable signal quality changes. Scan cache updates (`scan_cache_updated`, several a minute) print only with `--debug`, in text and JSON. If your account is an admin, it also reads airportd's log (`log stream`, no `sudo`) to add roam requests (`roam_requested` with `trigger`, `roam_target_bssid`, and `roam_target_channel`/`roam_reason` when macOS logs them), deauth/disassoc reason codes, join timing, and `system_sleep`, `system_wake` (`wake: dark|full`) and `lid_opened`/`lid_closed` markers; otherwise those lines are skipped. macOS powers Wi-Fi off while asleep (including Power Nap dark wakes), so a `disconnected`/`connected` pair to the same BSSID next to a `system_wake` line is sleep, not the AP. Without Location Services, BSSIDs and SSIDs are left out but link and power events still print. Add `--json` for the same events as NDJSON on stdout (see Usage).
+
 Usage
 -----
 
@@ -80,6 +106,15 @@ Watch event notifications (inc. roaming, connection, scanning, etc.):
 ``` {.sourceCode .bash}
 > lswifi --watchevents
 ```
+
+Add `--json` to get one JSON object per event on stdout (NDJSON) instead of log lines; logging stays on stderr, `--syslog` still gets the text line, and no file is written:
+
+``` {.sourceCode .bash}
+> lswifi --watchevents --json
+{"timestamp": "2026-10-22T15:41:07.512-04:00", "interface_mac": "aa:bb:cc:dd:ee:ff", "event": "roamed", "bssid": "11:22:33:44:55:66", "freq_mhz": 5180, "ssid": "corp", "rssi": -52, "channel": 36, "width_mhz": 80, "band": "5 GHz", "tx_rate_mbps": 864, "old_bssid": "11:22:33:44:55:77", "old_freq_mhz": 5745, "old_rssi": -71, "old_channel": 149, "old_width_mhz": 80, "old_band": "5 GHz"}
+```
+
+Every object has `timestamp` (local time with UTC offset, like the scan export), `interface_mac` and `event`, then `bssid`, `freq_mhz`, `ssid` and `rssi` when known, then event-specific keys such as `channel`, `width_mhz`, `band`, `noise`, `tx_rate_mbps`, `scan_bssid_count`, `old_*` values, `reason_code`/`reason_text` and `*_ms` join timing. Keys that are unknown or do not apply are left out rather than set to `null`. Numbers are numbers. If the SSID is not valid UTF-8, `ssid` uses replacement characters and `ssid_hex` has the raw octets.
 
 Export scan results to pcap:
 

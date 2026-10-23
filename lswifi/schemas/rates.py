@@ -19,18 +19,48 @@ schema definition for rates
 class Rates:
     """Base class for rates of a BSS"""
 
-    def __init__(self, bss_entry):
-        self.basic = get_basic_rates(
-            bss_entry.WlanRateSet.RateSet[: bss_entry.WlanRateSet.RateSetLength]
-        )
+    def __init__(self, rate_set):
+        """:param rate_set: rates in WLAN_RATE_SET units (bit 15 marks basic)"""
+        self.basic = get_basic_rates(rate_set)
 
-        self.data = get_data_rates(
-            bss_entry.WlanRateSet.RateSet[: bss_entry.WlanRateSet.RateSetLength]
-        )
+        self.data = get_data_rates(rate_set)
 
-        self.rate_set = get_rateset(
-            bss_entry.WlanRateSet.RateSet[: bss_entry.WlanRateSet.RateSetLength]
-        )
+        self.rate_set = get_rateset(rate_set)
+
+    @classmethod
+    def from_ies(cls, ies):
+        """Build from the Supported Rates (1) and Extended Supported Rates (50)
+        elements, for backends that do not report a rate set."""
+        return cls(get_rateset_from_ies(ies))
+
+
+# BSS membership selector values (bits 0-6) carried in the rates elements
+BSS_MEMBERSHIP_SELECTOR_VALUES = range(121, 128)
+
+
+def get_rateset_from_ies(ies):
+    """
+    Walk an IE TLV chain and convert the Supported Rates and Extended
+    Supported Rates octets to WLAN_RATE_SET units. BSS membership selectors
+    are not rates and are skipped. A truncated trailing element is ignored.
+    """
+    rate_set = []
+    ies = bytes(ies)
+    index = 0
+    while index + 2 <= len(ies):
+        element_id = ies[index]
+        length = ies[index + 1]
+        body = ies[index + 2 : index + 2 + length]
+        if len(body) < length:
+            break
+        if element_id in (1, 50):
+            for octet in body:
+                value = octet & 0x7F
+                if value in BSS_MEMBERSHIP_SELECTOR_VALUES:
+                    continue
+                rate_set.append(0x8000 | value if octet & 0x80 else value)
+        index += 2 + length
+    return rate_set
 
 
 def format_rate(rate):

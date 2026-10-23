@@ -12,7 +12,7 @@
 lswifi.elements
 ~~~~~~~~~~~~~~~
 
-code used to parse the information elements provided by Native Wifi's wlanapi.h
+code used to parse 802.11 information elements from a scan result or capture
 """
 
 import logging
@@ -21,12 +21,11 @@ import os
 import struct
 import sys
 from collections import namedtuple
-from ctypes import addressof, c_char
 from dataclasses import dataclass
 from datetime import timedelta
 from struct import unpack_from
 
-from lswifi import wlanapi as WLAN_API
+from lswifi.backends.base import BssRecord
 from lswifi.constants import *
 from lswifi.constants import (
     _40MHZ_CHANNEL_LIST,
@@ -41,7 +40,6 @@ from lswifi.schemas.bssid import *
 from lswifi.schemas.capabilities import *
 from lswifi.schemas.channel import *
 from lswifi.schemas.encryption import Encryption
-from lswifi.schemas.ie import *
 from lswifi.schemas.modes import *
 from lswifi.schemas.out import *
 from lswifi.schemas.phy import *
@@ -51,48 +49,47 @@ from lswifi.schemas.rnr import *
 from lswifi.schemas.security import *
 from lswifi.schemas.signalquality import *
 
+DOT11_SSID_MAX_LENGTH = 32
+
+
+class InformationElement:
+    """Data class for an 802.11 Information Element"""
+
+    def __init__(self, eid, name, length, decoded, body, pbody):
+        self.eid = eid
+        self.name = name
+        self.length = length
+        self.decoded = decoded
+        self.body = body
+        self.pbody = pbody
+
+    def __str__(self):
+        return f"Element ID: {self.eid}\nName: {self.name}\nLength: {self.length}\nDecoded: {self.decoded}\nBody: {self.body}\nPretty Body: {self.pbody}"
+
 
 class WirelessNetworkBss:
     def __init__(
         self,
-        bss_entry,
-        connected_bssid=None,
+        bss: BssRecord,
         is_byte_input_file=False,
         is_bytes_arg=False,
         is_pcap=False,
         pcap_ies=None,
     ):
         """
-        bss_entry:
-        ("dot11Ssid", Dot11SSID),
-        ("PhyId", c_ulong),
-        ("dot11Bssid", DOT11_MAC_ADDRESS),
-        ("dot11BssType", DOT11_BSS_TYPE),
-        ("dot11BssPhyType", DOT11_PHY_TYPE),
-        ("Rssi", c_long),
-        ("LinkQuality", c_ulong),
-        ("InRegDomain", c_bool),
-        ("BeaconPeriod", c_ushort),
-        ("Timestamp", c_ulonglong),
-        ("HostTimestamp", c_ulonglong),
-        ("CapabilityInformation", c_ushort),
-        ("ChCenterFrequency", c_ulong),
-        ("WlanRateSet", WLANRateSet),
-        ("IeOffset", c_ulong),
-        ("IeSize", c_ulong),
-        :param bss_entry:
+        :param bss: platform-neutral scan record from a backend or a capture
+        :param is_byte_input_file: decoding a .bss file; there are no IEs
+        :param is_bytes_arg: only keep the raw bytes, do not decode IEs
+        :param is_pcap: decoding a capture
+        :param pcap_ies: IE buffer to decode instead of bss.ies (captures)
         """
         # init values before parsing IEs
         self.log = logging.getLogger(__name__)
         self.is_byte_file = is_byte_input_file
         try:
-            _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
-                "utf-8"
-            )
+            _ssid = bss.ssid[:DOT11_SSID_MAX_LENGTH].decode("utf-8")
         except UnicodeDecodeError:
-            _ssid = bss_entry.dot11Ssid.SSID[: WLAN_API.DOT11_SSID_MAX_LENGTH].decode(
-                "latin-1"
-            )
+            _ssid = bss.ssid[:DOT11_SSID_MAX_LENGTH].decode("latin-1")
         try:
             # print("LEN: {}, SSID: {}".format(len(_ssid), _ssid))
             self.ssid = OutObject(
@@ -101,48 +98,51 @@ class WirelessNetworkBss:
                 align=Alignment.RIGHT,
                 subheader="[Network Name]",
             )
-            self.channel_number = ChannelNumber(bss_entry)
+            self.channel_number = ChannelNumber(bss.frequency_mhz)
             self.channel_frequency = OutObject(
-                value=f"{float(bss_entry.ChCenterFrequency / 1000):.0f}",
+                value=f"{bss.frequency_mhz}",
                 header="FREQ.",
                 subheader="[GHz]",
             )
             self.bssid = BSSID(
-                bss_entry, connected_bssid, header="BSSID", subheader="[MAC Address]"
+                bss.bssid, bss.connected, header="BSSID", subheader="[MAC Address]"
             )
-            self.phy_id = bss_entry.PhyId
-            self.bss_type = OutObject(
-                value=WLAN_API.DOT11_BSS_TYPE_DICT[bss_entry.dot11BssType],
-                header="TYPE",
-            )
-            self.phy_type = PHYType(bss_entry)
-            self.rssi = OutObject(value=bss_entry.Rssi, header="RSSI", subheader="dBm")
-            self.signal_quality = SignalQuality(
-                value=bss_entry.LinkQuality, header="QUAL"
-            )
-            self.has_country_code = bss_entry.InRegDomain
-            self.timestamp = bss_entry.Timestamp
-            self.host_timestamp = bss_entry.HostTimestamp
+            self.phy_id = bss.phy_id
+            self.bss_type = OutObject(value=bss.bss_type, header="TYPE")
+            self.phy_type = PHYType(bss.phy_name)
+            self.rssi = OutObject(value=bss.rssi_dbm, header="RSSI", subheader="dBm")
+            self.signal_quality = SignalQuality(value=bss.link_quality, header="QUAL")
+            self.has_country_code = bss.in_reg_domain
+            self.timestamp = bss.tsf
+            self.host_timestamp = bss.host_timestamp
             self.uptime = OutObject(
                 value=self.convert_timestamp_to_uptime(self.timestamp),
                 header="AP UPTIME",
                 subheader="[approx.]",
             )
-            self.beacon_period = bss_entry.BeaconPeriod
+            self.beacon_period = bss.beacon_interval_tu
             self.beacon_interval = BeaconInterval(
-                value=bss_entry.BeaconPeriod, header="BEACON", subheader="[ms]"
+                value=bss.beacon_interval_tu, header="BEACON", subheader="[ms]"
             )
-            self.channel_number_marked = ChannelNumber(bss_entry)
+            self.channel_number_marked = ChannelNumber(bss.frequency_mhz)
             self.channel_frequency = OutObject(
-                value=f"{float(bss_entry.ChCenterFrequency / 1000):.0f}",  # initially unit is MHz but converted to GHz after IEs are parsed below
+                value=f"{bss.frequency_mhz}",  # initially unit is MHz but converted to GHz after IEs are parsed below
                 header="FREQ.",
                 subheader="[GHz]",
             )
             # self.is_5ghz is used because sometime 2.4 GHz networks include VHT IEs
             self.is_5ghz = is_five_band(int(self.channel_frequency.value) / 1000)
 
-            self.channel_width = OutObject(value=20, header="WIDTH", subheader="[MHz]")
-            self.wlanrateset = Rates(bss_entry)
+            # the OS-reported width only fills in when there are no IEs to parse
+            self.channel_width = OutObject(
+                value=(bss.channel_width_mhz if not bss.ies else None) or 20,
+                header="WIDTH",
+                subheader="[MHz]",
+            )
+            if bss.rate_set is not None:
+                self.wlanrateset = Rates(bss.rate_set)
+            else:
+                self.wlanrateset = Rates.from_ies(bss.ies)
             self.ie_rates = OutObject(
                 header="SUPPORTED RATES",
                 align=Alignment.CENTER,
@@ -152,8 +152,8 @@ class WirelessNetworkBss:
                 header="TPC",
                 subheader="dBm",
             )
-            self.capabilities = Capabilities(bss_entry)
-            self.ie_size = bss_entry.IeSize
+            self.capabilities = Capabilities(bss.capability)
+            self.ie_size = len(bss.ies)
             self.country_code = OutObject(value="--", header="CC", subheader="A2")
             self.apname = OutObject(header="AP NAME")
             self.security = Security(self.capabilities)
@@ -167,7 +167,8 @@ class WirelessNetworkBss:
             self.exie_numbers = OutList(header="EXT IEs")
             self.amendments = OutList(header="AMENDMENTS", subheader="[802.11]")
             self.modes = Modes(header="MODES")
-            self.bssbytes = bss_entry
+            # backend-native record bytes for -bytes / -exportraw; IEs otherwise
+            self.bssbytes = bss.raw if bss.raw is not None else bytes(bss.ies)
             self.bsscolor = OutList(header="BSS", subheader="COLOR")
             self.channel_marking = ""
             self.channel_list = self.channel_number.value
@@ -177,31 +178,18 @@ class WirelessNetworkBss:
             self.besteffort_acm = OutObject(header="AC_BE")
             self.background_acm = OutObject(header="AC_BK")
             self.has_rnr = False
-            self.rnrs = []
+            self.rnrs: list = []
             if not is_byte_input_file:
-                if not is_pcap:
-                    self.raw_information_elements = (
-                        self._get_information_elements_buffer(bss_entry)
-                    )
-                    # self.iesbytes = [c for c in self.raw_information_elements]
-                    self.iesbytes = bytearray(self.raw_information_elements)
-                else:
-                    self.iesbytes = bytearray(pcap_ies)
+                ie_buffer = pcap_ies if is_pcap else bss.ies
+                self.iesbytes = bytearray(ie_buffer)
 
                 # if we're going to print out bytes we don't want to process yet as we could have a malformed IE that needs to be decoded and handled correctly
                 if not is_bytes_arg:
-                    if not is_pcap:
-                        self.information_elements = (
-                            WirelessNetworkBss.process_information_elements(
-                                self, bss_entry=bss_entry
-                            )
+                    self.information_elements = (
+                        WirelessNetworkBss.process_information_elements(
+                            self, ie_buffer=ie_buffer
                         )
-                    else:
-                        self.information_elements = (
-                            WirelessNetworkBss.process_information_elements(
-                                self, ie_buffer=pcap_ies
-                            )
-                        )
+                    )
 
                     ##########################################
                     # Do stuff now that IEs have been parsed #
@@ -238,10 +226,14 @@ class WirelessNetworkBss:
                     f"Caught unexpected error while parsing information elements for BSSID {self.bssid} on channel {self.channel_number} ({self.channel_frequency.value})"
                 )
             exception_type, exception_object, exception_traceback = sys.exc_info()
-            fname = os.path.split(exception_traceback.tb_frame.f_code.co_filename)[1]
-            self.log.error(
-                f"{exception_object} {exception_type} {fname}:{exception_traceback.tb_lineno}"
-            )
+            if exception_traceback is not None:
+                fname = os.path.split(exception_traceback.tb_frame.f_code.co_filename)[
+                    1
+                ]
+                lineno = exception_traceback.tb_lineno
+            else:
+                fname, lineno = "unknown", 0
+            self.log.error(f"{exception_object} {exception_type} {fname}:{lineno}")
             raise
 
     @staticmethod
@@ -513,19 +505,6 @@ class WirelessNetworkBss:
             #    )
         return out
 
-    def _get_information_elements_buffer(self, bss_entry):
-        """
-        gets the buffer containing the information elements bytes
-        """
-        bss_entry_pointer = addressof(bss_entry)
-        ie_offset = bss_entry.IeOffset
-        data_type = c_char * bss_entry.IeSize
-        ie_buffer = data_type.from_address(bss_entry_pointer + ie_offset)
-        return ie_buffer
-        # for byte in ie_buffer:
-        #    out += str(byte)
-        # return out
-
     def _append_information_elements(
         self, element_id, element_length, element_data, information_elements
     ):
@@ -545,7 +524,7 @@ class WirelessNetworkBss:
                 for index, information_element in enumerate(decoded_list):
                     if index == 0:
                         information_elements.append(
-                            WLAN_API.InformationElement(
+                            InformationElement(
                                 parsed_ie.eid,
                                 parsed_ie.name,
                                 parsed_ie.length,
@@ -557,23 +536,23 @@ class WirelessNetworkBss:
                     else:
                         if index == decoded_list_len:
                             information_elements.append(
-                                WLAN_API.InformationElement(
+                                InformationElement(
                                     "", "", "", information_element, "", ""
                                 )
                             )
                             # add a blank line
                             information_elements.append(
-                                WLAN_API.InformationElement("", "", "", "", "", "")
+                                InformationElement("", "", "", "", "", "")
                             )
                         else:
                             information_elements.append(
-                                WLAN_API.InformationElement(
+                                InformationElement(
                                     "", "", "", information_element, "", ""
                                 )
                             )
             else:
                 information_elements.append(
-                    WLAN_API.InformationElement(
+                    InformationElement(
                         parsed_ie.eid,
                         parsed_ie.name,
                         parsed_ie.length,
@@ -583,15 +562,17 @@ class WirelessNetworkBss:
                     )
                 )
 
-    def process_information_elements(self, bss_entry=None, ie_buffer=None):
+    def process_information_elements(self, ie_buffer):
+        """
+        :param ie_buffer: IE TLV chain as bytes, or a ctypes c_char array
+        """
         self.log.debug(f"Processing information elements for BSSID {self.bssid}")
-        if bss_entry:
-            bss_entry_pointer = addressof(bss_entry)
-            ie_offset = bss_entry.IeOffset
-            data_type = c_char * bss_entry.IeSize
-        if not ie_buffer:
-            ie_buffer = data_type.from_address(bss_entry_pointer + ie_offset)
         information_elements = []
+        if len(ie_buffer) == 0:
+            return information_elements
+        if isinstance(ie_buffer, (bytes, bytearray)):
+            # iterate as 1-byte bytes objects, like a ctypes c_char array
+            ie_buffer = [ie_buffer[i : i + 1] for i in range(len(ie_buffer))]
         # init element vars
         element_id = 0
         element_length = 0
@@ -682,7 +663,7 @@ class WirelessNetworkBss:
                         for count, item in enumerate(decoded_list):
                             if count == 0:
                                 information_elements.append(
-                                    WLAN_API.InformationElement(
+                                    InformationElement(
                                         parsed_ie.eid,
                                         parsed_ie.name,
                                         str_len,
@@ -693,13 +674,11 @@ class WirelessNetworkBss:
                                 )
                             else:
                                 information_elements.append(
-                                    WLAN_API.InformationElement(
-                                        "", "", "", item, "", ""
-                                    )
+                                    InformationElement("", "", "", item, "", "")
                                 )
                     else:
                         information_elements.append(
-                            WLAN_API.InformationElement(
+                            InformationElement(
                                 parsed_ie.eid,
                                 parsed_ie.name,
                                 str_len,
@@ -748,7 +727,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.2 SSID element
         if element_id == 0:
             decoded = WirelessNetworkBss.__parse_ssid_element(element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -765,7 +744,7 @@ class WirelessNetworkBss:
                 if any(any(b == rate for b in b_rates) for rate in decoded.split(" ")):
                     self.modes.append("b")
                 self.ie_rates.value = decoded
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -780,7 +759,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_dsss_parameter_set_element(
                 element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -792,7 +771,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.6 TIM Element
         if element_id == 5:
             decoded = WirelessNetworkBss.__parse_tim_element(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -805,7 +784,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_country_information_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -817,7 +796,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.28 BSS Load element (QBSS) (11)
         if element_id == 11:
             decoded = WirelessNetworkBss.__parse_bss_load_element(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -831,7 +810,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_power_constraint_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -843,7 +822,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.17 TPC Report Element: Transmit Power (35)
         if element_id == 35:
             decoded = WirelessNetworkBss.__parse_tpc_report_element(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -855,7 +834,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.23 Quiet Element: (40)
         if element_id == 40:
             decoded = WirelessNetworkBss.__parse_quiet_element(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -867,7 +846,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.12 ERP element: (42)
         if element_id == 42:
             decoded = WirelessNetworkBss.__parse_erp_element(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -881,7 +860,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_ht_capabilities_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -893,7 +872,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.25 RSNE: RSN Information (48)
         if element_id == 48:
             decoded = WirelessNetworkBss.__parse_rsn_element(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -907,7 +886,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_rates(element_data)
             if self:
                 self.ie_rates.value += decoded
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -921,7 +900,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_ap_channel_report_element(
                 element_data, element_length
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -935,7 +914,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_mobility_domain_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -949,7 +928,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_supported_operating_classes_element(
                 element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -963,7 +942,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_ht_operation_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -974,7 +953,7 @@ class WirelessNetworkBss:
 
         if element_id == 69:
             decoded = WirelessNetworkBss.__parse_time_advertisement(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -988,7 +967,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_rm_enabled_capabilities_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1000,7 +979,7 @@ class WirelessNetworkBss:
         # 802.11-2020 9.4.2.45 Multiple BSSID element (71)
         if element_id == 71:
             decoded = WirelessNetworkBss.__parse_multiple_bssid_element(element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1016,7 +995,7 @@ class WirelessNetworkBss:
                     element_data
                 )
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1028,7 +1007,7 @@ class WirelessNetworkBss:
         # 802.11-2020 9.4.2.54 Management MIC element (76)
         if element_id == 76:
             decoded = WirelessNetworkBss.__parse_management_mic(element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1042,7 +1021,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_interworking_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1054,7 +1033,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.98 Mesh Configuration element (113)
         if element_id == 113:
             decoded = WirelessNetworkBss.__parse_mesh_configuration(self, element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1068,7 +1047,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_extended_capabilities(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1082,7 +1061,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_cisco_ccx1_ckip_device_name(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1094,7 +1073,7 @@ class WirelessNetworkBss:
         # 802.11-2016 9.4.2.26 Vendor Specific element - Symbol Proprietary (173)
         if element_id == 173:
             decoded = WirelessNetworkBss.__parse_symbol_proprietary(element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1108,7 +1087,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_vht_capabilities_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1122,7 +1101,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_vht_operation_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1134,7 +1113,7 @@ class WirelessNetworkBss:
         # 802.11-2020 Tx Power Envelope (195)
         if element_id == 195:
             decoded = WirelessNetworkBss.__parse_tx_power_envelope(element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1147,7 +1126,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_reduced_neighbor_report(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1161,7 +1140,7 @@ class WirelessNetworkBss:
             decoded = WirelessNetworkBss.__parse_vendor_specific_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1173,7 +1152,7 @@ class WirelessNetworkBss:
         # 802.11-2020 9.4.2.241 RSN eXtension element (244)
         if element_id == 244:
             decoded = WirelessNetworkBss.__parse_rsn_extension(element_data)
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
@@ -1187,7 +1166,7 @@ class WirelessNetworkBss:
             ext_name, decoded = WirelessNetworkBss.__parse_extension_tag_element(
                 self, element_data
             )
-            return WLAN_API.InformationElement(
+            return InformationElement(
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id) + f": {ext_name}",
                 element_length,
@@ -1200,7 +1179,7 @@ class WirelessNetworkBss:
             self.log.debug(
                 f"No parser built for IE {element_id} detected from {self.ssid.value} ({self.bssid.value}) on channel {self.channel_number} ({self.channel_frequency.value}) {self.rssi} dBm"
             )
-        return WLAN_API.InformationElement(
+        return InformationElement(
             element_id,
             WirelessNetworkBss.get_eid_name(element_id),
             element_length,
@@ -1305,8 +1284,9 @@ class WirelessNetworkBss:
                     break
 
                 tbtt_info = body[tbtt_info_start:tbtt_info_end]
-                parsed_info = self._parse_tbtt_info_field(
-                    tbtt_info, tbtt_count, operating_class, channel_number
+                # self is None when called from decode_bytefile_ies
+                parsed_info = WirelessNetworkBss._parse_tbtt_info_field(
+                    self, tbtt_info, tbtt_count, operating_class, channel_number
                 )
                 if parsed_info:
                     base_out += parsed_info
@@ -1427,7 +1407,7 @@ class WirelessNetworkBss:
             offset += 3
 
         if self is None:
-            return
+            return base_out
 
         # Determine channel width
         width = "--"

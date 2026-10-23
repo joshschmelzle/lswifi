@@ -27,8 +27,6 @@ import subprocess
 import sys
 import time
 import traceback
-import winreg
-from ctypes import wintypes
 from threading import Lock, Timer
 from types import SimpleNamespace
 from typing import Any
@@ -40,6 +38,11 @@ from lswifi.helpers import (
     is_two_four_band,
 )
 from lswifi.slog import message as syslog
+from lswifi.watchjson import (
+    shared_writer,
+    watch_json_requested,
+    windows_event_record,
+)
 
 # PCI Express Link Speed Encoding (PciExpressCurrentLinkSpeedEncoded)
 # https://learn.microsoft.com/en-us/windows/win32/fwp/wmi/netadaptercimprov/msft-netadapterhardwareinfosettingdata
@@ -73,18 +76,29 @@ OPEN_EXISTING = 3
 IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2 = 0x22045C
 GUID_DEVINTERFACE_USB_HUB = "{f18a0e88-c30c-11d0-8815-00a0c906bed8}"
 
-_kernel32 = ctypes.windll.kernel32
-_kernel32.CreateFileW.restype = wintypes.HANDLE
-_kernel32.CreateFileW.argtypes = [
-    wintypes.LPCWSTR,
-    wintypes.DWORD,
-    wintypes.DWORD,
-    wintypes.LPVOID,
-    wintypes.DWORD,
-    wintypes.DWORD,
-    wintypes.HANDLE,
-]
-_INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+# kernel32, winreg, and wintypes are only touched on Windows so that this
+# module can be imported elsewhere
+if sys.platform == "win32":
+    import winreg
+    from ctypes import wintypes
+
+    _kernel32 = ctypes.windll.kernel32
+    _kernel32.CreateFileW.restype = wintypes.HANDLE
+    _kernel32.CreateFileW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    _INVALID_HANDLE_VALUE = wintypes.HANDLE(-1).value
+else:
+    winreg: Any = None
+    wintypes: Any = None
+    _kernel32: Any = None
+    _INVALID_HANDLE_VALUE = None
 
 
 def get_adapter_bus_info(adapter_guid: str) -> tuple:
@@ -221,6 +235,9 @@ def _query_usb_speed_ioctl(hub_path: str, port_index: int) -> int | None:
     Returns:
         USB speed value (2=USB2.0, 3=USB3.0, 4=USB3.1+) or None on failure
     """
+    if sys.platform != "win32":
+        return None
+
     log = logging.getLogger(__name__)
 
     handle = _kernel32.CreateFileW(
@@ -313,6 +330,9 @@ def _get_usb_speed_from_pnp(pnp_device_id: str) -> int | None:
         - 3: SuperSpeed (USB 3.0)
         - 4: SuperSpeed+ (USB 3.1+)
     """
+    if sys.platform != "win32":
+        return None
+
     log = logging.getLogger(__name__)
 
     # Check if device is present first
@@ -848,6 +868,20 @@ class Client:
     def seconds_passed(self, oldepoch, seconds) -> bool:
         return time.time() - oldepoch >= seconds
 
+    def emit_watch_event(
+        self, msg, wlan_event, bssid=None, bss=None, scan_count=None
+    ) -> None:
+        """--watchevents: log the text line, or with --json write an NDJSON
+        record to stdout instead; --syslog always gets the text line"""
+        if watch_json_requested(self.args):
+            shared_writer().write(
+                windows_event_record(self.mac, wlan_event, bssid, bss, scan_count)
+            )
+        else:
+            self.log.info(msg)
+        if self.args.syslog:
+            syslog(msg, "INFO")
+
     def on_event_notification(self, wlan_event, iface_guid) -> None:
         if self.iface.guid_string == str(iface_guid):
             pass
@@ -915,35 +949,30 @@ class Client:
                             "scan_complete",
                         ]:
                             extra = f", scan: ({len(self.data)} BSSIDs found)"
+                        scan_count = len(self.data) if extra else None
                         if not bssid:
                             msg = f"({self.mac}), event: ({wlan_event})"
-                            self.log.info(msg)
-                            if self.args.syslog:
-                                syslog(msg, "INFO")
+                            self.emit_watch_event(msg, wlan_event)
                         elif bssid == "00:00:00:00:00:00":
                             msg = f"({self.mac}), bssid: ({bssid}), event: ({wlan_event}){extra}"
-                            self.log.info(msg)
-                            if self.args.syslog:
-                                syslog(msg, "INFO")
+                            self.emit_watch_event(
+                                msg, wlan_event, bssid, scan_count=scan_count
+                            )
                         else:
                             msg = f"({self.mac}), bssid: ({bssid}), freq: ({freq}), ssid: ({ssid}), rssi: ({rssi}), event: ({wlan_event}){extra}"
-                            self.log.info(msg)
-                            if self.args.syslog:
-                                syslog(msg, "INFO")
+                            self.emit_watch_event(
+                                msg, wlan_event, bssid, bssid_data, scan_count
+                            )
                 else:
                     if not squelch:
                         if bssid:
                             msg = (
                                 f"({self.mac}), bssid: ({bssid}), event: ({wlan_event})"
                             )
-                            self.log.info(msg)
-                            if self.args.syslog:
-                                syslog(msg, "INFO")
+                            self.emit_watch_event(msg, wlan_event, bssid)
                         else:
                             msg = f"({self.mac}), event: ({wlan_event})"
-                            self.log.info(msg)
-                            if self.args.syslog:
-                                syslog(msg, "INFO")
+                            self.emit_watch_event(msg, wlan_event)
 
             # if we're not watching for events and we want to return scan results
             if not self.args.event_watcher:

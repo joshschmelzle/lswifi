@@ -334,6 +334,9 @@ def setup_parser() -> argparse.ArgumentParser:
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
 
+            Watch events as JSON, one object per line (NDJSON) on stdout:
+              >lswifi --watchevents --json
+
             Print a special table for BSSes which contain Reduced Neighbor Reports:
               >lswifi -rnr
 

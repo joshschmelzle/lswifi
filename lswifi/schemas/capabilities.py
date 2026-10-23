@@ -15,15 +15,54 @@ lswifi.capabilities
 schema definition for capabilities
 """
 
-from lswifi import wlanapi as WLAN_API
+from ctypes import Structure, Union, c_ushort
+
+
+class CapabilityInformationBits(Structure):
+    """802.11-2016 9.4.1.4 Capability Information field
+
+    The 16-bit Capability Information field is used in
+      Beacon transmissions to advertise the network’s capabilities.
+    Capability Information is also used in Probe Request
+      and Probe Response frames. In this field, each bit is used as a flag
+      to advertise a particular function of the network.
+    Stations use the capability advertisement to determine
+      whether they can support all the features in the BSS.
+    Stations that do not implement all the features in the capability
+      advertisement are not allowed to join.
+    """
+
+    _fields_ = [
+        ("ESS", c_ushort, 1),  # bit 0
+        ("IBSS", c_ushort, 1),  # bit 1
+        ("CF_POLLABLE", c_ushort, 1),  # bit 2
+        ("CF_POLL_REQUEST", c_ushort, 1),  # bit 3
+        ("PRIVACY", c_ushort, 1),  # bit 4
+        ("SHORT_PREAMBLE", c_ushort, 1),  # bit 5
+        ("PBCC", c_ushort, 1),  # bit 6 - Packet Binary Convolutional Code
+        ("CHANNEL_AGILITY", c_ushort, 1),  # bit 7
+        ("SPECTRUM_MANAGEMENT", c_ushort, 1),  # bit 8
+        ("QOS", c_ushort, 1),  # bit 9
+        ("SHORT_SLOT_TIME", c_ushort, 1),  # bit 10
+        ("APSD", c_ushort, 1),  # bit 11 - WMM Automatic Power Save Delievery
+        ("RADIO_MEASUREMENT", c_ushort, 1),  # bit 12
+        ("DSSS_OFDM", c_ushort, 1),  # bit 13
+        ("DELAYED_BLOCK_ACK", c_ushort, 1),  # bit 14
+        ("IMMEDIATE_BLOCK_ACK", c_ushort, 1),  # bit 15
+    ]
+
+
+class CapabilityInformation(Union):
+    _fields_ = [("bits", CapabilityInformationBits), ("asbyte", c_ushort)]
 
 
 class Capabilities:
     """Base class for Capabilities"""
 
-    def __init__(self, bss_entry):
-        self.value = bss_entry.CapabilityInformation
-        self.ci = WLAN_API.CapabilityInformation()
+    def __init__(self, capability: int):
+        """:param capability: 16-bit Capability Information field"""
+        self.value = capability
+        self.ci = CapabilityInformation()
         self.ci.asbyte = self.value
         self.hex = hex(self.value)
         self.ess = self.ci.bits.ESS
