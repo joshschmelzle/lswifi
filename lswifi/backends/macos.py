@@ -12,7 +12,7 @@
 lswifi.backends.macos
 ~~~~~~~~~~~~~~~~~~~~~
 
-CoreWLAN backend via PyObjC (pip install "lswifi[macos]").
+CoreWLAN backend via PyObjC (pyobjc-framework-CoreWLAN, installed with lswifi on macOS).
 
 CoreWLAN is imported lazily by MacOSBackend so this module, and the mapping
 functions in it, import on any OS.
@@ -172,8 +172,8 @@ class MacOSBackend:
                 import CoreWLAN as corewlan  # type: ignore[import-not-found,import-untyped,no-redef]
             except ImportError as error:
                 raise BackendUnavailableError(
-                    "CoreWLAN is not available to Python; install the macOS "
-                    "extra: pip install 'lswifi[macos]'"
+                    "CoreWLAN is not available to Python; reinstall lswifi "
+                    "or run: pip install pyobjc-framework-CoreWLAN"
                 ) from error
         self.corewlan = corewlan
         self.client = corewlan.CWWiFiClient.sharedWiFiClient()

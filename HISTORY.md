@@ -4,6 +4,12 @@ Release History
 RELEASED
 --------
 
+0.2.1 (2026-10-23)
+------------------
+
+- macOS: install PyObjC CoreWLAN by default. Plain `pip install lswifi` works; no `lswifi[macos]` extra needed (kept as an alias).
+- Package metadata lists macOS.
+
 0.2.0 (2026-10-23)
 ------------------
 

@@ -407,7 +407,7 @@ def _corewlan_available():
     return True
 
 
-@pytest.mark.skipif(not _corewlan_available(), reason="needs macOS with lswifi[macos]")
+@pytest.mark.skipif(not _corewlan_available(), reason="needs macOS with CoreWLAN")
 class TestRealScan:
     def test_scan(self):
         backend = MacOSBackend()
