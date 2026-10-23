@@ -391,6 +391,34 @@ class TestAirportdLogClassifier:
         )
         assert "CWXPCInterfaceContext" not in event.detail
 
+    def test_one_line_roam_block_keeps_fields_after_bssid(self):
+        # Bugbot: the NSData "}" in BSSID must not end the block early
+        (event,) = AirportdLogClassifier(Clock()).feed(
+            ROAM_LINES[1]
+            + " BSSID = {length = 6, bytes = 0x020000000008}; CHANNEL = 149;"
+            + ' REASON = "LowRSSI"; }\n'
+        )
+        assert event.fields == {
+            "roam_target_bssid": "02:00:00:00:00:08",
+            "roam_target_channel": 149,
+            "roam_reason": "LowRSSI",
+        }
+
+    def test_channel_flags_do_not_override_target_channel(self):
+        # Bugbot: only the CHANNEL key is the target, not CHANNEL_FLAGS etc.
+        classifier = AirportdLogClassifier(Clock())
+        lines = [
+            ROAM_LINES[1],
+            "    CHANNEL = 149;",
+            "    CHANNEL_FLAGS = 8210;",
+            "    CHANNELFLAGS = 1040;",
+            "}",
+        ]
+        events = [e for line in lines for e in classifier.feed(line)]
+        assert events[0].fields == {"roam_target_channel": 149}
+        assert "roam_target_channel: (149)" in events[0].detail
+        assert "8210" not in events[0].detail and "1040" not in events[0].detail
+
     def test_roam_block_cut_short_by_next_entry(self):
         classifier = AirportdLogClassifier(Clock())
         classifier.feed(ROAM_LINES[1])

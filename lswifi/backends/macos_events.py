@@ -454,6 +454,8 @@ _ROAM_REQUEST = "Requesting Roam : {"
 _ROAM_BLOCK_ITEM = re.compile(r"^\s*([A-Za-z0-9_]+)\s*=\s*(.*?);?\s*$")
 _NSDATA_BYTES = re.compile(r"bytes\s*=\s*0x([0-9A-Fa-f]{12})")
 # a new unified log entry (compact style) starts with a timestamp
+# only the target channel itself; not CHANNEL_FLAGS and friends
+_ROAM_CHANNEL_KEYS = frozenset({"CHANNEL", "ROAM_CHANNEL", "ROAMTOCHANNEL", "ROAM_TO_CHANNEL"})
 _TRIGGER_REASON = re.compile(r"reason\s*[=:]\s*([A-Za-z0-9_]+)")
 _LOG_ENTRY = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 _WAKE = re.compile(r"airportdProcessWake: Received (dark|full) wake event")
@@ -527,7 +529,8 @@ class AirportdLogClassifier:
         if _ROAM_REQUEST in line:
             rest = line.split(_ROAM_REQUEST, 1)[1]
             if "}" in rest:  # whole block on one line
-                events.append(self._roam_request(rest.split("}", 1)[0].split(";")))
+                # NSData values like BSSID carry their own {...}; the block ends at the last }
+                events.append(self._roam_request(rest.rsplit("}", 1)[0].split(";")))
             else:
                 self.roam_block = [rest] if rest.strip() else []
             return events
@@ -587,7 +590,11 @@ class AirportdLogClassifier:
                 if bssid:
                     parts.append(f"roam_target_bssid: ({bssid})")
                     fields["roam_target_bssid"] = bssid
-            elif "CHANNEL" in key and value.isdigit():
+            elif (
+                key in _ROAM_CHANNEL_KEYS
+                and value.isdigit()
+                and "roam_target_channel" not in fields
+            ):
                 parts.append(f"roam_target_channel: ({value})")
                 fields["roam_target_channel"] = int(value)
             elif "REASON" in key and "roam_reason" not in fields:
