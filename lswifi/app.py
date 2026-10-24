@@ -59,6 +59,13 @@ def rssi_sort_key(rssi):
     return -1000 if rssi is None else rssi
 
 
+def export_rssi_sort_key(row):
+    try:
+        return rssi_sort_key(int(row["rssi"]))
+    except ValueError:
+        return rssi_sort_key(None)
+
+
 class lswifi:
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -943,8 +950,8 @@ class lswifi:
                 key=lambda x: rssi_sort_key(x[get_index("RSSI", out_results)].value),
                 reverse=False,
             )
-            csv_out = sorted(csv_out, key=itemgetter("rssi"), reverse=False)
-            json_out = sorted(json_out, key=itemgetter("rssi"), reverse=False)
+            csv_out = sorted(csv_out, key=export_rssi_sort_key, reverse=True)
+            json_out = sorted(json_out, key=export_rssi_sort_key, reverse=True)
 
         if args.json:
             json_file_exists = os.path.exists(json_file_name)
