@@ -28,7 +28,9 @@ pillow==13.0.0
     # via genbadge
 pluggy==1.5.0
     # via pytest
-pytest==8.3.5
+pygments==2.21.0
+    # via pytest
+pytest==9.0.3
     # via -r tests.in
 requests==2.33.0
     # via genbadge

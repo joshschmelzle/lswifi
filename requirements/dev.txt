@@ -78,6 +78,8 @@ pluggy==1.7.0
     #   tox
 pre-commit==4.7.0
     # via -r dev.in
+pygments==2.21.0
+    # via pytest
 pyinstaller==6.22.3
     # via -r dev.in
 pyinstaller-hooks-contrib==2026.9
@@ -88,7 +90,7 @@ pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
-pytest==8.3.5
+pytest==9.0.3
     # via -r tests.in
 python-discovery==1.6.4
     # via
