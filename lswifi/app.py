@@ -54,6 +54,11 @@ from lswifi.pcap import PCAP, parse_radiotap_header
 from lswifi.schemas.out import OUT_TUPLE, SubHeader
 
 
+def rssi_sort_key(rssi):
+    """Sort key for RSSI; unknown (None, e.g. Linux drivers without dBm) sorts weakest"""
+    return -1000 if rssi is None else rssi
+
+
 class lswifi:
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -692,7 +697,7 @@ class lswifi:
                 # handle weakest rssi value we want to see displayed to the screen
                 if args.all:
                     pass
-                elif bss.rssi.value < args.sensitivity:
+                elif bss.rssi.value is not None and bss.rssi.value < args.sensitivity:
                     log.debug(
                         f"excluding {bss.bssid} ({bss.ssid}) because bss.rssi.value {bss.rssi.value} is < {args.sensitivity}"
                     )
@@ -918,7 +923,7 @@ class lswifi:
 
         rnr_results = sorted(
             rnr_results,
-            key=lambda x: x[get_index("RSSI", rnr_results)].value,
+            key=lambda x: rssi_sort_key(x[get_index("RSSI", rnr_results)].value),
             reverse=False,
         )
 
@@ -935,7 +940,7 @@ class lswifi:
         else:  # sort by RSSI
             out_results = sorted(
                 out_results,
-                key=lambda x: x[get_index("RSSI", out_results)].value,
+                key=lambda x: rssi_sort_key(x[get_index("RSSI", out_results)].value),
                 reverse=False,
             )
             csv_out = sorted(csv_out, key=itemgetter("rssi"), reverse=False)
@@ -1001,7 +1006,11 @@ class lswifi:
                 ):
                     continue
 
-                if not args.all and bss.rssi.value < args.sensitivity:
+                if (
+                    not args.all
+                    and bss.rssi.value is not None
+                    and bss.rssi.value < args.sensitivity
+                ):
                     continue
 
                 if (args.a or args.g or args.six) and not self._bss_matches_band_filter(

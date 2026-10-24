@@ -64,7 +64,7 @@ def bss_attrs(
     last: int,
     freq: int,
     ssid: bytes = b"ExampleNet",
-    mbm: int = -5500,
+    mbm: int | None = -5500,
     status: int | None = None,
     presp: bool = False,
     beacon_only: bool = False,
@@ -77,7 +77,9 @@ def bss_attrs(
         nl.attr_u64(nl.BSS_TSF, 212_000_000),
         nl.attr_u16(nl.BSS_BEACON_INTERVAL, 100),
         nl.attr_u16(nl.BSS_CAPABILITY, 0x0411),
-        nl.attr_s32(nl.BSS_SIGNAL_MBM, mbm),
+        nl.attr_s32(nl.BSS_SIGNAL_MBM, mbm)
+        if mbm is not None
+        else nl.attr_u8(nl.BSS_SIGNAL_UNSPEC, 60),
         nl.attr_u32(nl.BSS_SEEN_MS_AGO, 1200),
         nl.attr_u32(nl.BSS_CHAN_WIDTH, 0),
     ]
@@ -164,6 +166,7 @@ class FakeKernel:
         self.trigger_error = 0
         self.scan_event = nl.CMD_NEW_SCAN_RESULTS
         self.alpha2 = "US"
+        self.bands = [0, 1]
         self.sockets: list[FakeSocket] = []
         self.sent: list[nl.GenlMessage] = []
 
@@ -217,6 +220,15 @@ class FakeKernel:
                 [
                     nl.pack_nested(nl.ATTR_BSS, [b]) + nl.attr_u32(nl.ATTR_IFINDEX, 5)
                     for b in self.bss
+                ],
+            )
+        if msg.cmd == nl.CMD_GET_WIPHY:
+            bands = [nl.pack_attr(band, b"") for band in self.bands]
+            return multi(
+                3,  # NL80211_CMD_NEW_WIPHY
+                [
+                    nl.attr_u32(nl.ATTR_WIPHY, 0)
+                    + nl.pack_nested(nl.ATTR_WIPHY_BANDS, bands)
                 ],
             )
         if msg.cmd == nl.CMD_GET_STATION:
@@ -549,11 +561,30 @@ class TestScan:
         with pytest.raises(BackendError, match="is down"):
             backend.scan(self.iface(backend))
 
+    def scan_flags(self, kernel):
+        (trigger,) = [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN]
+        return nl.get_uint(trigger.attrs, nl.ATTR_SCAN_FLAGS)
+
+    def test_colocated_6ghz_when_wiphy_has_6ghz(self, kernel, backend):
+        kernel.bands = [0, 1, nl.BAND_6GHZ]
+        backend.scan(self.iface(backend))
+        assert self.scan_flags(kernel) == nl.SCAN_FLAG_COLOCATED_6GHZ
+
+    def test_no_6ghz_flag_without_6ghz(self, kernel, backend):
+        backend.scan(self.iface(backend))
+        assert self.scan_flags(kernel) is None
+
+    def test_wiphy_bands_cached(self, kernel, backend):
+        backend.scan(self.iface(backend))
+        backend.scan(self.iface(backend))
+        assert [m.cmd for m in kernel.sent].count(nl.CMD_GET_WIPHY) == 1
+
     def test_unprivileged_empty_cache(self, kernel, backend, caplog):
         kernel.trigger_error = errno.EPERM
         kernel.bss = []
         assert backend.scan(self.iface(backend)) == []
         assert "no cached scan results" in caplog.text
+        assert "nmcli device wifi rescan" in caplog.text
 
     def test_busy_waits_for_running_scan(self, kernel, backend, caplog):
         kernel.trigger_error = errno.EBUSY
@@ -800,3 +831,39 @@ def test_native_lookup_by_name(kernel, backend):
     assert isinstance(backend._native(iface), LinuxInterface)
     with pytest.raises(BackendError):
         backend._native(InterfaceInfo("wlan9", "", "", "", "", native=None))
+
+
+class TestUnknownSignal:
+    """Drivers that send only SIGNAL_UNSPEC: no fake dBm, not threshold-filtered"""
+
+    def test_record(self):
+        attrs = nl.parse_attrs(bss_attrs(0x31, 5180, mbm=None, channel=36))
+        record = bss_to_record(attrs)
+        assert record.rssi_dbm is None
+        assert record.link_quality == 60
+
+    def test_shown_and_sorted(self, tmp_path):
+        from lswifi import app, appsetup
+        from lswifi.elements import WirelessNetworkBss
+
+        records = [
+            bss_to_record(nl.parse_attrs(bss_attrs(0x31, 5180, mbm=None, channel=36))),
+            bss_to_record(nl.parse_attrs(bss_attrs(0x32, 5180, mbm=-4000, channel=36))),
+        ]
+
+        class Session:
+            data = [WirelessNetworkBss(r) for r in records]
+            mac = "02:00:00:00:00:13"
+            last_scan_time_iso = "2026-01-01T00:00:00"
+
+        args = appsetup.setup_parser().parse_args(
+            ["-t", "-60", "--json", str(tmp_path / "out.json")]
+        )
+        out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
+            Session(), False, "", args.json, args
+        )
+        assert {row["bssid"] for row in json_out} == {
+            "02:00:00:00:00:31",
+            "02:00:00:00:00:32",
+        }
+        assert len(out) == 2

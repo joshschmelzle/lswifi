@@ -324,6 +324,7 @@ class LinuxBackend:
         self._netlink = netlink or nl.GenericNetlink
         self.sysfs = sysfs or Sysfs()
         self.scan_timeout = scan_timeout
+        self._six_ghz: dict[int, bool] = {}
         try:
             self.netlink().close()
         except OSError as error:
@@ -436,6 +437,34 @@ class LinuxBackend:
 
     # --- scanning ---------------------------------------------------------
 
+    def supports_6ghz(self, native: LinuxInterface) -> bool:
+        """Whether the interface's wiphy lists a 6 GHz band"""
+        if native.wiphy is None:
+            return False
+        if native.wiphy in self._six_ghz:
+            return self._six_ghz[native.wiphy]
+        supported = False
+        try:
+            with self.netlink() as sock:
+                replies = sock.request(
+                    nl.CMD_GET_WIPHY,
+                    nl.attr_u32(nl.ATTR_WIPHY, native.wiphy)
+                    + nl.attr_flag(nl.ATTR_SPLIT_WIPHY_DUMP),
+                    dump=True,
+                )
+        except OSError as error:
+            log.debug("GET_WIPHY for phy%s failed: %s", native.wiphy, error)
+            replies = []
+        for reply in replies:
+            if nl.get_uint(reply.attrs, nl.ATTR_WIPHY) != native.wiphy:
+                continue
+            bands = reply.attrs.get(nl.ATTR_WIPHY_BANDS)
+            if bands and nl.BAND_6GHZ in nl.parse_attrs(bands):
+                supported = True
+        log.debug("phy%s 6 GHz support: %s", native.wiphy, supported)
+        self._six_ghz[native.wiphy] = supported
+        return supported
+
     def trigger_scan(self, native: LinuxInterface) -> bool:
         """Trigger a wildcard active scan and wait for it to finish.
 
@@ -449,6 +478,14 @@ class LinuxBackend:
                 nl.ATTR_SCAN_SSIDS,
                 [nl.pack_attr(1, b"")],  # wildcard SSID
             )
+            if self.supports_6ghz(native):
+                # also probe 6 GHz APs advertised in RNRs on 2.4/5 GHz
+                request += nl.attr_u32(nl.ATTR_SCAN_FLAGS, nl.SCAN_FLAG_COLOCATED_6GHZ)
+            if native.ssid:
+                log.info(
+                    "%s is associated; the scan may briefly pause its traffic",
+                    native.name,
+                )
             try:
                 with self.netlink() as sock:
                     sock.request(nl.CMD_TRIGGER_SCAN, request)
@@ -520,7 +557,8 @@ class LinuxBackend:
         if not fresh and not records:
             log.warning(
                 "%s: the kernel has no cached scan results (nothing has scanned "
-                "recently); run lswifi with sudo to scan",
+                "recently); run lswifi with sudo to scan, or fill the cache with "
+                "'nmcli device wifi rescan'",
                 native.name,
             )
         elif not fresh:

@@ -56,12 +56,14 @@ $ python3 -m pip install lswifi
 $ sudo lswifi
 ```
 
-Triggering a scan needs root (`CAP_NET_ADMIN`). With `sudo`, `lswifi` starts a scan on each managed interface, waits for the kernel to finish (up to 30 seconds), and reads the results. Without it, `lswifi` warns and shows the kernel's cached results from the last scan anyone ran, which may be stale or incomplete. If nothing has scanned recently the cache is empty, and you get a warning saying so. The interface must be up (`sudo ip link set wlan0 up`); it does not need to be connected.
+Triggering a scan needs root (`CAP_NET_ADMIN`). With `sudo`, `lswifi` starts a scan on each managed interface, waits for the kernel to finish (up to 30 seconds), and reads the results. Without it, `lswifi` warns and shows the kernel's cached results from the last scan anyone ran, which may be stale or incomplete. The kernel drops entries older than about 30 seconds, so if nothing has scanned recently the cache is empty and you get a warning saying so; `nmcli device wifi rescan` (no `sudo` needed on most desktops) fills it. The interface must be up (`sudo ip link set wlan0 up`); it does not need to be connected.
 
 Known limitations on Linux:
 
 - Only managed (station) and P2P client interfaces are scanned. Monitor, AP, and mesh interfaces are skipped.
-- Whether 6 GHz networks show up depends on the adapter, its driver and firmware, and the regulatory domain (`iw reg get`).
+- Whether 6 GHz networks show up depends on the adapter, its driver and firmware, and the regulatory domain (`iw reg get`). When the adapter lists a 6 GHz band, `lswifi` asks the kernel to also probe 6 GHz APs found in Reduced Neighbor Reports.
+- The scan cache is shared with NetworkManager, iwd, and wpa_supplicant, so results include what they saw. A scan from `lswifi` does not use NetworkManager's scan MAC randomization setting. Scanning while connected can briefly pause traffic.
+- Some drivers report signal only on a driver-specific 0-100 scale. Those networks show an unknown RSSI and are not filtered by `-t`.
 - nl80211 has no PHY type or link quality field. The PHY column comes from the information elements, so it shows `ax`/`be` and is blank for older 802.11n/ac networks.
 - Bus info comes from sysfs, and Transmit Power is shown only when the driver reports it.
 - `--supported` is not available on Linux.
