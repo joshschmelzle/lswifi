@@ -16,9 +16,12 @@ platform-neutral scan records and the backend protocol
 """
 
 import datetime
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol
+
+log = logging.getLogger(__name__)
 
 
 class BackendError(RuntimeError):
@@ -128,10 +131,18 @@ class RecordScanSession:
         self.scan_finished = False
         is_bytes_arg = bool(getattr(self.args, "bytes", None))
         records = self.backend.scan(self.iface)
-        self.data = [
-            self.to_bss(WirelessNetworkBss(record, is_bytes_arg=is_bytes_arg), record)
-            for record in records
-        ] or None
+        parsed = []
+        for record in records:
+            try:
+                parsed.append(
+                    self.to_bss(
+                        WirelessNetworkBss(record, is_bytes_arg=is_bytes_arg),
+                        record,
+                    )
+                )
+            except Exception:
+                log.error("skipping BSS %s", record.bssid)
+        self.data = parsed or None
         now = datetime.datetime.now()
         self.last_scan_time_epoch = time.time()
         self.last_scan_time_iso = now.astimezone().isoformat(timespec="milliseconds")

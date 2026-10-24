@@ -114,6 +114,8 @@ class OutObject:
             self._value = value
 
     def __str__(self):
+        if self._value is None:
+            return "--"
         return str(self._value)
 
     def __repr__(self):

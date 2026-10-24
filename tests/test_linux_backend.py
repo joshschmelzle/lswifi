@@ -916,4 +916,7 @@ class TestUnknownSignal:
             "02:00:00:00:00:31",
             "02:00:00:00:00:32",
         }
+        by_bssid = {row["bssid"]: row["rssi"] for row in json_out}
+        assert by_bssid["02:00:00:00:00:31"] == "--"
+        assert by_bssid["02:00:00:00:00:32"] == "-40"
         assert len(out) == 2

@@ -29,7 +29,6 @@ import sys
 import time
 import traceback
 from ctypes import POINTER, cast, create_string_buffer
-from operator import itemgetter
 from time import sleep
 
 # app imports
@@ -64,6 +63,24 @@ def export_rssi_sort_key(row):
         return rssi_sort_key(int(row["rssi"]))
     except ValueError:
         return rssi_sort_key(None)
+
+
+def uptime_sort_key(uptime):
+    """Sort key for AP uptime text. Unparseable values (for example "--") sort last."""
+    try:
+        days, clock = str(uptime).split("d", 1)
+        hours, minutes, seconds = clock.strip().split(":")
+        elapsed = (
+            int(days) * 86400 + int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+        )
+    except (ValueError, TypeError):
+        return (1, 0)
+    return (0, elapsed)
+
+
+def rate_list(rates):
+    text = str(rates).strip()
+    return text.split(" ") if text else []
 
 
 class lswifi:
@@ -850,8 +867,8 @@ class lswifi:
                             "modes": sorted(bss.modes.elements),
                             "pmf": str(bss.pmf).strip(),
                             "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": bss.wlanrateset.basic.split(" "),
-                            "rates_data": bss.wlanrateset.data.split(" "),
+                            "rates_basic": rate_list(bss.wlanrateset.basic),
+                            "rates_data": rate_list(bss.wlanrateset.data),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
                             "spatial_streams": str(bss.spatial_streams),
@@ -882,8 +899,8 @@ class lswifi:
                             "modes": "/".join(sorted(bss.modes.elements)),
                             "pmf": str(bss.pmf).strip(),
                             "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": "/".join(bss.wlanrateset.basic.split(" ")),
-                            "rates_data": "/".join(bss.wlanrateset.data.split(" ")),
+                            "rates_basic": "/".join(rate_list(bss.wlanrateset.basic)),
+                            "rates_data": "/".join(rate_list(bss.wlanrateset.data)),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
                             "spatial_streams": str(bss.spatial_streams),
@@ -934,16 +951,15 @@ class lswifi:
             reverse=False,
         )
 
-        if args.uptime:  # sort by uptime
+        if args.uptime:
             out_results = sorted(
                 out_results,
-                key=lambda x: int(
-                    x[get_index("UPTIME", out_results)].value.split("d")[0]
+                key=lambda x: uptime_sort_key(
+                    x[get_index("UPTIME", out_results)].value
                 ),
-                reverse=False,
             )
-            csv_out = sorted(csv_out, key=itemgetter("uptime"), reverse=False)
-            json_out = sorted(json_out, key=itemgetter("uptime"), reverse=False)
+            csv_out = sorted(csv_out, key=lambda row: uptime_sort_key(row["uptime"]))
+            json_out = sorted(json_out, key=lambda row: uptime_sort_key(row["uptime"]))
         else:  # sort by RSSI
             out_results = sorted(
                 out_results,
@@ -955,26 +971,28 @@ class lswifi:
 
         if args.json:
             json_file_exists = os.path.exists(json_file_name)
-            mode = "r+" if json_file_exists else "w"
             if not json_out:
                 log.info(f"nothing found to export as JSON to {json_file_name}")
             else:
                 log.info(f"exporting scans as JSON to {json_file_name}")
-                with open(json_file_name, mode) as file:
-                    if json_file_exists:
+                if json_file_exists:
+                    with open(json_file_name) as file:
                         file_data = json.load(file)
-                        file_data["scan_data"].extend(json_out)
-                        file.seek(0)
-                        json.dump(file_data, file, indent=args.json_indent)
-                    else:
-                        file_data = json.dumps(
-                            {
-                                "lswifi": {"version": f"lswifi {__version__}"},
-                                "scan_data": json_out,
-                            },
-                            indent=args.json_indent,
-                        )
-                        file.write(file_data)
+                    flat = []
+                    for item in file_data["scan_data"]:
+                        if isinstance(item, list):
+                            flat.extend(item)
+                        else:
+                            flat.append(item)
+                    flat.extend(json_out)
+                    file_data["scan_data"] = flat
+                else:
+                    file_data = {
+                        "lswifi": {"version": f"lswifi {__version__}"},
+                        "scan_data": json_out,
+                    }
+                with open(json_file_name, "w") as file:
+                    json.dump(file_data, file, indent=args.json_indent)
 
         if args.csv:
             has_headings = False
@@ -1025,7 +1043,9 @@ class lswifi:
                 ):
                     continue
 
-                if args.width is not None and args.width not in str(bss.channel_width):
+                if args.width is not None and int(args.width) != int(
+                    bss.channel_width.value
+                ):
                     continue
 
                 if args.include is not None and args.include not in str(bss.ssid):
