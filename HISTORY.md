@@ -4,6 +4,18 @@ Release History
 RELEASED
 --------
 
+0.3.0 (2026-10-23)
+------------------
+
+- Add Linux support through an nl80211 (generic netlink) backend built on the standard library. No new dependencies.
+- Linux: triggering a scan needs root (`CAP_NET_ADMIN`). Without it, `lswifi` warns and shows the kernel's cached results.
+- Linux: scan 2.4, 5 and 6 GHz. When the adapter lists a 6 GHz band, also probe 6 GHz APs found in Reduced Neighbor Reports.
+- Linux: `--list-interfaces` and `--get-interfaces` (with `--json`), and mark the connected BSS.
+- Linux: `--watchevents`, including `--json`, for connect, failed connect, roam, disconnect, port authorized and channel switch.
+- `--supported` is not available on Linux.
+- Unknown RSSI (drivers that report no dBm) sorts weakest and is not dropped by `-t`.
+- Package metadata lists Linux.
+
 0.2.1 (2026-10-23)
 ------------------
 
