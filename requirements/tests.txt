@@ -30,7 +30,7 @@ pluggy==1.5.0
     # via pytest
 pytest==8.3.5
     # via -r tests.in
-requests==2.32.5
+requests==2.33.0
     # via genbadge
 scapy==2.6.1
     # via -r tests.in
