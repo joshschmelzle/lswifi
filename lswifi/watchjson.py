@@ -13,7 +13,7 @@ lswifi.watchjson
 ~~~~~~~~~~~~~~~~
 
 ``--watchevents --json``: one JSON object per line (NDJSON) on stdout,
-shared by the Windows and macOS backends so both emit the same schema.
+shared by the Windows, macOS, and Linux backends so all emit the same schema.
 
 Every object has ``timestamp`` (ISO 8601, local offset, milliseconds, the
 same style as the ``--json`` scan export), ``interface_mac`` and ``event``.

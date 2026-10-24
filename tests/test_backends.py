@@ -237,11 +237,17 @@ class TestFactory:
     def test_backend_name(self, platform, name):
         assert backend_name_for_platform(platform) == name
 
-    @pytest.mark.parametrize("platform, label", [("linux", "Linux")])
-    def test_not_implemented(self, platform, label):
-        with pytest.raises(BackendNotImplementedError, match=label) as excinfo:
-            get_backend(platform)
-        assert "-decode" in str(excinfo.value)
+    def test_linux_without_nl80211(self, monkeypatch):
+        import errno
+
+        from lswifi.backends import nl80211
+
+        def no_family(*args, **kwargs):
+            raise OSError(errno.ENOENT, "nl80211 not found")
+
+        monkeypatch.setattr(nl80211, "GenericNetlink", no_family)
+        with pytest.raises(BackendUnavailableError, match="nl80211"):
+            get_backend("linux")
 
     def test_unknown_platform(self):
         with pytest.raises(BackendNotImplementedError, match="sunos5"):
@@ -511,12 +517,12 @@ class TestCliOffWindows:
         assert "usage" in result.stdout
 
     @pytest.mark.skipif(
-        not sys.platform.startswith("linux"), reason="macOS has a backend"
+        not sys.platform.startswith("linux"), reason="scans the host's adapters"
     )
-    def test_scan_says_backend_not_implemented(self):
+    def test_linux_scan_runs_or_fails_cleanly(self):
+        # a real scan where there is an nl80211 adapter, else a short error
         result = run_lswifi()
-        assert result.returncode != 0
-        assert "not implemented yet" in result.stderr
+        assert "not implemented yet" not in result.stderr
         assert "Traceback" not in result.stderr
 
     def test_import_elements_does_not_exit(self):
@@ -532,3 +538,55 @@ class TestCliOffWindows:
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "ok"
+
+
+class TestIntegerRssiParity:
+    RSSI_RANGE = range(-110, 1)
+
+    def test_sort_key_matches_plain_int_sort(self):
+        values = list(reversed(self.RSSI_RANGE))
+        assert [app.rssi_sort_key(v) for v in values] == values
+        assert sorted(values, key=app.rssi_sort_key) == sorted(values)
+
+    @pytest.mark.parametrize("threshold", [-110, -82, -70, -1])
+    def test_threshold_filter_matches_int_compare(self, tmp_path, threshold):
+        records = [
+            BssRecord(**{**UNIFI, "bssid": f"02:00:00:00:00:{i:02x}", "rssi_dbm": rssi})
+            for i, rssi in enumerate(self.RSSI_RANGE)
+        ]
+        rows = json_rows(records, tmp_path, extra=["-t", str(threshold)])
+        kept = sorted(int(row["rssi"]) for row in rows)
+        assert kept == [r for r in self.RSSI_RANGE if r >= threshold]
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("linux"), reason="checks that non-Linux never loads them"
+)
+def test_linux_modules_not_loaded_off_linux():
+    script = """
+import sys
+import lswifi.__main__, lswifi.app
+from lswifi.backends.base import BackendError, BackendUnavailableError
+from lswifi.backends.factory import get_backend
+
+other = "darwin" if sys.platform == "win32" else "win32"
+try:
+    get_backend(other)
+except BackendUnavailableError:
+    pass
+else:
+    raise SystemExit(f"{other} backend loaded on {sys.platform}")
+try:
+    get_backend()
+except BackendError:
+    pass
+loaded = sorted(
+    name for name in sys.modules
+    if name in ("lswifi.backends.linux", "lswifi.backends.linux_events", "lswifi.backends.nl80211")
+)
+raise SystemExit(f"loaded: {loaded}" if loaded else 0)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

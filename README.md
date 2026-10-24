@@ -5,7 +5,7 @@
   <img src="https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/lswifi_orange_crop.png" width="400">
 </picture>
 
-`lswifi` is a CLI-centric Wi-Fi scanning tool for Windows and macOS that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh wlan show networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, decoding 802.11 IEs, revealing 6 GHz Reduced Neighbor Reports, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
+`lswifi` is a CLI-centric Wi-Fi scanning tool for Windows, macOS, and Linux that provides more information about nearby Wi-Fi networks than built-in tools (e.g. `netsh wlan show networks`). Examples include Received Signal Strength Indicator (RSSI), showing security AKMs and ciphers, decoding 802.11 IEs, revealing 6 GHz Reduced Neighbor Reports, and more. With capable Wi-Fi adapters, lswifi can detect and show networks in 2.4 GHz, 5 GHz, and 6 GHz bands.
 
 Note: Recent versions of Windows add OFDM rates, RSSI, AKMs and ciphers, QBSS, and limited RNR information to `netsh wlan` output. `lswifi` still offers additional information, parsing, filtering, and output options.
 
@@ -45,6 +45,31 @@ Known limitations on macOS:
 - `beaconInterval` is reported in TU (100 for a typical AP), despite the API docs saying milliseconds.
 
 `--watchevents` on macOS prints a timestamped line for each CoreWLAN event: power on/off, connect and disconnect, roams (current values plus `old_bssid`, `old_freq`, `old_rssi` and `old_channel` fields), reconnects (a `connected` line gets `old_bssid` when it lands on a different AP), SSID, channel, mode and country code changes, and notable signal quality changes. Scan cache updates (`scan_cache_updated`, several a minute) print only with `--debug`, in text and JSON. If your account is an admin, it also reads airportd's log (`log stream`, no `sudo`) to add roam requests (`roam_requested` with `trigger`, `roam_target_bssid`, and `roam_target_channel`/`roam_reason` when macOS logs them), deauth/disassoc reason codes, join timing, and `system_sleep`, `system_wake` (`wake: dark|full`) and `lid_opened`/`lid_closed` markers; otherwise those lines are skipped. macOS powers Wi-Fi off while asleep (including Power Nap dark wakes), so a `disconnected`/`connected` pair to the same BSSID next to a `system_wake` line is sleep, not the AP. Without Location Services, BSSIDs and SSIDs are left out but link and power events still print. Add `--json` for the same events as NDJSON on stdout (see Usage).
+
+Linux (preview)
+---------------
+
+`lswifi` scans on Linux through nl80211 (generic netlink), the same kernel interface `iw` uses. It reads the raw information elements from the kernel and decodes them with the same parsers as Windows and macOS. No extra packages are needed; it works with drivers that use cfg80211/mac80211, which is nearly all of them.
+
+``` {.sourceCode .bash}
+$ python3 -m pip install lswifi
+$ sudo lswifi
+```
+
+Triggering a scan needs root (`CAP_NET_ADMIN`). With `sudo`, `lswifi` starts a scan on each managed interface, waits for the kernel to finish (up to 30 seconds), and reads the results. Without it, `lswifi` warns and shows the kernel's cached results from the last scan anyone ran, which may be stale or incomplete. The kernel drops entries older than about 30 seconds, so if nothing has scanned recently the cache is empty and you get a warning saying so; `nmcli device wifi rescan` (no `sudo` needed on most desktops) fills it. The interface must be up (`sudo ip link set wlan0 up`); it does not need to be connected.
+
+Known limitations on Linux:
+
+- Only managed (station) and P2P client interfaces are scanned. Monitor, AP, and mesh interfaces are skipped.
+- Whether 6 GHz networks show up depends on the adapter, its driver and firmware, and the regulatory domain (`iw reg get`). When the adapter lists a 6 GHz band, `lswifi` asks the kernel to also probe 6 GHz APs found in Reduced Neighbor Reports.
+- The scan cache is shared with NetworkManager, iwd, and wpa_supplicant, so results include what they saw. A scan from `lswifi` does not use NetworkManager's scan MAC randomization setting. Scanning while connected can briefly pause traffic.
+- Some drivers report signal only on a driver-specific 0-100 scale. Those networks show an unknown RSSI and are not filtered by `-t`.
+- nl80211 has no PHY type or link quality field. The PHY column comes from the information elements, so it shows `ax`/`be` and is blank for older 802.11n/ac networks.
+- Bus info comes from sysfs, and Transmit Power is shown only when the driver reports it.
+- `--supported` is not available on Linux.
+- Some drivers keep reporting the last channel while an interface is down; `lswifi` ignores it when the interface is down.
+
+`--watchevents` on Linux listens to the nl80211 `mlme` and `scan` multicast groups and prints a timestamped line for each connect, failed connect, roam, disconnect (with the reason code and whether it was locally generated), port authorized (the 4-way handshake is done), and channel switch. Scan cache updates (`scan_cache_updated`) print only with `--debug`. Joining these groups does not need root. Add `--json` for the same events as NDJSON on stdout (see Usage).
 
 Usage
 -----
