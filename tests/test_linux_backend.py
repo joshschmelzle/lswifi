@@ -5,6 +5,7 @@
 import errno
 import json
 import struct
+import sys
 
 import pytest
 
@@ -512,6 +513,9 @@ class TestInterfaces:
         assert sysfs.driver("wlan1") is None
         assert sysfs.bus_info("wlan1") == (None, None)
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="sysfs paths need ':' and symlinks"
+    )
     def test_sysfs_usb(self, tmp_path):
         usb = tmp_path / "devices" / "1-1"
         intf = usb / "1-1:1.0"
