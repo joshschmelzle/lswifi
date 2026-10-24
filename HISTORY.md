@@ -4,6 +4,17 @@ Release History
 RELEASED
 --------
 
+0.3.1 (2026-10-24)
+------------------
+
+- Detect legacy WPA from vendor IE 221 (OUI 00:50:F2, type 1) in the auth, encryption, and security columns. Suites are merged when an RSN element is also present (#123).
+- `--json` keeps every scan in `scan_data` as a flat list of BSS objects. A file from 0.3.0, where later scans were nested lists, is flattened on the next append. Rewriting the file no longer leaves trailing bytes that make it invalid (#127).
+- `--uptime` no longer crashes when a BSS has no uptime (macOS shows `--`). JSON and CSV use the same elapsed-time order as the table.
+- Unknown RSSI is printed as `--`. It still sorts as the weakest signal and is not removed by `-t`.
+- `-export` with `--channel-width 20` no longer includes 320 MHz networks.
+- A short Extended Capabilities or vendor-specific element no longer fails that BSS. One BSS that still cannot be parsed is skipped instead of dropping the scan.
+- `--json` rate lists are `[]` when an AP advertises no rates.
+
 0.3.0 (2026-10-23)
 ------------------
 

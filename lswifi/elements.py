@@ -1210,7 +1210,7 @@ class WirelessNetworkBss:
         out = ""
         body = list(memoryview(element_data))
         out = f"Octets: {len(body)}, 0x{element_data.hex()}"
-        if len(body) > 1:
+        if len(body) > 2:
             if get_bit(body[2], 3):  # octet 3, bit 4 ... (or bit 19 for BSS Transition)
                 if self is not None:
                     self.amendments.append("v")
@@ -1613,7 +1613,7 @@ class WirelessNetworkBss:
 
         if len(memoryview_body) < 4:
             log.debug(f"Vendor IE too short: {len(memoryview_body)} bytes")
-            return f"OUI: {oui3} (truncated)"
+            return "truncated vendor IE"
 
         zero, one, two, three = [memoryview_body[i] for i in [0, 1, 2, 3]]
         oui3 = convert_mac_address_to_string([zero, one, two]).upper()

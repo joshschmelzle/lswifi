@@ -461,6 +461,48 @@ class TestFakeBackend:
         ]
         assert session.last_scan_time_iso
 
+    def test_one_bad_bss_does_not_drop_the_scan(self, monkeypatch):
+        from lswifi import elements
+
+        good = BssRecord(**ARUBA, ie_source="beacon")
+        bad = BssRecord(**{**UNIFI, "bssid": "02:00:00:00:00:ff"}, ie_source="beacon")
+        real = elements.WirelessNetworkBss
+
+        class Boom(real):
+            def __init__(self, bss, *args, **kwargs):
+                if str(bss.bssid).endswith("ff"):
+                    raise ValueError("bad ie")
+                super().__init__(bss, *args, **kwargs)
+
+        monkeypatch.setattr(elements, "WirelessNetworkBss", Boom)
+        backend = FakeBackend([good, bad])
+        session = backend.open_session(parse([]), backend.list_interfaces()[0])
+        asyncio.run(session.scan())
+        assert session.scan_finished
+        assert [str(b.bssid) for b in session.data] == ["98:8f:00:9a:a4:80"]
+
+    def test_windows_bss_list_skips_bad_record(self, monkeypatch):
+        from lswifi import elements, wlanapi
+
+        good = BssRecord(**ARUBA, ie_source="beacon")
+        bad = BssRecord(**{**UNIFI, "bssid": "02:00:00:00:00:ff"}, ie_source="beacon")
+        real = elements.WirelessNetworkBss
+
+        class Boom(real):
+            def __init__(self, bss, *args, **kwargs):
+                if str(bss.bssid).endswith("ff"):
+                    raise ValueError("bad ie")
+                super().__init__(bss, *args, **kwargs)
+
+        monkeypatch.setattr(wlanapi, "WirelessNetworkBss", Boom)
+        monkeypatch.setattr(
+            wlanapi.WLAN,
+            "get_wireless_network_bss_records",
+            staticmethod(lambda interface: [good, bad]),
+        )
+        parsed = wlanapi.WLAN.get_wireless_network_bss_list(object(), False)
+        assert [str(bss.bssid) for bss in parsed] == ["98:8f:00:9a:a4:80"]
+
     def test_lswifi_scan(self, tmp_path, monkeypatch, capsys):
         monkeypatch.chdir(tmp_path)
         backend = FakeBackend(fake_records())

@@ -1660,10 +1660,13 @@ class WLAN:
         """Returns a list of WirelessNetworkBss objects based on the wireless
         networks available.
         """
-        return [
-            WirelessNetworkBss(record, is_bytes_arg=is_bytes_arg)
-            for record in WLAN.get_wireless_network_bss_records(interface)
-        ]
+        parsed = []
+        for record in WLAN.get_wireless_network_bss_records(interface):
+            try:
+                parsed.append(WirelessNetworkBss(record, is_bytes_arg=is_bytes_arg))
+            except Exception:
+                logging.getLogger(__name__).error("skipping BSS %s", record.bssid)
+        return parsed
 
     @staticmethod
     def get_wireless_network_bss_records(interface) -> list:

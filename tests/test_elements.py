@@ -105,3 +105,14 @@ class TestElements:
         assert str(bss.security) == "PSK/CCMP-128,TKIP/TKIP"
         decoded = next(ie.decoded for ie in bss.information_elements if ie.eid == 221)
         assert "TKIP" in decoded and "PSK" in decoded
+
+    def test_short_extended_capabilities_does_not_crash(self):
+        bss = _bss_with_ies(b"short", bytes([127, 2, 0x00, 0x00]))
+        assert "v" not in bss.amendments
+        bss = _bss_with_ies(b"btm", bytes([127, 3, 0x00, 0x00, 0x08]))
+        assert "v" in bss.amendments
+
+    def test_short_vendor_ie_does_not_crash(self):
+        bss = _bss_with_ies(b"short", bytes([221, 2, 0x00, 0x50]))
+        decoded = next(ie.decoded for ie in bss.information_elements if ie.eid == 221)
+        assert decoded == "truncated vendor IE"
