@@ -19,7 +19,6 @@ import sys
 
 from lswifi.backends.base import BackendNotImplementedError, WifiBackend
 
-# backend name -> display name, for platforms with a backend still to come
 _NOT_IMPLEMENTED: dict[str, str] = {}
 
 

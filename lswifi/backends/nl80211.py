@@ -31,7 +31,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-# netlink / generic netlink
+# linux/netlink.h, linux/genetlink.h
 NETLINK_GENERIC = 16
 SOL_NETLINK = 270
 NETLINK_ADD_MEMBERSHIP = 1
@@ -57,7 +57,7 @@ CTRL_ATTR_MCAST_GROUPS = 7
 CTRL_ATTR_MCAST_GRP_NAME = 1
 CTRL_ATTR_MCAST_GRP_ID = 2
 
-# nl80211 commands
+# enum nl80211_commands
 CMD_GET_WIPHY = 1
 CMD_GET_INTERFACE = 5
 CMD_NEW_INTERFACE = 7
@@ -78,7 +78,7 @@ CMD_DISCONNECT = 48
 CMD_CH_SWITCH_NOTIFY = 88
 CMD_PORT_AUTHORIZED = 125
 
-# nl80211 attributes
+# enum nl80211_attrs
 ATTR_WIPHY = 1
 ATTR_IFINDEX = 3
 ATTR_IFNAME = 4
@@ -178,9 +178,6 @@ class NetlinkError(OSError):
         super().__init__(code, message)
 
 
-# --- attributes -----------------------------------------------------------
-
-
 def align4(length: int) -> int:
     return (length + 3) & ~3
 
@@ -276,9 +273,6 @@ def mac_str(raw: bytes | None) -> str:
     return ":".join(f"{octet:02x}" for octet in raw)
 
 
-# --- messages -------------------------------------------------------------
-
-
 @dataclass
 class GenlMessage:
     """One generic netlink message: nlmsghdr + genlmsghdr + attributes"""
@@ -361,9 +355,6 @@ def error_code(message: RawMessage) -> int:
     if len(message.payload) < 4:
         return 0
     return -int(struct.unpack_from("=i", message.payload)[0])
-
-
-# --- socket ---------------------------------------------------------------
 
 
 class NetlinkSocket(Protocol):

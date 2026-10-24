@@ -46,6 +46,8 @@ from lswifi.helpers import get_channel_number_from_frequency
 log = logging.getLogger(__name__)
 
 UNSUPPORTED = "unsupported on Linux"
+IFF_UP = 0x1
+WILDCARD_SSID = b""
 SCAN_TIMEOUT = 30.0  # 6 GHz passive scans on every channel take a while
 SYSFS_NET = "/sys/class/net"
 
@@ -58,6 +60,11 @@ PERMISSION_HELP = (
 STATION_IFTYPES = (nl.IFTYPE_STATION, nl.IFTYPE_P2P_CLIENT)
 
 _permission_warned = False
+
+
+def drop_queued_events(events: nl.GenericNetlink) -> None:
+    while events.events(0):
+        pass
 
 
 def warn_permission_once() -> None:
@@ -243,7 +250,7 @@ class Sysfs:
         if flags is None:
             return None
         try:
-            return bool(int(flags, 16) & 0x1)  # IFF_UP
+            return bool(int(flags, 16) & IFF_UP)
         except ValueError:
             return None
 
@@ -336,8 +343,6 @@ class LinuxBackend:
     def netlink(self) -> nl.GenericNetlink:
         """A fresh nl80211 socket; one per operation keeps threads apart"""
         return self._netlink()
-
-    # --- interfaces -------------------------------------------------------
 
     def _interfaces(self) -> list[LinuxInterface]:
         with self.netlink() as sock:
@@ -435,8 +440,6 @@ class LinuxBackend:
                 return alpha2
         return None
 
-    # --- scanning ---------------------------------------------------------
-
     def supports_6ghz(self, native: LinuxInterface) -> bool:
         """Whether the interface's wiphy lists a 6 GHz band"""
         if native.wiphy is None:
@@ -476,7 +479,7 @@ class LinuxBackend:
             events.join(nl.MCAST_GROUP_SCAN)
             request = nl.attr_u32(nl.ATTR_IFINDEX, native.ifindex) + nl.pack_nested(
                 nl.ATTR_SCAN_SSIDS,
-                [nl.pack_attr(1, b"")],  # wildcard SSID
+                [nl.pack_attr(1, WILDCARD_SSID)],
             )
             colocated = self.supports_6ghz(native)
             if native.ssid:
@@ -484,9 +487,7 @@ class LinuxBackend:
                     "%s is associated; the scan may briefly pause its traffic",
                     native.name,
                 )
-            # drop results of scans that finished before ours was requested
-            while events.events(0):
-                pass
+            drop_queued_events(events)
             busy = False
             try:
                 try:
@@ -580,7 +581,6 @@ class LinuxBackend:
         """Fresh scan when permitted, else the cached results"""
         native = self._native(iface)
         if self.sysfs.is_up(native.name) is False:
-            # a down interface has no scan cache either; say why up front
             raise BackendError(
                 f"{native.name} is down; bring it up first "
                 f"(sudo ip link set {native.name} up)"
@@ -623,8 +623,6 @@ class LinuxBackend:
         if not interfaces:
             raise BackendError("no Wi-Fi interfaces found")
         LinuxEventWatcher(self, interfaces, args).run()
-
-    # --- -ap, -channel, --get-interfaces ----------------------------------
 
     def interface_info(self, args, iface: InterfaceInfo) -> str:
         """-ap, -channel, --get-interfaces from nl80211 and sysfs"""

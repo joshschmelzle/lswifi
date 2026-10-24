@@ -227,7 +227,7 @@ class LinuxEventWatcher:
             self.json_writer.write(record)
         else:
             log.info(line)
-        if getattr(self.args, "syslog", None):  # syslog always gets the text
+        if getattr(self.args, "syslog", None):
             from lswifi.slog import message as syslog
 
             syslog(line, "INFO")
@@ -251,7 +251,6 @@ class LinuxEventWatcher:
         if ifindex is None:
             return []
         if ifindex not in self.interfaces:
-            # a station interface that appeared after the watch started
             for info in self.backend.list_interfaces():
                 if info.native.ifindex == ifindex:
                     self.add(info)

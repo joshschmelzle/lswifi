@@ -28,6 +28,8 @@ from lswifi.backends.linux_events import LinkFormatter, LinuxEventWatcher
 from lswifi.elements import WirelessNetworkBss
 
 FAMILY = 0x1C
+CMD_NEW_WIPHY = 3
+IFTYPE_P2P_DEVICE = 10
 GROUPS = {"config": 5, "scan": 6, "regulatory": 7, "mlme": 8}
 
 
@@ -169,7 +171,7 @@ class FakeKernel:
         self.alpha2 = "US"
         self.bands = [0, 1]
         self.reject_scan_flags = False
-        self.stale_results = False  # NEW_SCAN_RESULTS from an earlier scan
+        self.stale_results = False
         self.sockets: list[FakeSocket] = []
         self.sent: list[nl.GenlMessage] = []
 
@@ -227,14 +229,13 @@ class FakeKernel:
             )
         if msg.cmd == nl.CMD_GET_WIPHY:
             if self.stale_results:
-                # an earlier scan finishes while we look up the wiphy
                 self.broadcast(
                     "scan",
                     event(nl.CMD_NEW_SCAN_RESULTS, nl.attr_u32(nl.ATTR_IFINDEX, 5)),
                 )
             bands = [nl.pack_attr(band, b"") for band in self.bands]
             return multi(
-                3,  # NL80211_CMD_NEW_WIPHY
+                CMD_NEW_WIPHY,
                 [
                     nl.attr_u32(nl.ATTR_WIPHY, 0)
                     + nl.pack_nested(nl.ATTR_WIPHY_BANDS, bands)
@@ -481,7 +482,7 @@ class TestInterfaces:
             iface_attrs(6, "wlanpi0", iftype=nl.IFTYPE_MONITOR, last=0x11),
             iface_attrs(5, "wlan1", last=0x12),
             iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=5180, last=0x13),
-            nl.attr_u32(nl.ATTR_IFTYPE, 10),  # P2P device: no netdev
+            nl.attr_u32(nl.ATTR_IFTYPE, IFTYPE_P2P_DEVICE),
         ]
         infos = backend.list_interfaces()
         assert [i.connection_name for i in infos] == ["wlan0", "wlan1"]
@@ -562,7 +563,7 @@ class TestScan:
         trigger = [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN][0]
         assert nl.get_uint(trigger.attrs, nl.ATTR_IFINDEX) == 5
         ssids = nl.parse_attrs(trigger.attrs[nl.ATTR_SCAN_SSIDS])
-        assert ssids == {1: b""}  # one wildcard SSID: active scan
+        assert ssids == {1: b""}
         assert PERMISSION_HELP not in caplog.text
 
     def test_unprivileged_falls_back_to_cache(self, kernel, backend, caplog):
@@ -571,7 +572,7 @@ class TestScan:
         assert len(records) == 1
         assert caplog.text.count("CAP_NET_ADMIN") == 1
         backend.scan(self.iface(backend))
-        assert caplog.text.count("CAP_NET_ADMIN") == 1  # warned once
+        assert caplog.text.count("CAP_NET_ADMIN") == 1
 
     def test_down_unprivileged(self, kernel, backend):
         kernel.trigger_error = errno.EPERM
@@ -599,13 +600,13 @@ class TestScan:
         triggers = [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN]
         assert [nl.ATTR_SCAN_FLAGS in m.attrs for m in triggers] == [True, False]
         assert "did not finish" not in caplog.text
-        backend.scan(self.iface(backend))  # remembered: no flag next time
+        backend.scan(self.iface(backend))
         triggers = [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN]
         assert nl.ATTR_SCAN_FLAGS not in triggers[-1].attrs
 
     def test_stale_results_do_not_end_wait(self, kernel, backend, caplog):
         kernel.stale_results = True
-        kernel.scan_event = 0  # our scan never finishes
+        kernel.scan_event = 0
         backend.scan(self.iface(backend))
         assert "did not finish" in caplog.text
 
