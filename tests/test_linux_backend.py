@@ -168,6 +168,8 @@ class FakeKernel:
         self.scan_event = nl.CMD_NEW_SCAN_RESULTS
         self.alpha2 = "US"
         self.bands = [0, 1]
+        self.reject_scan_flags = False
+        self.stale_results = False  # NEW_SCAN_RESULTS from an earlier scan
         self.sockets: list[FakeSocket] = []
         self.sent: list[nl.GenlMessage] = []
 
@@ -224,6 +226,12 @@ class FakeKernel:
                 ],
             )
         if msg.cmd == nl.CMD_GET_WIPHY:
+            if self.stale_results:
+                # an earlier scan finishes while we look up the wiphy
+                self.broadcast(
+                    "scan",
+                    event(nl.CMD_NEW_SCAN_RESULTS, nl.attr_u32(nl.ATTR_IFINDEX, 5)),
+                )
             bands = [nl.pack_attr(band, b"") for band in self.bands]
             return multi(
                 3,  # NL80211_CMD_NEW_WIPHY
@@ -248,7 +256,13 @@ class FakeKernel:
         if msg.cmd == nl.CMD_TRIGGER_SCAN:
             if self.trigger_error:
                 return [nl.build_error(seq, -self.trigger_error)]
+            if self.reject_scan_flags and nl.ATTR_SCAN_FLAGS in msg.attrs:
+                return [nl.build_error(seq, -errno.EINVAL)]
             ifindex = nl.get_uint(msg.attrs, nl.ATTR_IFINDEX)
+            self.broadcast(
+                "scan",
+                event(nl.CMD_TRIGGER_SCAN, nl.attr_u32(nl.ATTR_IFINDEX, ifindex)),
+            )
             if self.scan_event:
                 self.broadcast(
                     "scan",
@@ -578,6 +592,28 @@ class TestScan:
         backend.scan(self.iface(backend))
         assert self.scan_flags(kernel) is None
 
+    def test_rejected_scan_flags_retry_without(self, kernel, backend, caplog):
+        kernel.bands = [0, 1, nl.BAND_6GHZ]
+        kernel.reject_scan_flags = True
+        assert len(backend.scan(self.iface(backend))) == 1
+        triggers = [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN]
+        assert [nl.ATTR_SCAN_FLAGS in m.attrs for m in triggers] == [True, False]
+        assert "did not finish" not in caplog.text
+        backend.scan(self.iface(backend))  # remembered: no flag next time
+        triggers = [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN]
+        assert nl.ATTR_SCAN_FLAGS not in triggers[-1].attrs
+
+    def test_stale_results_do_not_end_wait(self, kernel, backend, caplog):
+        kernel.stale_results = True
+        kernel.scan_event = 0  # our scan never finishes
+        backend.scan(self.iface(backend))
+        assert "did not finish" in caplog.text
+
+    def test_results_before_start_ignored(self, kernel, backend, caplog):
+        kernel.stale_results = True
+        backend.scan(self.iface(backend))
+        assert "did not finish" not in caplog.text
+
     def test_wiphy_bands_cached(self, kernel, backend):
         backend.scan(self.iface(backend))
         backend.scan(self.iface(backend))
@@ -788,6 +824,15 @@ class TestEvents:
         watcher, _ = self.watcher(kernel, backend, ("--watchevents", "--debug"))
         (line,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
         assert "scan: (1 BSSIDs found)" in line
+
+    def test_scan_dump_failure_does_not_stop_watch(self, kernel, backend, monkeypatch):
+        watcher, _ = self.watcher(kernel, backend, ("--watchevents", "--debug"))
+
+        def gone(native):
+            raise BackendError("reading scan results failed on wlan1: No such device")
+
+        monkeypatch.setattr(backend, "dump_scan", gone)
+        assert watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS)) == []
 
     def test_other_interfaces_ignored(self, kernel, backend):
         watcher, _ = self.watcher(kernel, backend)

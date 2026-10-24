@@ -478,17 +478,33 @@ class LinuxBackend:
                 nl.ATTR_SCAN_SSIDS,
                 [nl.pack_attr(1, b"")],  # wildcard SSID
             )
-            if self.supports_6ghz(native):
-                # also probe 6 GHz APs advertised in RNRs on 2.4/5 GHz
-                request += nl.attr_u32(nl.ATTR_SCAN_FLAGS, nl.SCAN_FLAG_COLOCATED_6GHZ)
+            colocated = self.supports_6ghz(native)
             if native.ssid:
                 log.info(
                     "%s is associated; the scan may briefly pause its traffic",
                     native.name,
                 )
+            # drop results of scans that finished before ours was requested
+            while events.events(0):
+                pass
+            busy = False
             try:
-                with self.netlink() as sock:
-                    sock.request(nl.CMD_TRIGGER_SCAN, request)
+                try:
+                    self._request_scan(native, request, colocated)
+                except nl.NetlinkError as error:
+                    if not colocated or error.errno not in (
+                        errno.EINVAL,
+                        errno.EOPNOTSUPP,
+                    ):
+                        raise
+                    log.debug(
+                        "%s: colocated 6 GHz scan flag rejected (%s); retrying without",
+                        native.name,
+                        error.strerror,
+                    )
+                    if native.wiphy is not None:
+                        self._six_ghz[native.wiphy] = False
+                    self._request_scan(native, request, False)
             except nl.NetlinkError as error:
                 if error.errno in (errno.EPERM, errno.EACCES):
                     warn_permission_once()
@@ -505,10 +521,18 @@ class LinuxBackend:
                 # another scan (wpa_supplicant, NetworkManager) is running;
                 # its results are just as fresh
                 log.debug("%s: scan already in progress; waiting for it", native.name)
+                busy = True
+            # results count only after the kernel announces our scan started
+            # (TRIGGER_SCAN event); a busy scan has already started
+            started = busy
             deadline = time.monotonic() + self.scan_timeout
             while (remaining := deadline - time.monotonic()) > 0:
                 for message in events.events(remaining):
                     if nl.get_uint(message.attrs, nl.ATTR_IFINDEX) != native.ifindex:
+                        continue
+                    if message.cmd == nl.CMD_TRIGGER_SCAN:
+                        started = True
+                    if not started:
                         continue
                     if message.cmd == nl.CMD_NEW_SCAN_RESULTS:
                         return True
@@ -523,6 +547,15 @@ class LinuxBackend:
             self.scan_timeout,
         )
         return False
+
+    def _request_scan(
+        self, native: LinuxInterface, request: bytes, colocated: bool
+    ) -> None:
+        if colocated:
+            # also probe 6 GHz APs advertised in RNRs on 2.4/5 GHz
+            request += nl.attr_u32(nl.ATTR_SCAN_FLAGS, nl.SCAN_FLAG_COLOCATED_6GHZ)
+        with self.netlink() as sock:
+            sock.request(nl.CMD_TRIGGER_SCAN, request)
 
     def dump_scan(self, native: LinuxInterface) -> list[BssRecord]:
         """The kernel's scan results for this interface; no privileges needed"""

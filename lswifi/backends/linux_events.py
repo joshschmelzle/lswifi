@@ -26,7 +26,7 @@ from collections.abc import Callable
 from typing import Any
 
 from lswifi.backends import nl80211 as nl
-from lswifi.backends.base import InterfaceInfo
+from lswifi.backends.base import BackendError, InterfaceInfo
 from lswifi.backends.linux import LinkInfo, LinuxInterface
 from lswifi.backends.macos_events import EventLine, reason_text
 from lswifi.watchjson import event_record, shared_writer, watch_json_requested
@@ -295,7 +295,8 @@ class LinuxEventWatcher:
         if cmd == nl.CMD_NEW_SCAN_RESULTS and self.scan_events:
             try:
                 count = len(self.backend.dump_scan(native))
-            except OSError:
+            except (OSError, BackendError) as error:
+                log.debug("%s: scan dump failed: %s", native.name, error)
                 return []
             return [formatter.scan_cache(count)]
         return []
