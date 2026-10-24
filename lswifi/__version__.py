@@ -11,7 +11,7 @@
 """version information for lswifi"""
 
 __title__ = "lswifi"
-__description__ = "a CLI-centric Wi-Fi scanning tool for Windows and macOS"
+__description__ = "a CLI-centric Wi-Fi scanning tool for Windows, macOS, and Linux"
 __url__ = "https://github.com/joshschmelzle/lswifi"
 __version__ = "0.2.1"
 __author__ = "Josh Schmelzle"

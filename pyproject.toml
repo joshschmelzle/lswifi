@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lswifi"
 dynamic = ["version", "optional-dependencies"]
-description = "a CLI-centric Wi-Fi scanning tool for Windows and macOS"
+description = "a CLI-centric Wi-Fi scanning tool for Windows, macOS, and Linux"
 readme = "README-PYPI.md"
 requires-python = ">=3.13"
 dependencies = [
@@ -42,6 +42,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows :: Windows 10",
     "Operating System :: Microsoft :: Windows :: Windows 11",
     "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
 ]
 
 [project.urls]

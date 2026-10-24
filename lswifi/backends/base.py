@@ -61,6 +61,7 @@ class BssRecord:
     raw: bytes | None = None  # backend-native record bytes (Windows WLAN_BSS_ENTRY)
     # width the OS reports, for when there are no IEs; IE-derived width wins
     channel_width_mhz: int | None = None
+    seen_ms_ago: int | None = None  # Linux: since the kernel last heard the BSS
 
 
 @dataclass

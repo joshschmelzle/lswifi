@@ -19,9 +19,8 @@ import sys
 
 from lswifi.backends.base import BackendNotImplementedError, WifiBackend
 
-_NOT_IMPLEMENTED = {
-    "linux": "Linux (nl80211)",
-}
+# backend name -> display name, for platforms with a backend still to come
+_NOT_IMPLEMENTED: dict[str, str] = {}
 
 
 def backend_name_for_platform(platform: str | None = None) -> str | None:
@@ -52,16 +51,20 @@ def get_backend(platform: str | None = None) -> WifiBackend:
         from lswifi.backends.macos import MacOSBackend
 
         return MacOSBackend()
+    if name == "linux":
+        from lswifi.backends.linux import LinuxBackend
+
+        return LinuxBackend()
     if name in _NOT_IMPLEMENTED:
         raise BackendNotImplementedError(
             f"scanning is not implemented yet on {_NOT_IMPLEMENTED[name]}. "
-            "lswifi currently scans on Windows and macOS. "
+            "lswifi currently scans on Windows, macOS, and Linux. "
             "Commands that do not scan still work here: -decode <pcap>, "
             "-decoderaw <file.ies>, --help, and --version."
         )
     raise BackendNotImplementedError(
         f"no Wi-Fi backend for platform {platform!r}. "
-        "lswifi currently scans on Windows and macOS."
+        "lswifi currently scans on Windows, macOS, and Linux."
     )
 
 
