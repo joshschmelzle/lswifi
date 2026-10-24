@@ -963,7 +963,7 @@ class lswifi:
                 with open(json_file_name, mode) as file:
                     if json_file_exists:
                         file_data = json.load(file)
-                        file_data["scan_data"].append(json_out)
+                        file_data["scan_data"].extend(json_out)
                         file.seek(0)
                         json.dump(file_data, file, indent=args.json_indent)
                     else:
