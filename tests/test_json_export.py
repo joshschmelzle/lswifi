@@ -129,3 +129,23 @@ def test_export_width_20_excludes_320(tmp_path, caplog):
     caplog.set_level(logging.INFO)
     app.lswifi().parse_bss_list(session, False, "", "", args)
     assert "Exported 1 networks" in caplog.text
+
+
+def test_export_width_skips_80_plus_80(tmp_path, caplog):
+    import logging
+
+    bss = WirelessNetworkBss(BssRecord(**ARUBA))
+    bss.channel_width.value = "80+80"
+    caplog.set_level(logging.INFO)
+    for width in ("80", "160"):
+        path = tmp_path / f"{width}.pcapng"
+        args = parse(
+            ["-all", "-export", "all", "-path", str(path), "--channel-width", width]
+        )
+        session = Session([bss])
+        session.iface = type("Iface", (), {"description": "Fake Adapter"})()
+        session.last_scan_time_epoch = 1_700_000_000.0
+        app.lswifi().parse_bss_list(session, False, "", "", args)
+        assert not path.exists()
+    assert "Exported" not in caplog.text
+    assert "Error exporting" not in caplog.text

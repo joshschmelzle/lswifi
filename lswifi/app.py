@@ -777,7 +777,7 @@ class lswifi:
                             pass
 
                 # handle width filter
-                if args.width is not None and int(args.width) != int(
+                if args.width is not None and str(args.width) != str(
                     bss.channel_width.value
                 ):
                     continue
@@ -1042,7 +1042,7 @@ class lswifi:
                 ):
                     continue
 
-                if args.width is not None and int(args.width) != int(
+                if args.width is not None and str(args.width) != str(
                     bss.channel_width.value
                 ):
                     continue
