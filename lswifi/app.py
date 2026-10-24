@@ -66,7 +66,6 @@ def export_rssi_sort_key(row):
 
 
 def uptime_sort_key(uptime):
-    """Sort key for AP uptime text. Unparseable values (for example "--") sort last."""
     try:
         days, clock = str(uptime).split("d", 1)
         hours, minutes, seconds = clock.strip().split(":")
