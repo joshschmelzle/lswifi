@@ -558,7 +558,10 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         dest="json",
         action=WriteToJSONAction,
-        help="output will be formatted as json",
+        help=(
+            "format output as JSON. each scan is appended to the file as "
+            "one JSON object per line (NDJSON)"
+        ),
     )
     parser.add_argument(
         "--indent",
@@ -566,7 +569,10 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="4",
         default=None,
         type=json_indent,
-        help="JSON output will be formatted with pretty print with provided indent level",
+        help=(
+            "pretty-print JSON written to stdout with this indent level. "
+            "NDJSON scan files stay one object per line"
+        ),
     )
     parser.add_argument(
         "--csv",

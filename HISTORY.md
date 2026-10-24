@@ -1,6 +1,11 @@
 Release History
 ===============
 
+UNRELEASED
+----------
+
+- `--json` scan files are NDJSON instead of one JSON document rewritten on every scan. Each scan is appended as one object (`lswifi` version, scan timestamp, and `scan_data`) and the existing file is not read back. `--indent` still pretty-prints JSON written to stdout and does not apply to this file.
+
 RELEASED
 --------
 

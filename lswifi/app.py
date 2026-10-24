@@ -954,27 +954,16 @@ class lswifi:
             json_out = sorted(json_out, key=export_rssi_sort_key, reverse=True)
 
         if args.json:
-            json_file_exists = os.path.exists(json_file_name)
-            mode = "r+" if json_file_exists else "w"
             if not json_out:
                 log.info(f"nothing found to export as JSON to {json_file_name}")
             else:
                 log.info(f"exporting scans as JSON to {json_file_name}")
-                with open(json_file_name, mode) as file:
-                    if json_file_exists:
-                        file_data = json.load(file)
-                        file_data["scan_data"].append(json_out)
-                        file.seek(0)
-                        json.dump(file_data, file, indent=args.json_indent)
-                    else:
-                        file_data = json.dumps(
-                            {
-                                "lswifi": {"version": f"lswifi {__version__}"},
-                                "scan_data": json_out,
-                            },
-                            indent=args.json_indent,
-                        )
-                        file.write(file_data)
+                scan_record = {"lswifi": {"version": f"lswifi {__version__}"}}
+                if client.last_scan_time_iso:
+                    scan_record["timestamp"] = client.last_scan_time_iso
+                scan_record["scan_data"] = json_out
+                with open(json_file_name, "a", encoding="utf-8", newline="\n") as file:
+                    file.write(json.dumps(scan_record) + "\n")
 
         if args.csv:
             has_headings = False

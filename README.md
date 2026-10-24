@@ -217,8 +217,10 @@ options:
   -raw                  format output as the raw value for other scripts (for -ap and -channel only)
   --get-interfaces      print current Wi-Fi status and information
   --list-interfaces     print a list of available WLAN interfaces
-  --json [JSON]         output will be formatted as json
-  --indent 4            JSON output will be formatted with pretty print with provided indent level
+  --json [JSON]         format output as JSON. each scan is appended to the file as
+                        one JSON object per line (NDJSON)
+  --indent 4            pretty-print JSON written to stdout with this indent level.
+                        NDJSON scan files stay one object per line
   --csv [CSV]           output will be formatted as csv
   -exportraw, -expraw [BSSID]
                         export raw bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
