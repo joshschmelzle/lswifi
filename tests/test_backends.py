@@ -548,6 +548,22 @@ class TestIntegerRssiParity:
         assert [app.rssi_sort_key(v) for v in values] == values
         assert sorted(values, key=app.rssi_sort_key) == sorted(values)
 
+    def test_export_sorts_rssi_numerically_strongest_first(self, tmp_path, monkeypatch):
+        from lswifi.backends.windows import bss_entry_to_record
+
+        monkeypatch.chdir(tmp_path)
+        keep: list = []
+        records = [
+            bss_entry_to_record(
+                make_wlan_bss_entry(
+                    keep, **{**ARUBA, "bssid": f"02:00:00:00:00:0{i}", "rssi_dbm": rssi}
+                )
+            )
+            for i, rssi in enumerate([-9, -43, -75])
+        ]
+        rows = json_rows(records, tmp_path)
+        assert [row["rssi"] for row in rows] == ["-9", "-43", "-75"]
+
     @pytest.mark.parametrize("threshold", [-110, -82, -70, -1])
     def test_threshold_filter_matches_int_compare(self, tmp_path, threshold):
         records = [
