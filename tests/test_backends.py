@@ -538,3 +538,55 @@ class TestCliOffWindows:
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "ok"
+
+
+class TestIntegerRssiParity:
+    RSSI_RANGE = range(-110, 1)
+
+    def test_sort_key_matches_plain_int_sort(self):
+        values = list(reversed(self.RSSI_RANGE))
+        assert [app.rssi_sort_key(v) for v in values] == values
+        assert sorted(values, key=app.rssi_sort_key) == sorted(values)
+
+    @pytest.mark.parametrize("threshold", [-110, -82, -70, -1])
+    def test_threshold_filter_matches_int_compare(self, tmp_path, threshold):
+        records = [
+            BssRecord(**{**UNIFI, "bssid": f"02:00:00:00:00:{i:02x}", "rssi_dbm": rssi})
+            for i, rssi in enumerate(self.RSSI_RANGE)
+        ]
+        rows = json_rows(records, tmp_path, extra=["-t", str(threshold)])
+        kept = sorted(int(row["rssi"]) for row in rows)
+        assert kept == [r for r in self.RSSI_RANGE if r >= threshold]
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("linux"), reason="checks that non-Linux never loads them"
+)
+def test_linux_modules_not_loaded_off_linux():
+    script = """
+import sys
+import lswifi.__main__, lswifi.app
+from lswifi.backends.base import BackendError, BackendUnavailableError
+from lswifi.backends.factory import get_backend
+
+other = "darwin" if sys.platform == "win32" else "win32"
+try:
+    get_backend(other)
+except BackendUnavailableError:
+    pass
+else:
+    raise SystemExit(f"{other} backend loaded on {sys.platform}")
+try:
+    get_backend()
+except BackendError:
+    pass
+loaded = sorted(
+    name for name in sys.modules
+    if name in ("lswifi.backends.linux", "lswifi.backends.linux_events", "lswifi.backends.nl80211")
+)
+raise SystemExit(f"loaded: {loaded}" if loaded else 0)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
