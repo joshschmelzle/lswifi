@@ -112,7 +112,7 @@ typing-extensions==4.13.2
     # via mypy
 urllib3==2.8.0
     # via requests
-virtualenv==21.14.9
+virtualenv==21.14.13
     # via
     #   pre-commit
     #   tox
