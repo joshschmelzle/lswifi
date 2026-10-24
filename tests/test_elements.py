@@ -6,8 +6,22 @@ import pytest
 
 import lswifi
 import lswifi.elements
+from lswifi.backends.base import BssRecord
 
 # WirelessNetworkBss
+
+
+def _bss_with_ies(ssid, ie_bytes, capability=0x0011):
+    ies = bytes([0, len(ssid)]) + ssid + bytes([1, 1, 0x82]) + ie_bytes
+    return lswifi.elements.WirelessNetworkBss(
+        BssRecord(
+            ssid=ssid,
+            bssid="02:00:00:00:00:10",
+            frequency_mhz=2437,
+            capability=capability,
+            ies=ies,
+        )
+    )
 
 
 class TestElements:
@@ -50,3 +64,44 @@ class TestElements:
             lswifi.elements.WirelessNetworkBss.convert_timestamp_to_uptime(285837076)
             == "00d 0:04:45"
         )
+
+    @pytest.mark.parametrize(
+        "wpa_ie, auth, encryption, security",
+        [
+            pytest.param(
+                "dd160050f20101000050f20201000050f20201000050f202",
+                "PSK",
+                "TKIP",
+                "PSK/TKIP/TKIP",
+                id="wpa-psk-tkip",
+            ),
+            pytest.param(
+                "dd160050f20101000050f20401000050f20401000050f201",
+                ".1X-SHA-1",
+                "CCMP-128",
+                ".1X-SHA-1/CCMP-128/CCMP-128",
+                id="wpa-1x-ccmp",
+            ),
+        ],
+    )
+    def test_legacy_wpa_ie(self, wpa_ie, auth, encryption, security):
+        bss = _bss_with_ies(b"legacy", bytes.fromhex(wpa_ie))
+        assert (str(bss.auth), str(bss.encryption), str(bss.security)) == (
+            auth,
+            encryption,
+            security,
+        )
+        decoded = next(ie.decoded for ie in bss.information_elements if ie.eid == 221)
+        assert decoded.startswith("Microsoft WPA Version: 1,")
+        assert auth in decoded
+        assert encryption.split("/")[0] in decoded
+
+    def test_legacy_wpa_alongside_rsn(self):
+        rsn = bytes.fromhex("30140100000fac020100000fac040100000fac020000")
+        wpa = bytes.fromhex("dd160050f20101000050f20201000050f20201000050f202")
+        bss = _bss_with_ies(b"mixed", rsn + wpa)
+        assert str(bss.auth) == "PSK"
+        assert str(bss.encryption) == "CCMP-128,TKIP/TKIP"
+        assert str(bss.security) == "PSK/CCMP-128,TKIP/TKIP"
+        decoded = next(ie.decoded for ie in bss.information_elements if ie.eid == 221)
+        assert "TKIP" in decoded and "PSK" in decoded

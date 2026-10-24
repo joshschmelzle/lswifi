@@ -2308,8 +2308,7 @@ class WirelessNetworkBss:
             out = "Microsoft"
             return out
         if "00:50:f2:01" in oui:
-            out = "Microsoft"
-            return out
+            return WirelessNetworkBss.__parse_wpa_element(self, element_data)
         if (
             "00:50:f2:02" in oui
         ):  # WMM Information Element and # WMM/WME Parameter Element
@@ -3229,6 +3228,99 @@ class WirelessNetworkBss:
                 f"Spatial Streams: {ss}"
             )
 
+    def __record_security_suites(self, akm_list, pairwise_list, group_name):
+        """Fill auth/encryption/security. A second suite (WPA beside RSN) is merged."""
+
+        def merge(existing, names):
+            merged = []
+            for name in [*existing.split(","), *names]:
+                if name and name not in merged:
+                    merged.append(name)
+            return merged
+
+        if "/" in str(self.security.value):
+            existing_akm, existing_pairwise, existing_group = str(
+                self.security.value
+            ).split("/", 2)
+            akm_list = merge(existing_akm, akm_list)
+            pairwise_list = merge(existing_pairwise, pairwise_list)
+            group_name = ",".join(merge(existing_group, [group_name]))
+        self.auth.value = ",".join(akm_list)
+        if "".join(pairwise_list) == group_name:
+            self.encryption.value = "".join(pairwise_list)
+        else:
+            self.encryption.value = "{}/{}".format(",".join(pairwise_list), group_name)
+        self.security.value = "{}/{}/{}".format(
+            ",".join(akm_list),
+            ",".join(pairwise_list),
+            group_name,
+        )
+
+    def __parse_wpa_element(self, element_data):
+        """
+        WPA Information Element (vendor IE 221, OUI 00:50:F2, type 1).
+
+        Same suite layout as the RSNE through the AKM list. There is no RSN
+        Capabilities field.
+        """
+        body = list(memoryview(element_data))
+        if len(body) < 10:
+            return "Microsoft WPA"
+        version = body[4] + body[5]
+        group_cipher_suite = body[9]
+        try:
+            group_name = f"{CIPHER_SUITE_DICT[group_cipher_suite]}"
+        except KeyError:
+            group_name = f"--({group_cipher_suite})"
+        index = 10
+        pairwise_list = []
+        pairwise_cipher_suite = 0
+        if index + 1 < len(body):
+            pairwise_count = body[index] + body[index + 1]
+            index += 2
+            count = 0
+            while count < pairwise_count and index + 3 < len(body):
+                pairwise_cipher_suite = body[index + 3]
+                try:
+                    pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
+                except KeyError:
+                    pairwise_list.append(f"--({pairwise_cipher_suite})")
+                index += 4
+                count += 1
+        if pairwise_cipher_suite == 0:
+            pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
+        akm_list = []
+        akm_ids = []
+        akm_suite = 0
+        if index + 1 < len(body):
+            akm_count = body[index] + body[index + 1]
+            index += 2
+            count = 0
+            while count < akm_count and index + 3 < len(body):
+                akm_suite = body[index + 3]
+                akm_ids.append(akm_suite)
+                try:
+                    akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
+                except KeyError:
+                    akm_list.append(f"--({akm_suite})")
+                index += 4
+                count += 1
+        if akm_suite == 0:
+            akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
+        if self is not None:
+            self.__record_security_suites(akm_list, pairwise_list, group_name)
+        return (
+            "Microsoft WPA Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}"
+        ).format(
+            str(version) + ",",
+            "/".join(akm_list),
+            f"({'/'.join(map(str, akm_ids))})",
+            "/".join(pairwise_list),
+            f"({pairwise_cipher_suite})",
+            group_name,
+            f"({group_cipher_suite})",
+        )
+
     def __parse_rsn_element(self, edata):
         """
         the RSNE contains the information required to establish an RSNA
@@ -3293,16 +3385,9 @@ class WirelessNetworkBss:
         if akm_suite == 0:
             akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
         if self is not None:
-            self.auth.value = "{}".format(",".join(akm_list))
-            if "".join(pairwise_list) == str(CIPHER_SUITE_DICT[group_cipher_suite]):
-                self.encryption.value = "".join(pairwise_list)
-            else:
-                self.encryption.value = "{}/{}".format(
-                    ",".join(pairwise_list), CIPHER_SUITE_DICT[group_cipher_suite]
-                )
-            self.security.value = "{}/{}/{}".format(
-                ",".join(akm_list),
-                ",".join(pairwise_list),
+            self.__record_security_suites(
+                akm_list,
+                pairwise_list,
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
         akm_ids = "/".join(map(str, akm_ids))
