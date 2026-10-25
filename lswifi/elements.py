@@ -567,7 +567,6 @@ class WirelessNetworkBss:
         """Fill in a PHY the OS did not report, from the highest IE that applies."""
         if self.phy_type.from_os:
             return
-        # 500 kb/s units: 6/9/12/18/24/36/48/54 and 1/2/5.5/11
         ofdm_rates = {12, 18, 24, 36, 48, 72, 96, 108}
         hrdsss_rates = {2, 4, 11, 22}
         eids = set()
@@ -586,16 +585,16 @@ class WirelessNetworkBss:
                     value = octet & 0x7F
                     if 0 < value < 121:
                         rates.add(value)
-        if 106 in ext_ids:  # EHT Operation
+        if 106 in ext_ids:
             name = "EHT"
-        elif 35 in ext_ids:  # HE Capabilities
+        elif 35 in ext_ids:
             name = "HE"
-        elif self.is_5ghz and (191 in eids or 192 in eids):  # VHT on 5 GHz only
+        elif self.is_5ghz and (191 in eids or 192 in eids):
             name = "VHT"
-        elif 45 in eids or 61 in eids:  # HT Capabilities, HT Operation
+        elif 45 in eids or 61 in eids:
             name = "HT"
         elif is_two_four_band(self.channel_frequency.value):
-            if 42 in eids or (rates & ofdm_rates):  # ERP element or an OFDM rate
+            if 42 in eids or (rates & ofdm_rates):
                 name = "ERP"
             elif rates and rates <= hrdsss_rates:
                 name = "HR-DSSS"

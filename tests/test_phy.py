@@ -275,3 +275,25 @@ class TestPhyFromIes:
         assert json_phy == column
         assert csv_phy == column
         assert str(bss.phy_type) == column
+
+    def test_24ghz_vht_ies_stay_in_ies_output(self, capsys):
+        bssid = "02:00:00:00:00:11"
+        bss = WirelessNetworkBss(
+            BssRecord(
+                ssid=b"ht",
+                bssid=bssid,
+                frequency_mhz=2412,
+                rssi_dbm=-40,
+                ies=_ht_24_with_vht_ies(),
+            )
+        )
+        assert str(bss.phy_type) == "n"
+        args = parse(["-ies", bssid])
+        app.lswifi().parse_bss_list(Session([bss]), False, "", "", args)
+        output = capsys.readouterr().out
+        assert any(
+            "191" in line and "VHT Capabilities" in line for line in output.splitlines()
+        )
+        assert any(
+            "192" in line and "VHT Operation" in line for line in output.splitlines()
+        )
