@@ -31,7 +31,7 @@ $ python3 -m pip install lswifi
 
 macOS hides SSIDs, BSSIDs, and information elements from apps that have not been granted Location Services. Without that grant, `lswifi` only sees RSSI and channel, and prints a warning. `sudo` does not help.
 
-- Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.13 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
+- Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.11 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
 - Allow Python in System Settings > Privacy & Security > Location Services.
 
 macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but in testing the Developer ID-signed python.org interpreter (and venvs created from it) could still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay `notDetermined` and never get the prompt.
@@ -280,7 +280,7 @@ FAQs
 ----
 
 1. What OSes and Python versions are required to run `lswifi`?
-    - Windows 10+ and Python 3.13 are the current minimum versions I'm willing to support (subject to change based on the [official Python release cycle](https://devguide.python.org/versions/)).
+    - Windows 10+ and Python 3.11 are the current minimum versions I'm willing to support (subject to change based on the [official Python release cycle](https://devguide.python.org/versions/)).
     - Windows 11 and a capable interface is required for 6 GHz support. Don't have 6 GHz capable interface? Try `lswifi -rnr` with multi-band 6 GHz APs nearby.
 2. Can you get add information from radio tap headers?
     - Currently there is not a way to get radio tap headers from Native Wifi wlanapi.h.
