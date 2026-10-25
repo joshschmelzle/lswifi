@@ -17,6 +17,16 @@ schema definition for phytype
 
 from .out import *
 
+_PHY_RANK = {
+    "OFDM": 1,
+    "HR-DSSS": 1,
+    "ERP": 2,
+    "HT": 3,
+    "VHT": 4,
+    "HE": 5,
+    "EHT": 6,
+}
+
 
 class PHYType:
     """Base class for PHY Type"""
@@ -24,12 +34,18 @@ class PHYType:
     def __init__(self, phy_name: str | None):
         """
         :param phy_name: PHY name from the OS, e.g. Windows DOT11_PHY_TYPE_DICT
-          value "HE (802.11ax)". None when the OS has no such enum; HE and EHT
-          are still set later from the IEs.
+          value "HE (802.11ax)". None when the OS has no such enum; the name is
+          then taken from the IEs.
         """
         self.value = phy_name if phy_name is not None else ""
+        self.from_os = bool(phy_name)
         self.header = Header("PHY")
         self.subheader = SubHeader(".11")
+
+    def promote(self, name: str) -> None:
+        """Record name when it outranks the PHY already stored."""
+        if _PHY_RANK.get(name, 0) > _PHY_RANK.get(self.value, 0):
+            self.value = name
 
     def out(self):
         return OUT_TUPLE(self.__str__(), self.header, self.subheader)
