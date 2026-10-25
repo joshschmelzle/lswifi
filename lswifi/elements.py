@@ -190,6 +190,7 @@ class WirelessNetworkBss:
                             self, ie_buffer=ie_buffer
                         )
                     )
+                    self._derive_phy_from_ies()
 
                     ##########################################
                     # Do stuff now that IEs have been parsed #
@@ -561,6 +562,52 @@ class WirelessNetworkBss:
                         f"{parsed_ie.pbody} ({parsed_ie_length})",
                     )
                 )
+
+    def _derive_phy_from_ies(self) -> None:
+        """Fill in a PHY the OS did not report, from the highest IE that applies."""
+        if self.phy_type.from_os:
+            return
+        ofdm_rates = {12, 18, 24, 36, 48, 72, 96, 108}
+        hrdsss_rates = {2, 4, 11, 22}
+        eids = set()
+        ext_ids = set()
+        rates = set()
+        for ie in self.information_elements:
+            eid = ie.eid
+            if not isinstance(eid, int):
+                continue
+            eids.add(eid)
+            body = ie.body
+            if eid == 255 and body:
+                ext_ids.add(body[0])
+            elif eid in (1, 50) and body:
+                for octet in body:
+                    value = octet & 0x7F
+                    if 0 < value < 121:
+                        rates.add(value)
+        if 106 in ext_ids:
+            name = "EHT"
+        elif 35 in ext_ids:
+            name = "HE"
+        elif self.is_5ghz and (191 in eids or 192 in eids):
+            name = "VHT"
+        elif 45 in eids or 61 in eids:
+            name = "HT"
+        elif is_two_four_band(self.channel_frequency.value):
+            if 42 in eids or (rates & ofdm_rates):
+                name = "ERP"
+            elif rates and rates <= hrdsss_rates:
+                name = "HR-DSSS"
+            else:
+                return
+        elif eids and (
+            is_five_band(self.channel_frequency.value)
+            or is_six_band(self.channel_frequency.value)
+        ):
+            name = "OFDM"
+        else:
+            return
+        self.phy_type.promote(name)
 
     def process_information_elements(self, ie_buffer):
         """
@@ -2683,7 +2730,7 @@ class WirelessNetworkBss:
                 if onesixty_in_5g_and_6g or onesixty_or_eighty_plus_eighty_in_5g_and_6g:
                     # this is a capability bit, doesn't indicate actual channel in use
                     pass
-                self.phy_type.name = "HE"
+                self.phy_type.promote("HE")
                 if "ax" not in self.modes:
                     self.modes.append("ax")
 
@@ -2842,7 +2889,7 @@ class WirelessNetworkBss:
                 out += f", CCFS 1: {eht_ccfs1}"
 
             if self is not None:
-                self.phy_type.name = "EHT"
+                self.phy_type.promote("EHT")
                 if "be" not in self.modes:
                     self.modes.append("be")
                 if eht_operation_information_present:
