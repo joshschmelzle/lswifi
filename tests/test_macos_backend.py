@@ -11,13 +11,14 @@ import json
 import logging
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from lswifi import app, appsetup
-from lswifi.backends import macos
+from lswifi.backends import macos, macos_location
 from lswifi.backends.base import BackendError, BssRecord
 from lswifi.backends.macos import (
     MacOSBackend,
@@ -26,6 +27,8 @@ from lswifi.backends.macos import (
     network_to_record,
 )
 from lswifi.elements import WirelessNetworkBss
+
+_REAL_PREPARE = macos_location.prepare_location_services
 
 TESTS = Path(__file__).parent
 ROOT = TESTS.parent
@@ -167,7 +170,15 @@ def fake_corewlan(cw_iface):
 
 @pytest.fixture(autouse=True)
 def reset_location_warning(monkeypatch):
+    from lswifi.backends import macos_location
+
     monkeypatch.setattr(macos, "_location_warned", False)
+    monkeypatch.setattr(macos_location, "_cached", None)
+    monkeypatch.setattr(
+        macos_location,
+        "prepare_location_services",
+        lambda: macos_location.LocationAuthorization("authorized", True, ""),
+    )
 
 
 class TestFrequency:
@@ -751,14 +762,130 @@ def test_import_does_not_load_corewlan():
             sys.executable,
             "-c",
             "import sys, lswifi.backends.macos, lswifi.backends.factory; "
-            "print('CoreWLAN' in sys.modules)",
+            "print("
+            "'CoreWLAN' in sys.modules, "
+            "'CoreLocation' in sys.modules, "
+            "'Foundation' in sys.modules"
+            ")",
         ],
         capture_output=True,
         text=True,
         cwd=ROOT,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "False"
+    assert result.stdout.strip() == "False False False"
+
+
+class TestLocationIntegration:
+    def _denied(self, monkeypatch):
+        state = macos_location.LocationAuthorization(
+            "denied",
+            False,
+            macos_location.DENIED_MESSAGE,
+        )
+        monkeypatch.setattr(macos_location, "prepare_location_services", lambda: state)
+        monkeypatch.setattr(
+            macos_location, "current_location_authorization", lambda: state
+        )
+        return state
+
+    def test_open_session_checks_before_scan(self, monkeypatch):
+        calls = []
+
+        def prepare():
+            calls.append(threading.current_thread())
+            return macos_location.LocationAuthorization("authorized", True, "")
+
+        monkeypatch.setattr(macos_location, "prepare_location_services", prepare)
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        iface = backend.list_interfaces()[0]
+        backend.open_session(parse([]), iface)
+        assert calls == [threading.current_thread()]
+        assert calls[0] is threading.main_thread()
+        backend.scan(iface)
+        assert len(calls) == 2
+
+    def test_list_interfaces_does_not_ask(self, monkeypatch, capsys):
+        def prepare():
+            raise AssertionError("location check")
+
+        monkeypatch.setattr(macos_location, "prepare_location_services", prepare)
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        with pytest.raises(SystemExit):
+            app.run(parse(["--list-interfaces"]), backend=backend)
+        assert "Connection Name: en0" in capsys.readouterr().out
+
+    def test_denied_warns_once_across_scans(self, monkeypatch, caplog):
+        self._denied(monkeypatch)
+        cw = FakeInterface(networks=[redacted_network(), redacted_network(rssi=-70)])
+        backend = MacOSBackend(fake_corewlan(cw))
+        session = backend.open_session(parse([]), backend.list_interfaces()[0])
+        with caplog.at_level(logging.WARNING):
+            asyncio.run(session.scan())
+            asyncio.run(session.scan())
+        warnings = [r for r in caplog.records if "denied" in r.getMessage()]
+        assert len(warnings) == 1
+        assert (
+            "System Settings > Privacy & Security > Location Services"
+            in warnings[0].getMessage()
+        )
+        assert "sudo does not help" in warnings[0].getMessage()
+
+    def test_supported_and_interfaces_report_status(self, monkeypatch):
+        self._denied(monkeypatch)
+        backend = MacOSBackend(fake_corewlan(FakeInterface(bssid="aa:bb:cc:dd:ee:ff")))
+        iface = backend.list_interfaces()[0]
+        supported = backend.interface_info(parse(["--supported"]), iface)
+        assert "Location Services: denied" in supported
+        assert "unsupported on macOS" in supported
+        text = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "Location Services: denied" in text
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["location_authorization"] == "denied"
+
+    def test_get_interfaces_json_stays_one_document(self, monkeypatch, capsys, caplog):
+        self._denied(monkeypatch)
+        backend = MacOSBackend(fake_corewlan(FakeInterface(bssid="aa:bb:cc:dd:ee:ff")))
+        with caplog.at_level(logging.WARNING), pytest.raises(SystemExit) as caught:
+            app.run(parse(["--get-interfaces", "--json"]), backend=backend)
+        assert caught.value.code == 0
+        out = capsys.readouterr().out
+        payload = json.loads(out)
+        assert list(out.strip())[0] == "{"
+        assert payload["location_authorization"] == "denied"
+        assert "System Settings" not in out
+        assert "sudo does not help" not in out
+        assert "denied" in caplog.text
+        assert "System Settings > Privacy & Security > Location Services" in caplog.text
+
+    def test_watch_events_checks_location_before_the_run_loop(self, monkeypatch):
+        order = []
+
+        def prepare():
+            order.append("location")
+            return macos_location.LocationAuthorization("authorized", True, "")
+
+        class Watcher:
+            def __init__(self, *_args, **_kwargs):
+                order.append("init")
+
+            def run(self):
+                order.append("run")
+
+        monkeypatch.setattr(macos_location, "prepare_location_services", prepare)
+        monkeypatch.setattr("lswifi.backends.macos_events.MacOSEventWatcher", Watcher)
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        backend.watch_events(parse(["--watchevents"]))
+        assert order == ["location", "init", "run"]
+
+    def test_authorized_interface_has_no_warning(self, caplog):
+        backend = MacOSBackend(fake_corewlan(FakeInterface(bssid="aa:bb:cc:dd:ee:ff")))
+        iface = backend.list_interfaces()[0]
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "Location Services: authorized" in out
+        assert "Location Services" not in caplog.text
 
 
 def _corewlan_available():
@@ -773,7 +900,9 @@ def _corewlan_available():
 
 @pytest.mark.skipif(not _corewlan_available(), reason="needs macOS with CoreWLAN")
 class TestRealScan:
-    def test_scan(self):
+    def test_scan(self, monkeypatch):
+        monkeypatch.setattr(macos_location, "prepare_location_services", _REAL_PREPARE)
+        monkeypatch.setattr(macos_location, "_cached", None)
         backend = MacOSBackend()
         ifaces = backend.list_interfaces()
         if not ifaces or ifaces[0].state_string == "powered off":

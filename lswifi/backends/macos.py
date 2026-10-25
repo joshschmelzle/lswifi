@@ -18,15 +18,18 @@ CoreWLAN is imported lazily by MacOSBackend so this module, and the mapping
 functions in it, import on any OS.
 
 macOS 14+ only returns SSID, BSSID, country code and the IE blob when the
-calling process holds a Location Services grant. Without it, scan results
-still carry RSSI, channel and beacon interval, so rows are kept and the user
-is told once why the other columns are blank. sudo does not change this.
+calling process holds a Location Services grant. lswifi asks CoreLocation for
+that grant and runs this thread's run loop until the user answers or the wait
+expires. Without a grant, scan results still carry RSSI, channel and beacon
+interval, so rows are kept and the user is told once which authorization state
+blocked the rest. sudo does not change this.
 """
 
 import json
 import logging
 from typing import Any
 
+from lswifi.backends import macos_location
 from lswifi.backends.base import (
     BackendError,
     BackendUnavailableError,
@@ -101,12 +104,42 @@ LOCATION_HELP = (
 _location_warned = False
 
 
-def warn_location_once() -> None:
+def warn_location_once(message: str | None = None) -> None:
     """Explain the Location Services redaction once per process"""
     global _location_warned
-    if not _location_warned:
-        _location_warned = True
-        log.warning(LOCATION_HELP)
+    if _location_warned:
+        return
+    _location_warned = True
+    if message is None:
+        current = macos_location.current_location_authorization()
+        if current is not None and current.granted:
+            message = macos_location.REDACTED_WHILE_AUTHORIZED
+        elif current is not None and current.message:
+            message = current.message
+        else:
+            message = LOCATION_HELP
+    log.warning(message)
+
+
+def note_location():
+    """Check Location Services and warn once when the grant is missing"""
+    found = macos_location.prepare_location_services()
+    if not found.granted:
+        warn_location_once(found.message)
+    return found
+
+
+def location_needed(args) -> bool:
+    """Commands that show SSIDs or BSSIDs, not a bare interface list"""
+    if args is None:
+        return False
+    skipped = (
+        getattr(args, "list_interfaces", False)
+        or getattr(args, "append", None)
+        or getattr(args, "display_ethers", False)
+        or getattr(args, "event_watcher", False)
+    )
+    return not skipped
 
 
 def frequency_from_channel(channel_number: int, band: int | None) -> int:
@@ -459,6 +492,7 @@ class MacOSBackend:
 
     def scan(self, iface: InterfaceInfo) -> list[BssRecord]:
         """Broadcast scan (nil SSID), blocking until CoreWLAN returns"""
+        note_location()
         cw_iface = self._native(iface)
         networks, error = cw_iface.scanForNetworksWithSSID_error_(None, None)
         if networks is None:
@@ -475,11 +509,16 @@ class MacOSBackend:
 
     def cached_scan(self, iface: InterfaceInfo) -> list[BssRecord]:
         """Read the interface scan cache without triggering a scan"""
+        note_location()
         cw_iface = self._native(iface)
         networks = cw_iface.cachedScanResults()
         return self._records(networks or [], cw_iface)
 
     def open_session(self, args, iface: InterfaceInfo) -> MacOSScanSession:
+        # app.py scans on a worker thread. Ask here, on the caller thread,
+        # so the authorization prompt has a run loop to appear on.
+        if location_needed(args):
+            note_location()
         return MacOSScanSession(self, iface, args)
 
     def bus_info(self, iface: InterfaceInfo) -> tuple:
@@ -492,15 +531,18 @@ class MacOSBackend:
         interfaces = self.list_interfaces()
         if not interfaces:
             raise BackendError("no Wi-Fi interfaces found")
+        note_location()
         MacOSEventWatcher(self.client, interfaces, args).run()
 
     def interface_info(self, args, iface: InterfaceInfo) -> str:
         """-ap, -channel, --get-interfaces from the associated CWInterface"""
+        location = note_location()
         cw_iface = self._native(iface)
         if args.supported:
             return (
                 f"    --supported: {UNSUPPORTED}\n"
                 "    AP uptime isn't available on macOS\n"
+                f"    Location Services: {macos_location.location_label(location)}\n"
             )
         bssid = (cw_iface.bssid() or "").lower()
         ssid = _nsdata_bytes(cw_iface.ssidData()).decode("utf-8", errors="replace")
@@ -513,7 +555,7 @@ class MacOSBackend:
             else None
         )
         state = _interface_state(cw_iface)
-        if state == "connected" and not bssid:
+        if state == "connected" and not bssid and location.granted:
             warn_location_once()
 
         base = {"interface": iface.connection_name, "mac": iface.mac}
@@ -554,6 +596,7 @@ class MacOSBackend:
         info = base | {
             "description": iface.description,
             "state": state,
+            "location_authorization": location.status,
             "ssid": ssid,
             "bssid": bssid,
             "channel": channel_number,
@@ -598,6 +641,7 @@ class MacOSBackend:
         outstr += f"    Description: {iface.description}\n"
         outstr += f"    MAC: {iface.mac}\n"
         outstr += f"    State: {state}\n"
+        outstr += f"    Location Services: {macos_location.location_label(location)}\n"
         if connected:
             outstr += f"    SSID: {ssid}\n"
             outstr += f"    BSSID: {bssid}\n"

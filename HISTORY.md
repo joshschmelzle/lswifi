@@ -1,6 +1,11 @@
 Release History
 ===============
 
+UNRELEASED
+----------
+
+- On macOS, check Location Services before a scan. When the status is not determined, ask for access and run the run loop for a bounded wait so the system prompt can appear (#133). Sleeping does not. The warning names the state (denied, restricted, not determined, turned off, or a Python that is not code-signed) and what to do. `--supported` and `--get-interfaces`, including JSON, report the state. Warnings stay on stderr.
+
 RELEASED
 --------
 

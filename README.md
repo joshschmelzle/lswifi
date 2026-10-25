@@ -29,12 +29,18 @@ macOS (preview)
 $ python3 -m pip install lswifi
 ```
 
-macOS hides SSIDs, BSSIDs, and information elements from apps that have not been granted Location Services. Without that grant, `lswifi` only sees RSSI and channel, and prints a warning. `sudo` does not help.
+macOS hides SSIDs, BSSIDs, and information elements unless the process has a Location Services grant. `lswifi` checks that grant with CoreLocation before it scans. When the status is not determined and this Python is code-signed, it asks for When In Use access and runs the run loop for up to 15 seconds so macOS can show the prompt. Sleeping does not show the prompt. When standard input is not a terminal, the wait is about a second, so a script is not stuck. `--watchevents` asks once, then watches. Without a grant, results still include RSSI and channel, and one warning on stderr names the state:
 
-- Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.11 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
-- Allow Python in System Settings > Privacy & Security > Location Services.
+- **denied**: grant this Python, or the terminal that launched it, in System Settings > Privacy & Security > Location Services.
+- **restricted**: parental controls or device management are blocking Location Services.
+- **not determined**: no choice is recorded yet. Allow the prompt, or grant this Python or the terminal in Location Services, then run `lswifi` again. If no prompt appears and Python is not listed there, the interpreter is not registered.
+- **not code-signed**: ad-hoc builds, including uv, Homebrew, and pyenv, cannot be registered. Install Python from the [python.org installer](https://www.python.org/downloads/macos/) (3.11 or newer) and grant that interpreter.
+- **turned off**: Location Services is off system-wide. Turn it on, then grant Python or the terminal.
+- **unavailable**: CoreLocation could not be loaded. Reinstall `lswifi`.
 
-macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but in testing the Developer ID-signed python.org interpreter (and venvs created from it) could still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay `notDetermined` and never get the prompt.
+`--supported` and `--get-interfaces` print the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`). The warning stays on stderr, so `--json` is still one JSON document. `sudo` does not help.
+
+macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but a Developer ID-signed python.org interpreter (and venvs created from it) can still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay not determined and never get the prompt.
 
 Known limitations on macOS:
 
