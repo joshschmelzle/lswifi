@@ -1,6 +1,8 @@
 name: publish
 
 on:
+  push:
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
@@ -9,11 +11,80 @@ permissions:
   contents: read
 
 jobs:
+  release:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    outputs:
+      publish: ${{ steps.out.outputs.publish }}
+      tag: ${{ steps.out.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: cut
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+        run: bash .github/scripts/cut-release.sh
+      - id: out
+        if: steps.cut.outcome == 'success'
+        shell: bash
+        env:
+          RELEASED: ${{ steps.cut.outputs.released }}
+          PUSH_TAG: ${{ steps.cut.outputs.tag }}
+        run: |
+          if [ "$RELEASED" = true ]; then
+            echo "Publishing ${PUSH_TAG}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "tag=${PUSH_TAG}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release_event:
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.out.outputs.publish }}
+      tag: ${{ steps.out.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: out
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          RELEASE_AUTHOR: ${{ github.event.release.author.login }}
+          ACTOR: ${{ github.actor }}
+        run: bash .github/scripts/release-event.sh >> "$GITHUB_OUTPUT"
+
   test:
+    needs: [release, release_event]
+    if: >-
+      always() &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (needs.release_event.result == 'success' || needs.release_event.result == 'skipped') &&
+      (github.event_name == 'workflow_dispatch' ||
+       needs.release.outputs.publish == 'true' ||
+       needs.release_event.outputs.publish == 'true')
     uses: ./.github/workflows/tests.yml
 
   build:
-    needs: test
+    needs: [release, release_event, test]
+    if: >-
+      always() &&
+      needs.test.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (needs.release_event.result == 'success' || needs.release_event.result == 'skipped') &&
+      (github.event_name == 'workflow_dispatch' ||
+       needs.release.outputs.publish == 'true' ||
+       needs.release_event.outputs.publish == 'true')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -21,10 +92,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Check the tag matches the package version
-        if: github.event_name == 'release'
+        if: needs.release.outputs.publish == 'true' || needs.release_event.outputs.publish == 'true'
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ needs.release.outputs.tag || needs.release_event.outputs.tag }}
         run: |
           # Windows CPython turns print()'s trailing \n into \r\n. Bash command
           # substitution deletes the LF and leaves the CR, so VERSION never
@@ -45,8 +116,14 @@ jobs:
           path: dist/
 
   pypi:
-    needs: build
-    if: github.event_name == 'release'
+    needs: [release, release_event, build]
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (needs.release_event.result == 'success' || needs.release_event.result == 'skipped') &&
+      (needs.release.outputs.publish == 'true' ||
+       needs.release_event.outputs.publish == 'true')
     runs-on: ubuntu-latest
     environment:
       name: pypi
