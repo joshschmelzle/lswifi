@@ -1,6 +1,11 @@
 Release History
 ===============
 
+UNRELEASED
+----------
+
+- On macOS, check Location Services before a scan. When the status is not determined, ask for access and run the run loop for a bounded wait so the system prompt can appear (#133). The warning names the state. `--get-interfaces` prints it, and `--get-interfaces --json` includes `location_authorization`. Warnings stay on stderr.
+
 RELEASED
 --------
 

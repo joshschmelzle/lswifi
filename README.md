@@ -29,12 +29,16 @@ macOS (preview)
 $ python3 -m pip install lswifi
 ```
 
-macOS hides SSIDs, BSSIDs, and information elements from apps that have not been granted Location Services. Without that grant, `lswifi` only sees RSSI and channel, and prints a warning. `sudo` does not help.
+macOS hides SSIDs, BSSIDs, and information elements unless Python has a Location Services grant. `lswifi` checks before a scan and, when the choice is not determined, asks and runs the run loop so the prompt can appear. RSSI and channel still show. The warning is on stderr, so `--json` is still one document. `--get-interfaces` prints `Location Services:` and the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`).
 
-- Use a signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/) (3.11 or newer). Location Services can be granted to it. Unsigned or ad-hoc builds (for example, uv-managed Pythons) are not offered the grant and will get redacted results.
-- Allow Python in System Settings > Privacy & Security > Location Services.
+lswifi needs a code-signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/); uv, Homebrew, and pyenv builds can't be granted. Enable Python in System Settings > Privacy & Security > Location Services. Without a grant, one warning names the state:
 
-macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but in testing the Developer ID-signed python.org interpreter (and venvs created from it) could still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay `notDetermined` and never get the prompt.
+- **denied**: Python is turned off in Location Services.
+- **not determined**: no choice yet; lswifi asks.
+- **not code-signed**: this Python can't be granted.
+- **turned off**: Location Services is off system-wide.
+- **restricted**: blocked by parental controls or device management.
+- **unavailable**: CoreLocation couldn't load; reinstall lswifi.
 
 Known limitations on macOS:
 

@@ -1,2 +1,3 @@
-# back-compat for lswifi[macos]; CoreWLAN is now a default dependency on macOS
+# back-compat for lswifi[macos]; CoreWLAN and CoreLocation are default macOS dependencies
 pyobjc-framework-CoreWLAN>=12.0; sys_platform == "darwin"
+pyobjc-framework-CoreLocation>=12.0; sys_platform == "darwin"

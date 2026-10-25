@@ -27,6 +27,7 @@ import json
 import logging
 from typing import Any
 
+from lswifi.backends import macos_location
 from lswifi.backends.base import (
     BackendError,
     BackendUnavailableError,
@@ -90,23 +91,47 @@ CW_SECURITY_NAMES = {
 
 UNSUPPORTED = "unsupported on macOS"
 
-LOCATION_HELP = (
-    "macOS hides SSID, BSSID, and information elements (security, width, "
-    "amendments) from processes without a Location Services grant; showing "
-    "RSSI and channel only. Grant Location Services to the app that runs "
-    "lswifi in System Settings > Privacy & Security > Location Services. "
-    "sudo does not help. See the macOS section of the README."
-)
+LOCATION_HELP = macos_location.GENERIC_MESSAGE
 
 _location_warned = False
 
 
-def warn_location_once() -> None:
+def warn_location_once(message: str | None = None) -> None:
     """Explain the Location Services redaction once per process"""
     global _location_warned
-    if not _location_warned:
-        _location_warned = True
-        log.warning(LOCATION_HELP)
+    if _location_warned:
+        return
+    _location_warned = True
+    if message is None:
+        current = macos_location.current_location_authorization()
+        if current is None:
+            current = macos_location.prepare_location_services()
+        if current.granted:
+            message = macos_location.REDACTED_WHILE_AUTHORIZED
+        elif current.message:
+            message = current.message
+        else:
+            message = LOCATION_HELP
+    log.warning(message)
+
+
+def note_location():
+    found = macos_location.prepare_location_services()
+    if not found.granted:
+        warn_location_once(found.message)
+    return found
+
+
+def location_needed(args) -> bool:
+    if args is None:
+        return False
+    skipped = (
+        getattr(args, "list_interfaces", False)
+        or getattr(args, "append", None)
+        or getattr(args, "display_ethers", False)
+        or getattr(args, "event_watcher", False)
+    )
+    return not skipped
 
 
 def frequency_from_channel(channel_number: int, band: int | None) -> int:
@@ -459,6 +484,7 @@ class MacOSBackend:
 
     def scan(self, iface: InterfaceInfo) -> list[BssRecord]:
         """Broadcast scan (nil SSID), blocking until CoreWLAN returns"""
+        note_location()
         cw_iface = self._native(iface)
         networks, error = cw_iface.scanForNetworksWithSSID_error_(None, None)
         if networks is None:
@@ -475,11 +501,14 @@ class MacOSBackend:
 
     def cached_scan(self, iface: InterfaceInfo) -> list[BssRecord]:
         """Read the interface scan cache without triggering a scan"""
+        note_location()
         cw_iface = self._native(iface)
         networks = cw_iface.cachedScanResults()
         return self._records(networks or [], cw_iface)
 
     def open_session(self, args, iface: InterfaceInfo) -> MacOSScanSession:
+        if location_needed(args):
+            note_location()
         return MacOSScanSession(self, iface, args)
 
     def bus_info(self, iface: InterfaceInfo) -> tuple:
@@ -492,10 +521,12 @@ class MacOSBackend:
         interfaces = self.list_interfaces()
         if not interfaces:
             raise BackendError("no Wi-Fi interfaces found")
+        note_location()
         MacOSEventWatcher(self.client, interfaces, args).run()
 
     def interface_info(self, args, iface: InterfaceInfo) -> str:
         """-ap, -channel, --get-interfaces from the associated CWInterface"""
+        location = note_location()
         cw_iface = self._native(iface)
         if args.supported:
             return (
@@ -513,7 +544,7 @@ class MacOSBackend:
             else None
         )
         state = _interface_state(cw_iface)
-        if state == "connected" and not bssid:
+        if state == "connected" and not bssid and location.granted:
             warn_location_once()
 
         base = {"interface": iface.connection_name, "mac": iface.mac}
@@ -554,6 +585,7 @@ class MacOSBackend:
         info = base | {
             "description": iface.description,
             "state": state,
+            "location_authorization": location.status,
             "ssid": ssid,
             "bssid": bssid,
             "channel": channel_number,
@@ -598,6 +630,7 @@ class MacOSBackend:
         outstr += f"    Description: {iface.description}\n"
         outstr += f"    MAC: {iface.mac}\n"
         outstr += f"    State: {state}\n"
+        outstr += f"    Location Services: {macos_location.location_label(location)}\n"
         if connected:
             outstr += f"    SSID: {ssid}\n"
             outstr += f"    BSSID: {bssid}\n"
