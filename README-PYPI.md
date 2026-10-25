@@ -17,7 +17,7 @@ Note: The Python Scripts directory must be added to the PATH environment variabl
 
 ![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/pip_install.gif "animation showing install of lswifi")
 
-macOS (preview): same install, `python3 -m pip install lswifi`; the CoreWLAN bindings come with it. macOS hides SSIDs, BSSIDs, and information elements unless Python has a Location Services grant, so use a signed Python such as the [python.org installer](https://www.python.org/downloads/macos/) (3.13 or newer) and allow it in System Settings > Privacy & Security > Location Services. Unsigned or ad-hoc builds (for example, uv-managed Pythons) get redacted results.
+macOS (preview): same install, `python3 -m pip install lswifi`; the CoreWLAN bindings come with it. macOS hides SSIDs, BSSIDs, and information elements unless Python has a Location Services grant, so use a signed Python such as the [python.org installer](https://www.python.org/downloads/macos/) (3.11 or newer) and allow it in System Settings > Privacy & Security > Location Services. Unsigned or ad-hoc builds (for example, uv-managed Pythons) get redacted results.
 
 Linux (preview): same install, `python3 -m pip install lswifi`; no extra packages. Scanning uses nl80211, so run `sudo lswifi` to trigger a fresh scan (`CAP_NET_ADMIN`); without it, `lswifi` shows the kernel's cached results. `--supported` is not available on Linux.
 

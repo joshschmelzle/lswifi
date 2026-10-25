@@ -1,6 +1,11 @@
 Release History
 ===============
 
+UNRELEASED
+----------
+
+- Require Python 3.11 or newer. The test suite also runs on Python 3.12.
+
 RELEASED
 --------
 
