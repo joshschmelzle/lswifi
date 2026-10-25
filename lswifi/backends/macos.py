@@ -227,26 +227,6 @@ def _mapping_get(obj, key: str):
     return None
 
 
-def _ipv4_state(monitor):
-    if monitor is None:
-        return None
-    if isinstance(monitor, dict):
-        return monitor.get("ipv4State")
-    state = _call(monitor, "ipv4State")
-    if state is not None:
-        return state
-    try:
-        state = monitor.ipv4State
-    except Exception:
-        return None
-    if callable(state):
-        try:
-            return state()
-        except Exception:
-            return None
-    return state
-
-
 def _text(value) -> str | None:
     if value is None:
         return None
@@ -259,17 +239,59 @@ def _text(value) -> str | None:
     return text or None
 
 
-def _gateway(cw_iface) -> tuple[str | None, str | None]:
-    # mcsIndex, numberOfSpatialStreams, maxNSSSupportedForAP, and ipMonitor
-    # are undocumented CoreWLAN selectors. They answer on some macOS builds
-    # and are absent from the public header, so a missing or failing selector
-    # is skipped.
-    state = _ipv4_state(_call(cw_iface, "ipMonitor"))
-    hardware = _text(_mapping_get(state, "ARPResolvedHardwareAddress"))
+def _monitor_value(monitor, selector: str):
+    if monitor is None:
+        return None
+    if isinstance(monitor, dict):
+        return monitor.get(selector)
+    return _call(monitor, selector)
+
+
+def _string_list(value) -> list[str]:
+    if value is None or isinstance(value, (str, bytes)):
+        text = _text(value)
+        return [text] if text else []
+    try:
+        items = list(value)
+    except Exception:
+        return []
+    found = []
+    for item in items:
+        text = _text(item)
+        if text:
+            found.append(text)
+    return found
+
+
+def _config_gateway(state) -> tuple[str | None, str | None]:
     ip = _text(_mapping_get(state, "ARPResolvedIPAddress"))
+    hardware = _text(_mapping_get(state, "ARPResolvedHardwareAddress"))
     if hardware and ":" in hardware:
         hardware = hardware.lower()
     return ip, hardware
+
+
+def _gateway(cw_iface) -> tuple[str | None, str | None]:
+    monitor = _call(cw_iface, "ipMonitor")
+    ip = hardware = None
+    for selector in ("ipv4WiFiStateConfig", "ipv4StateConfig", "ipv4State"):
+        state = _monitor_value(monitor, selector)
+        if state is None:
+            continue
+        found_ip, found_mac = _config_gateway(state)
+        if ip is None:
+            ip = found_ip
+        if hardware is None:
+            hardware = found_mac
+        if ip and hardware:
+            break
+    if not ip:
+        ip = _text(_monitor_value(monitor, "ipv4Router"))
+    return ip, hardware
+
+
+def _ipv4_addresses(cw_iface) -> list[str]:
+    return _string_list(_monitor_value(_call(cw_iface, "ipMonitor"), "ipv4Addresses"))
 
 
 def _channel_runs(numbers: list[int]) -> list[list[int]]:
@@ -516,9 +538,19 @@ class MacOSBackend:
         channels = summarize_supported_channels(
             _call(cw_iface, "supportedWLANChannels")
         )
-        gateway_ip, gateway_mac = (None, None)
-        if connected:
-            gateway_ip, gateway_mac = _gateway(cw_iface)
+        # mcsIndex, numberOfSpatialStreams, maxNSSSupportedForAP, and ipMonitor
+        # are undocumented CoreWLAN selectors. They answer on some macOS builds
+        # and are absent from the public header, so a missing or failing selector
+        # is skipped.
+        gateway_ip, gateway_mac = _gateway(cw_iface) if connected else (None, None)
+        ipv4_addresses = _ipv4_addresses(cw_iface) or None
+        mcs_index = _as_int(_call(cw_iface, "mcsIndex")) if connected else None
+        spatial_streams = (
+            _as_int(_call(cw_iface, "numberOfSpatialStreams")) if connected else None
+        )
+        max_spatial_streams = (
+            _as_int(_call(cw_iface, "maxNSSSupportedForAP")) if connected else None
+        )
         info = base | {
             "description": iface.description,
             "state": state,
@@ -551,17 +583,12 @@ class MacOSBackend:
                 else bool(service)
             ),
             "supported_channels": channels,
-            "mcs_index": _as_int(_call(cw_iface, "mcsIndex")) if connected else None,
-            "spatial_streams": (
-                _as_int(_call(cw_iface, "numberOfSpatialStreams"))
-                if connected
-                else None
-            ),
-            "max_spatial_streams": (
-                _as_int(_call(cw_iface, "maxNSSSupportedForAP")) if connected else None
-            ),
+            "mcs_index": mcs_index,
+            "spatial_streams": spatial_streams,
+            "max_spatial_streams": max_spatial_streams,
             "gateway_ip": gateway_ip,
             "gateway_mac": gateway_mac,
+            "ipv4_addresses": ipv4_addresses,
             "country_code": cw_iface.countryCode(),
             "bus": None,
         }
@@ -600,6 +627,8 @@ class MacOSBackend:
                 outstr += f"    Gateway: {info['gateway_ip']}\n"
             if info["gateway_mac"] is not None:
                 outstr += f"    Gateway MAC: {info['gateway_mac']}\n"
+        if info["ipv4_addresses"]:
+            outstr += f"    IPv4 Address: {', '.join(info['ipv4_addresses'])}\n"
         if info["tx_power_mw"] is not None:
             outstr += f"    Tx Power: {format_mbps(info['tx_power_mw'])} mW\n"
         if info["interface_mode"] is not None:

@@ -168,6 +168,7 @@ class LinuxInterface:
     center_freq1: int | None = None
     center_freq2: int | None = None
     tx_power_mbm: int | None = None
+    links: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def is_station(self) -> bool:
@@ -191,6 +192,7 @@ def interface_from_attrs(attrs: dict[int, bytes]) -> LinuxInterface | None:
         center_freq1=nl.get_uint(attrs, nl.ATTR_CENTER_FREQ1),
         center_freq2=nl.get_uint(attrs, nl.ATTR_CENTER_FREQ2),
         tx_power_mbm=nl.get_uint(attrs, nl.ATTR_WIPHY_TX_POWER_LEVEL),
+        links=parse_mlo_links(attrs, mac_field="addr"),
     )
 
 
@@ -407,8 +409,9 @@ def parse_sta_info(payload: bytes) -> dict[str, Any]:
     return sta
 
 
-def parse_mlo_links(attrs: dict[int, bytes]) -> list[dict[str, Any]]:
-    """NL80211_ATTR_MLO_LINKS: each inner nest is one link (id, BSSID, freq)."""
+def parse_mlo_links(
+    attrs: dict[int, bytes], mac_field: str = "bssid"
+) -> list[dict[str, Any]]:
     blob = attrs.get(nl.ATTR_MLO_LINKS)
     if not blob:
         return []
@@ -418,11 +421,20 @@ def parse_mlo_links(attrs: dict[int, bytes]) -> list[dict[str, Any]]:
         link: dict[str, Any] = {}
         if nl.ATTR_MLO_LINK_ID in inner:
             link["id"] = nl.get_uint(inner, nl.ATTR_MLO_LINK_ID)
-        bssid = nl.mac_str(inner.get(nl.ATTR_MAC))
-        if bssid:
-            link["bssid"] = bssid
+        mac = nl.mac_str(inner.get(nl.ATTR_MAC))
+        if mac:
+            link[mac_field] = mac
         if nl.ATTR_WIPHY_FREQ in inner:
             link["frequency_mhz"] = nl.get_uint(inner, nl.ATTR_WIPHY_FREQ)
+        width = nl.get_uint(inner, nl.ATTR_CHANNEL_WIDTH)
+        if width is not None and width in nl.CHAN_WIDTH_MHZ:
+            link["width_mhz"] = nl.CHAN_WIDTH_MHZ[width]
+        if nl.ATTR_CENTER_FREQ1 in inner:
+            link["center_freq1_mhz"] = nl.get_uint(inner, nl.ATTR_CENTER_FREQ1)
+        if nl.ATTR_CENTER_FREQ2 in inner:
+            link["center_freq2_mhz"] = nl.get_uint(inner, nl.ATTR_CENTER_FREQ2)
+        if nl.ATTR_WIPHY_TX_POWER_LEVEL in inner:
+            link["tx_power_mbm"] = nl.get_uint(inner, nl.ATTR_WIPHY_TX_POWER_LEVEL)
         if nl.ATTR_STA_INFO in inner:
             link["station"] = parse_sta_info(inner[nl.ATTR_STA_INFO])
         if link:
@@ -455,11 +467,52 @@ def _public_link(link: dict[str, Any]) -> dict[str, Any]:
     public: dict[str, Any] = {}
     if link.get("id") is not None:
         public["id"] = link["id"]
+    if link.get("addr"):
+        public["addr"] = link["addr"]
     if link.get("bssid"):
         public["bssid"] = link["bssid"]
-    if link.get("frequency_mhz") is not None:
-        public["frequency_mhz"] = link["frequency_mhz"]
+    freq = link.get("frequency_mhz")
+    if freq is not None:
+        public["frequency_mhz"] = freq
+        number = channel_number(freq)
+        if number is not None:
+            public["channel"] = number
+        band = band_name(freq)
+        if band:
+            public["band"] = band
+    if link.get("width_mhz") is not None:
+        public["width_mhz"] = link["width_mhz"]
+    if link.get("center_freq1_mhz") is not None:
+        public["center_freq1_mhz"] = link["center_freq1_mhz"]
+    if link.get("center_freq2_mhz") is not None:
+        public["center_freq2_mhz"] = link["center_freq2_mhz"]
+    if link.get("tx_power_mbm") is not None:
+        public["tx_power_dbm"] = link["tx_power_mbm"] / 100
     return public
+
+
+def format_link(item: dict[str, Any]) -> str:
+    bits = []
+    if item.get("bssid"):
+        bits.append(item["bssid"])
+    if item.get("addr") and item.get("addr") != item.get("bssid"):
+        bits.append(item["addr"])
+    if item.get("channel") is not None:
+        bits.append(f"channel {item['channel']}")
+    if item.get("frequency_mhz") is not None:
+        bits.append(f"{item['frequency_mhz']} MHz")
+    if item.get("band"):
+        bits.append(item["band"])
+    if item.get("width_mhz") is not None:
+        bits.append(f"{item['width_mhz']} MHz")
+    if item.get("center_freq1_mhz") is not None:
+        bits.append(f"center {item['center_freq1_mhz']} MHz")
+    if item.get("center_freq2_mhz") is not None:
+        bits.append(f"center2 {item['center_freq2_mhz']} MHz")
+    if item.get("tx_power_dbm") is not None:
+        bits.append(f"{format_mbps(item['tx_power_dbm'])} dBm")
+    label = f"Link {item['id']}" if item.get("id") is not None else "Link"
+    return f"{label}: {', '.join(bits)}"
 
 
 def merge_station_dump(messages) -> tuple[str | None, dict[str, Any] | None, list]:
@@ -486,14 +539,18 @@ def merge_station_dump(messages) -> tuple[str | None, dict[str, Any] | None, lis
         nested = [link["station"] for link in links if link.get("station")]
         if len(nested) == 1:
             aggregate = nested[0]
-    public = []
+    if bssid is None and len(links) == 1:
+        bssid = links[0].get("bssid")
+    return bssid, aggregate, links
+
+
+def _drop_placeholder_mld_signal(station: dict[str, Any] | None, links: list) -> None:
+    if not station or station.get("signal") != 0 or not links:
+        return
     for link in links:
-        item = _public_link(link)
-        if item:
-            public.append(item)
-    if bssid is None and len(public) == 1:
-        bssid = public[0].get("bssid")
-    return bssid, aggregate, public
+        if "signal" in (link.get("station") or {}):
+            return
+    station.pop("signal", None)
 
 
 def station_to_link(attrs: dict[int, bytes]) -> tuple[str, int | None, float | None]:
@@ -562,6 +619,49 @@ def _phy_flags(attrs: dict[int, bytes]) -> set[str]:
         if nl.BAND_IFTYPE_EHT_CAP_MAC in inner:
             flags.add("EHT")
     return flags
+
+
+def _concat_nested(chunks: list[bytes]) -> bytes:
+    entries: list[bytes] = []
+    for blob in chunks:
+        entries.extend(
+            payload for _index, payload in nl.parse_attrs(blob).items() if payload
+        )
+    return b"".join(
+        nl.pack_attr((index + 1) | nl.NLA_F_NESTED, payload)
+        for index, payload in enumerate(entries)
+    )
+
+
+def _merge_band_payloads(chunks: list[bytes]) -> bytes:
+    if len(chunks) == 1:
+        return chunks[0]
+    merged: dict[int, bytes] = {}
+    freq_chunks: list[bytes] = []
+    iftype_chunks: list[bytes] = []
+    for chunk in chunks:
+        for kind, payload in nl.parse_attrs(chunk).items():
+            if kind == nl.BAND_ATTR_FREQS:
+                freq_chunks.append(payload)
+            elif kind == nl.BAND_ATTR_IFTYPE_DATA:
+                iftype_chunks.append(payload)
+            elif kind not in merged or not merged[kind]:
+                merged[kind] = payload
+    parts = [nl.pack_attr(kind, payload) for kind, payload in merged.items()]
+    if freq_chunks:
+        parts.append(
+            nl.pack_attr(
+                nl.BAND_ATTR_FREQS | nl.NLA_F_NESTED, _concat_nested(freq_chunks)
+            )
+        )
+    if iftype_chunks:
+        parts.append(
+            nl.pack_attr(
+                nl.BAND_ATTR_IFTYPE_DATA | nl.NLA_F_NESTED,
+                _concat_nested(iftype_chunks),
+            )
+        )
+    return b"".join(parts)
 
 
 def summarize_bands(bands: dict[int, bytes]) -> tuple[list[dict], list[str]]:
@@ -898,20 +998,33 @@ class LinuxBackend:
     def link(self, native: LinuxInterface) -> LinkInfo:
         """Current SSID, BSSID, channel, RSSI and Tx rate"""
         native = self.refresh(native)
-        radio = {"iftype": native.iftype, "tx_power_mbm": native.tx_power_mbm}
+        freq = native.frequency_mhz
+        width = native.width_mhz
+        center1 = native.center_freq1
+        center2 = native.center_freq2
+        tx_power = native.tx_power_mbm
+        iface_links = [dict(item) for item in native.links]
+        if freq is None and len(iface_links) == 1:
+            only = iface_links[0]
+            freq = only.get("frequency_mhz")
+            if width is None:
+                width = only.get("width_mhz")
+            if center1 is None:
+                center1 = only.get("center_freq1_mhz")
+            if center2 is None:
+                center2 = only.get("center_freq2_mhz")
+            if tx_power is None:
+                tx_power = only.get("tx_power_mbm")
+        radio = {"iftype": native.iftype, "tx_power_mbm": tx_power}
         if self.sysfs.is_up(native.name) is False:
             # some drivers (brcmfmac) keep reporting the last channel while down
             return LinkInfo(connected=False, extra=radio)
         info = LinkInfo(
             connected=bool(native.ssid),
             ssid=native.ssid,
-            frequency_mhz=native.frequency_mhz,
-            width_mhz=native.width_mhz,
-            extra=radio
-            | {
-                "center_freq1": native.center_freq1,
-                "center_freq2": native.center_freq2,
-            },
+            frequency_mhz=freq,
+            width_mhz=width,
+            extra=radio | {"center_freq1": center1, "center_freq2": center2},
         )
         if not info.connected:
             return info
@@ -925,15 +1038,22 @@ class LinuxBackend:
         except OSError as error:
             log.debug("GET_STATION on %s failed: %s", native.name, error)
             stations = []
-        bssid, station, links = merge_station_dump(stations)
+        bssid, station, station_links = merge_station_dump(stations)
+        links = _merge_links(iface_links + station_links)
+        _drop_placeholder_mld_signal(station, links)
         info.bssid = bssid
         if station:
             tx = station.get("tx_rate") or {}
             info.rssi = station.get("signal")
             info.tx_rate_mbps = tx.get("mbps")
             info.extra["station"] = station
-        if links:
-            info.extra["links"] = links
+        public = []
+        for item in links:
+            shown = _public_link(item)
+            if shown:
+                public.append(shown)
+        if public:
+            info.extra["links"] = public
         return info
 
     def country_code(self) -> str | None:
@@ -1005,16 +1125,19 @@ class LinuxBackend:
         except OSError as error:
             log.debug("GET_WIPHY for phy%s failed: %s", native.wiphy, error)
             return None, None
-        bands: dict[int, bytes] = {}
+        parts: dict[int, list[bytes]] = {}
         for reply in replies:
-            if nl.get_uint(reply.attrs, nl.ATTR_WIPHY) != native.wiphy:
+            seen = nl.get_uint(reply.attrs, nl.ATTR_WIPHY)
+            if seen is not None and seen != native.wiphy:
                 continue
             blob = reply.attrs.get(nl.ATTR_WIPHY_BANDS)
             if not blob:
                 continue
             for band_id, payload in nl.parse_attrs(blob).items():
-                if band_id not in bands or not bands[band_id]:
-                    bands[band_id] = payload
+                parts.setdefault(band_id, []).append(payload)
+        bands = {
+            band_id: _merge_band_payloads(chunks) for band_id, chunks in parts.items()
+        }
         summary, phy = summarize_bands(bands)
         return (summary or None), (phy or None)
 
@@ -1299,13 +1422,7 @@ class LinuxBackend:
             lines.append(f"    SSID: {link.ssid_text}")
             lines.append(f"    BSSID: {link.bssid}")
             for item in links or []:
-                bits = []
-                if item.get("bssid"):
-                    bits.append(item["bssid"])
-                if item.get("frequency_mhz") is not None:
-                    bits.append(f"{item['frequency_mhz']} MHz")
-                label = f"Link {item['id']}" if item.get("id") is not None else "Link"
-                lines.append(f"    {label}: {', '.join(bits)}")
+                lines.append(f"    {format_link(item)}")
         if link.frequency_mhz is not None:
             if link.channel is not None:
                 lines.append(f"    Channel: {link.channel}")

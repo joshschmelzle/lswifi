@@ -435,6 +435,23 @@ def _sample_channels():
     return channels
 
 
+class _WifiMonitor:
+    """CWIPMonitor selectors observed on macOS: no ipv4State."""
+
+    def ipv4WiFiStateConfig(self):
+        return {
+            "ARPResolvedHardwareAddress": "64:e8:81:b8:e9:80",
+            "ARPResolvedIPAddress": "192.168.1.1",
+            "AdditionalRoutes": [],
+        }
+
+    def ipv4Router(self):
+        return "10.9.9.9"
+
+    def ipv4Addresses(self):
+        return ["192.168.1.50", "10.1.1.5"]
+
+
 class RichInterface(FakeInterface):
     def __init__(self):
         super().__init__(bssid="AA:BB:CC:DD:EE:FF")
@@ -465,12 +482,7 @@ class RichInterface(FakeInterface):
         return True
 
     def ipMonitor(self):
-        return {
-            "ipv4State": {
-                "ARPResolvedHardwareAddress": "AA:BB:CC:DD:EE:01",
-                "ARPResolvedIPAddress": "192.168.1.1",
-            }
-        }
+        return _WifiMonitor()
 
     def supportedWLANChannels(self):
         return _sample_channels()
@@ -551,7 +563,9 @@ class TestMacInterfaceInfo:
         assert "Spatial Streams: 2" in out
         assert "Max Spatial Streams: 2" in out
         assert "Gateway: 192.168.1.1" in out
-        assert "Gateway MAC: aa:bb:cc:dd:ee:01" in out
+        assert "Gateway MAC: 64:e8:81:b8:e9:80" in out
+        assert "IPv4 Address: 192.168.1.50, 10.1.1.5" in out
+        assert "10.9.9.9" not in out
         assert "Tx Power: 10 mW" in out
         assert "Interface Mode: station" in out
         assert "Power: on" in out
@@ -568,7 +582,8 @@ class TestMacInterfaceInfo:
         assert info["spatial_streams"] == 2
         assert info["max_spatial_streams"] == 2
         assert info["gateway_ip"] == "192.168.1.1"
-        assert info["gateway_mac"] == "aa:bb:cc:dd:ee:01"
+        assert info["gateway_mac"] == "64:e8:81:b8:e9:80"
+        assert info["ipv4_addresses"] == ["192.168.1.50", "10.1.1.5"]
         assert info["tx_power_mw"] == 10.0
         assert info["interface_mode"] == "station"
         assert info["power_on"] is True
@@ -591,6 +606,42 @@ class TestMacInterfaceInfo:
         )
         assert "PHY Mode: 99" in out
         assert "Security: 99" in out
+
+    def test_gateway_falls_back_to_state_config_then_router(self):
+        class StateConfig:
+            def ipv4StateConfig(self):
+                return {
+                    "ARPResolvedIPAddress": "192.168.4.1",
+                    "ARPResolvedHardwareAddress": "AA:BB:CC:DD:EE:10",
+                }
+
+            def ipv4Router(self):
+                return "10.0.0.1"
+
+        cw = FakeInterface(bssid="aa:bb:cc:dd:ee:ff")
+        cw.ipMonitor = lambda: StateConfig()
+        backend = MacOSBackend(fake_corewlan(cw))
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "Gateway: 192.168.4.1" in out
+        assert "Gateway MAC: aa:bb:cc:dd:ee:10" in out
+        assert "10.0.0.1" not in out
+
+        class RouterOnly:
+            def ipv4Router(self):
+                return "192.168.8.1"
+
+            def ipv4Addresses(self):
+                return ["192.168.8.20"]
+
+        cw.ipMonitor = lambda: RouterOnly()
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "Gateway: 192.168.8.1" in out
+        assert "Gateway MAC" not in out
+        assert "IPv4 Address: 192.168.8.20" in out
 
     def test_disconnected_omits_connected_fields(self):
         cw = FakeInterface()
@@ -662,6 +713,7 @@ class TestMacInterfaceInfo:
             "max_spatial_streams",
             "gateway_ip",
             "gateway_mac",
+            "ipv4_addresses",
             "service_active",
             "supported_channels",
         ):
