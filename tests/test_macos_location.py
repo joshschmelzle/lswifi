@@ -124,10 +124,16 @@ class TestAlreadyDecided:
         state = ask(manager)
         assert state.status == loc.DENIED
         assert "denied" in state.message
+        assert "code-signed Python" in state.message
+        assert "python.org" in state.message
+        assert "uv" in state.message and "Homebrew" in state.message
+        assert "pyenv" in state.message
+        assert "Enable Python" in state.message
         assert (
             "System Settings > Privacy & Security > Location Services" in state.message
         )
-        assert "terminal" in state.message
+        assert "terminal" not in state.message
+        assert "app that runs" not in state.message
         assert "sudo does not help" in state.message
         assert manager.events == []
 
@@ -230,7 +236,10 @@ class TestNotDetermined:
         state = ask(manager, wait=1.0, pump=pump, clock=clock)
         assert state.status == loc.NOT_DETERMINED
         assert "not determined" in state.message
-        assert "python.org" in state.message
+        assert "code-signed Python" in state.message
+        assert "https://www.python.org/downloads/macos/" in state.message
+        assert "Enable Python" in state.message
+        assert "uv" in state.message
         assert sum(pumps) == pytest.approx(1.0)
         assert sum(pumps) < loc.WAIT_INTERACTIVE_S
 
@@ -254,6 +263,9 @@ class TestNotDetermined:
         assert "not code-signed" in state.message
         assert "https://www.python.org/downloads/macos/" in state.message
         assert "uv" in state.message
+        assert "Homebrew" in state.message and "pyenv" in state.message
+        assert "Enable Python" in state.message
+        assert "cannot be granted" in state.message
         assert "sudo does not help" in state.message
         assert "request" in manager.events
         assert sum(pumps) == pytest.approx(loc.UNSIGNED_WAIT_S)
@@ -429,12 +441,11 @@ class TestSignature:
         "text, registered",
         [
             (
-                "Authority=Developer ID Application: Python Software Foundation (B62T2735S6)\n"
-                "TeamIdentifier=B62T2735S6\n",
+                "Authority=Developer ID Application: Example Builder\n",
                 True,
             ),
             ("Authority=Software Signing\nAuthority=Apple Root CA\n", True),
-            ("Signature=adhoc\nTeamIdentifier=not set\n", False),
+            ("Signature=adhoc\n", False),
             ("flags=0x2(adhoc)\n", False),
             ("code object is not signed at all\n", False),
             ("Identifier=python3\n", False),

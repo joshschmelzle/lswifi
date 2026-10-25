@@ -31,11 +31,11 @@ $ python3 -m pip install lswifi
 
 macOS hides SSIDs, BSSIDs, and information elements unless the process has a Location Services grant. `lswifi` checks that grant with CoreLocation before it scans. When the status is not determined and this Python is code-signed, it asks for When In Use access and runs the run loop for up to 15 seconds so macOS can show the prompt. Sleeping does not show the prompt. When standard input is not a terminal, the wait is about a second, so a script is not stuck. `--watchevents` asks once, then watches. Without a grant, results still include RSSI and channel, and one warning on stderr names the state:
 
-- **denied**: grant this Python, or the terminal that launched it, in System Settings > Privacy & Security > Location Services.
+- **denied**: Location Services is denied for this Python. lswifi needs a code-signed Python (for example, the [python.org installer](https://www.python.org/downloads/macos/)). Unsigned interpreters such as uv, Homebrew, and pyenv builds cannot be granted. Enable Python in System Settings > Privacy & Security > Location Services.
 - **restricted**: parental controls or device management are blocking Location Services.
-- **not determined**: no choice is recorded yet. Allow the prompt, or grant this Python or the terminal in Location Services, then run `lswifi` again. If no prompt appears and Python is not listed there, the interpreter is not registered.
-- **not code-signed**: ad-hoc builds, including uv, Homebrew, and pyenv, cannot be registered. Install Python from the [python.org installer](https://www.python.org/downloads/macos/) (3.11 or newer) and grant that interpreter.
-- **turned off**: Location Services is off system-wide. Turn it on, then grant Python or the terminal.
+- **not determined**: no choice is recorded yet. lswifi asks for access. It needs a code-signed Python (for example, the python.org installer). Unsigned interpreters such as uv, Homebrew, and pyenv builds cannot be granted. Enable Python in System Settings > Privacy & Security > Location Services.
+- **not code-signed**: this Python is not code-signed, so Location Services cannot grant it. Install a code-signed Python (for example, the python.org installer) and enable Python there. uv, Homebrew, and pyenv builds cannot be granted.
+- **turned off**: Location Services is off system-wide. Turn it on, then enable Python.
 - **unavailable**: CoreLocation could not be loaded. Reinstall `lswifi`.
 
 `--supported` and `--get-interfaces` print the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`). The warning stays on stderr, so `--json` is still one JSON document. `sudo` does not help.

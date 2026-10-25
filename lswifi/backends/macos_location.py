@@ -60,11 +60,17 @@ _HIDE = (
 )
 _SUDO = "sudo does not help."
 _PYTHON_ORG = "https://www.python.org/downloads/macos/"
+SIGNED_PYTHON_HELP = (
+    "lswifi needs a code-signed Python (for example, the python.org "
+    f"installer: {_PYTHON_ORG}). "
+    "Unsigned interpreters such as uv, Homebrew, and pyenv builds "
+    "cannot be granted. "
+    f"Enable Python in {_SETTINGS}."
+)
 
 DENIED_MESSAGE = (
-    f"{_HIDE} because Location Services is denied for this process; "
-    "showing RSSI and channel only. Grant this Python, or the terminal "
-    f"that launched it, in {_SETTINGS}. {_SUDO}"
+    f"{_HIDE} because Location Services is denied for this Python; "
+    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP} {_SUDO}"
 )
 RESTRICTED_MESSAGE = (
     f"{_HIDE} because Location Services is restricted for this process; "
@@ -72,25 +78,21 @@ RESTRICTED_MESSAGE = (
     f"have to allow it. {_SUDO}"
 )
 NOT_DETERMINED_MESSAGE = (
-    f"{_HIDE} because Location Services is not determined for this process; "
-    "showing RSSI and channel only. lswifi asked for access. Allow the prompt, "
-    "or grant this Python or the terminal that launched it in "
-    f"{_SETTINGS}, then run lswifi again. If no prompt appears and Python is "
-    "not listed there, this interpreter is not registered with Location "
-    f"Services: install a code-signed Python from {_PYTHON_ORG} (3.11 or newer). "
-    f"{_SUDO}"
+    f"{_HIDE} because Location Services is not determined for this "
+    "Python; showing RSSI and channel only. lswifi asked for access. "
+    f"{SIGNED_PYTHON_HELP} {_SUDO}"
 )
 NOT_REGISTERED_MESSAGE = (
-    f"{_HIDE} because this Python is not code-signed with an identity "
-    "Location Services can register; showing RSSI and channel only. "
-    "Ad-hoc or unsigned builds (including uv, Homebrew, and pyenv) stay "
-    f"unavailable. Install a code-signed Python from {_PYTHON_ORG} "
-    f"(3.11 or newer) and grant it in {_SETTINGS}. {_SUDO}"
+    f"{_HIDE} because this Python is not code-signed; "
+    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP} {_SUDO}"
 )
 DISABLED_MESSAGE = (
     f"{_HIDE} because Location Services is turned off; showing RSSI and "
-    f"channel only. Turn it on in {_SETTINGS}, then grant this Python "
-    f"or the terminal that launched it. {_SUDO}"
+    f"channel only. Turn it on in {_SETTINGS}, then enable Python. {_SUDO}"
+)
+GENERIC_MESSAGE = (
+    f"{_HIDE} until this Python has a Location Services grant; "
+    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP} {_SUDO}"
 )
 CORELOCATION_MISSING = (
     f"{_HIDE} because CoreLocation is not available to this Python, so "

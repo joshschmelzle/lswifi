@@ -313,7 +313,7 @@ class TestBackend:
             asyncio.run(session.scan())
         warnings = [r for r in caplog.records if "Location Services" in r.getMessage()]
         assert len(warnings) == 1
-        assert "sudo does not help" in caplog.text
+        assert "authorized for this Python" in warnings[0].getMessage()
         assert session.data is not None and len(session.data) == 2
         for bss in session.data:
             assert str(bss.security) == "--"
@@ -824,12 +824,8 @@ class TestLocationIntegration:
             asyncio.run(session.scan())
             asyncio.run(session.scan())
         warnings = [r for r in caplog.records if "denied" in r.getMessage()]
-        assert len(warnings) == 1
-        assert (
-            "System Settings > Privacy & Security > Location Services"
-            in warnings[0].getMessage()
-        )
-        assert "sudo does not help" in warnings[0].getMessage()
+        assert [r.getMessage() for r in warnings] == [macos_location.DENIED_MESSAGE]
+        assert "app that runs" not in caplog.text
 
     def test_supported_and_interfaces_report_status(self, monkeypatch):
         self._denied(monkeypatch)
@@ -857,8 +853,23 @@ class TestLocationIntegration:
         assert payload["location_authorization"] == "denied"
         assert "System Settings" not in out
         assert "sudo does not help" not in out
-        assert "denied" in caplog.text
-        assert "System Settings > Privacy & Security > Location Services" in caplog.text
+        assert [r.getMessage() for r in caplog.records] == [
+            macos_location.DENIED_MESSAGE
+        ]
+
+    def test_bare_warning_uses_prepared_denial_when_uncached(self, monkeypatch, caplog):
+        state = macos_location.LocationAuthorization(
+            "denied",
+            False,
+            macos_location.DENIED_MESSAGE,
+        )
+        monkeypatch.setattr(macos_location, "prepare_location_services", lambda: state)
+        with caplog.at_level(logging.WARNING):
+            macos.warn_location_once()
+            macos.warn_location_once()
+        assert [r.getMessage() for r in caplog.records] == [
+            macos_location.DENIED_MESSAGE
+        ]
 
     def test_watch_events_checks_location_before_the_run_loop(self, monkeypatch):
         order = []

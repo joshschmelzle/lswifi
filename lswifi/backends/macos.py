@@ -93,13 +93,7 @@ CW_SECURITY_NAMES = {
 
 UNSUPPORTED = "unsupported on macOS"
 
-LOCATION_HELP = (
-    "macOS hides SSID, BSSID, and information elements (security, width, "
-    "amendments) from processes without a Location Services grant; showing "
-    "RSSI and channel only. Grant Location Services to the app that runs "
-    "lswifi in System Settings > Privacy & Security > Location Services. "
-    "sudo does not help. See the macOS section of the README."
-)
+LOCATION_HELP = macos_location.GENERIC_MESSAGE
 
 _location_warned = False
 
@@ -112,9 +106,11 @@ def warn_location_once(message: str | None = None) -> None:
     _location_warned = True
     if message is None:
         current = macos_location.current_location_authorization()
-        if current is not None and current.granted:
+        if current is None:
+            current = macos_location.prepare_location_services()
+        if current.granted:
             message = macos_location.REDACTED_WHILE_AUTHORIZED
-        elif current is not None and current.message:
+        elif current.message:
             message = current.message
         else:
             message = LOCATION_HELP
