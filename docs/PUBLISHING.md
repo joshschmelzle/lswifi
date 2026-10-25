@@ -79,6 +79,6 @@ Use semantic versions, tagged `v<major>.<minor>.<patch>` (for example `v0.3.2`).
 - *minor* stays compatible with previous versions
 - *patch* is a bug fix
 
-Merge the release to `main` with `__version__` bumped in `lswifi/__version__.py` and a section for that version in `HISTORY.md`. The release workflow tags that commit `v<version>` and opens a GitHub release whose notes are that `HISTORY.md` section. If the version did not change, or the tag already exists, it does nothing.
+Merge the release to `main` with `__version__` bumped in `lswifi/__version__.py` and a section for that version in `HISTORY.md`. On that push, `publish.yml` tags the commit `v<version>` and opens a GitHub release whose notes are that `HISTORY.md` section. If the version did not change, or the tag already exists, it does nothing and does not upload.
 
-That workflow then runs the publish workflow. The publish workflow checks the tag against `__version__` and uploads to PyPI only after the protected `pypi` environment is approved. Publishing a GitHub release by hand runs the same publish workflow.
+The same workflow checks the tag against `__version__` and uploads to PyPI only after the protected `pypi` environment is approved. Publishing a GitHub release by hand also runs `publish.yml`. A release created by that push, and a version already on PyPI, are not uploaded again.

@@ -15,7 +15,7 @@ WORKFLOW
 7. (recommended) check types with `tox -e typing` which runs mypy on repo.
 8. Sanity checks
 9. Push code
-10. (maintainers only) release by merging a `__version__` bump and a `HISTORY.md` section to `main`. CI tags `v<version>` and, after the `pypi` environment is approved, publishes to PyPI. See [PUBLISHING.md](PUBLISHING.md).
+10. (maintainers only) release by merging a `__version__` bump and a `HISTORY.md` section to `main`. `publish.yml` tags `v<version>` and, after the `pypi` environment is approved, publishes to PyPI. See [PUBLISHING.md](PUBLISHING.md).
 
 pip-compile
 -----------
