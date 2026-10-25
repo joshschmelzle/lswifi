@@ -41,7 +41,7 @@ from lswifi.backends.base import (
     InterfaceInfo,
     RecordScanSession,
 )
-from lswifi.helpers import get_channel_number_from_frequency
+from lswifi.helpers import format_mbps, get_channel_number_from_frequency
 
 log = logging.getLogger(__name__)
 
@@ -650,7 +650,7 @@ class LinuxBackend:
             )
 
         bus_type, bus = self.sysfs.bus_info(native.name)
-        bus_text = f"{bus_type} {bus}" if bus_type else "unknown"
+        bus_text = f"{bus_type} {bus}" if bus_type else None
         tx_power = (
             native.tx_power_mbm / 100 if native.tx_power_mbm is not None else None
         )
@@ -673,18 +673,24 @@ class LinuxBackend:
         outstr = f"Interface: {iface.connection_name} is {state}\n"
         outstr += f"    Description: {iface.description}\n"
         outstr += f"    MAC: {iface.mac}\n"
-        outstr += f"    Bus: {bus_text}\n"
+        if bus_text:
+            outstr += f"    Bus: {bus_text}\n"
         outstr += f"    State: {state}\n"
         if link.connected:
             outstr += f"    SSID: {link.ssid_text}\n"
             outstr += f"    BSSID: {link.bssid}\n"
-            outstr += f"    Channel: {link.channel}\n"
+            if link.channel is not None:
+                outstr += f"    Channel: {link.channel}\n"
             if link.band is not None:
                 outstr += f"    Band: {link.band}\n"
             if link.width_mhz is not None:
                 outstr += f"    Width: {link.width_mhz} MHz\n"
-            outstr += f"    RSSI: {link.rssi} dBm\n"
-            outstr += f"    Transmit (Tx) Rate: {link.tx_rate_mbps} Mbps\n"
+            if link.rssi is not None:
+                outstr += f"    RSSI: {link.rssi} dBm\n"
+            if link.tx_rate_mbps is not None:
+                outstr += (
+                    f"    Transmit (Tx) Rate: {format_mbps(link.tx_rate_mbps)} Mbps\n"
+                )
         if tx_power is not None:
             outstr += f"    Transmit Power: {tx_power:g} dBm\n"
         if info["country_code"]:

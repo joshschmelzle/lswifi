@@ -529,6 +529,7 @@ class TestFakeBackend:
             app.run(parse(["--list-interfaces"]), backend=backend)
         out = capsys.readouterr().out
         assert "Connection Name: Wi-Fi" in out
+        assert "GUID: 00000000-0000-0000-0000-000000000000" in out
         assert "MAC: 02:00:00:00:00:01" in out
 
     def test_run_interface_info(self, capsys):

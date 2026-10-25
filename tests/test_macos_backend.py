@@ -7,6 +7,7 @@ on any OS and never imports CoreWLAN.
 """
 
 import asyncio
+import json
 import logging
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from lswifi import appsetup
+from lswifi import app, appsetup
 from lswifi.backends import macos
 from lswifi.backends.base import BackendError, BssRecord
 from lswifi.backends.macos import (
@@ -373,12 +374,48 @@ class TestBackend:
         out = backend.interface_info(parse(argv), backend.list_interfaces()[0])
         assert expected in out
 
-    def test_get_interfaces_bus_unsupported(self):
-        backend = MacOSBackend(fake_corewlan(FakeInterface()))
-        out = backend.interface_info(parse(["--get-interfaces"]), backend.list_interfaces()[0])
-        assert "Bus: unsupported on macOS" in out
+    def test_get_interfaces_hides_unavailable_fields(self):
+        cw = FakeInterface(bssid="AA:BB:CC:DD:EE:FF")
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "Bus:" not in out
+        assert "GUID" not in out
+        assert "unsupported" not in out
         assert "Channel: 44" in out
         assert "Band: 5 GHz" in out
+        assert "Transmit (Tx) Rate: 286 Mbps" in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["bus"] is None
+        assert info["tx_rate_mbps"] == 286.0
+
+    def test_fractional_tx_rate(self):
+        cw = FakeInterface(bssid="aa:bb:cc:dd:ee:ff")
+        cw.transmitRate = lambda: 6.5
+        backend = MacOSBackend(fake_corewlan(cw))
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "Transmit (Tx) Rate: 6.5 Mbps" in out
+
+    def test_list_interfaces_hides_empty_guid(self, capsys):
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        with pytest.raises(SystemExit):
+            app.run(parse(["--list-interfaces"]), backend=backend)
+        out = capsys.readouterr().out
+        assert "Connection Name: en0" in out
+        assert "GUID" not in out
+        assert "MAC: c0:c7:db:00:00:01" in out
+
+    def test_list_interfaces_json_keeps_null_guid(self, capsys):
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        with pytest.raises(SystemExit):
+            app.run(parse(["--list-interfaces", "--json"]), backend=backend)
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["interfaces"][0]["guid"] is None
+        assert payload["interfaces"][0]["mac"] == "c0:c7:db:00:00:01"
 
 
 def test_import_does_not_load_corewlan():

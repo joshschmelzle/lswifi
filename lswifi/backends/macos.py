@@ -35,6 +35,7 @@ from lswifi.backends.base import (
     RecordScanSession,
 )
 from lswifi.helpers import (
+    format_mbps,
     get_2ghz5ghz_frequency_from_channel_number,
     get_6ghz_frequency_from_channel_number,
 )
@@ -288,26 +289,29 @@ class MacOSBackend:
             "tx_rate_mbps": cw_iface.transmitRate() if state == "connected" else None,
             "tx_power_mw": cw_iface.transmitPower(),
             "country_code": cw_iface.countryCode(),
-            "bus": UNSUPPORTED,
+            "bus": None,
         }
         if args.json:
             return json.dumps(info, indent=args.json_indent, default=str)
         outstr = f"Interface: {iface.connection_name} is {state}\n"
         outstr += f"    Description: {iface.description}\n"
         outstr += f"    MAC: {iface.mac}\n"
-        outstr += f"    Bus: {UNSUPPORTED}\n"
         outstr += f"    State: {state}\n"
         if state == "connected":
             outstr += f"    SSID: {ssid}\n"
             outstr += f"    BSSID: {bssid}\n"
-            outstr += f"    Channel: {channel_number}\n"
+            if channel_number is not None:
+                outstr += f"    Channel: {channel_number}\n"
             if band is not None:
                 outstr += f"    Band: {band}\n"
             if width is not None:
                 outstr += f"    Width: {width} MHz\n"
-            outstr += f"    RSSI: {info['rssi']} dBm\n"
-            outstr += f"    Noise: {info['noise']} dBm\n"
-            outstr += f"    Transmit (Tx) Rate: {info['tx_rate_mbps']} Mbps\n"
+            if info["rssi"] is not None:
+                outstr += f"    RSSI: {info['rssi']} dBm\n"
+            if info["noise"] is not None:
+                outstr += f"    Noise: {info['noise']} dBm\n"
+            if info["tx_rate_mbps"] is not None:
+                outstr += f"    Transmit (Tx) Rate: {format_mbps(info['tx_rate_mbps'])} Mbps\n"
         if info["country_code"]:
             outstr += f"    Country Code: {info['country_code']}\n"
         return outstr

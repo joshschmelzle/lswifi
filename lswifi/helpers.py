@@ -40,6 +40,12 @@ def remove_control_chars(text: str) -> str:
     return __control_char_re.sub("", text)
 
 
+def format_mbps(rate) -> str:
+    text = f"{float(rate):.1f}"
+    whole, frac = text.split(".", 1)
+    return whole if frac == "0" else text
+
+
 def escape_control_chars(text: str) -> str:
     if isinstance(text, str):
         try:

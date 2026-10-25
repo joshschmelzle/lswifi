@@ -29,6 +29,7 @@ from lswifi.backends import nl80211 as nl
 from lswifi.backends.base import BackendError, InterfaceInfo
 from lswifi.backends.linux import LinkInfo, LinuxInterface
 from lswifi.backends.macos_events import EventLine, reason_text
+from lswifi.helpers import format_mbps
 from lswifi.watchjson import event_record, shared_writer, watch_json_requested
 
 log = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ class LinkFormatter:
         extra = f", channel: ({_channel(link)})"
         fields: dict[str, Any] = _channel_json(link)
         if link.tx_rate_mbps is not None:
-            extra += f", tx_rate: ({link.tx_rate_mbps:g} Mbps)"
+            extra += f", tx_rate: ({format_mbps(link.tx_rate_mbps)} Mbps)"
             fields["tx_rate_mbps"] = link.tx_rate_mbps
         return extra, fields
 

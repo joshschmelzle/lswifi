@@ -44,6 +44,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from lswifi.helpers import format_mbps
 from lswifi.watchjson import event_record, shared_writer, watch_json_requested
 
 log = logging.getLogger(__name__)
@@ -287,7 +288,7 @@ class EventFormatter:
         if state.noise is not None:
             extra += f", noise: ({state.noise})"
         if state.tx_rate is not None:
-            extra += f", tx_rate: ({state.tx_rate:g} Mbps)"
+            extra += f", tx_rate: ({format_mbps(state.tx_rate)} Mbps)"
         return extra
 
     def _roam(self, old: LinkState, new: LinkState) -> EventLine:
@@ -295,7 +296,7 @@ class EventFormatter:
         fields: dict[str, Any] = _channel_json(new)
         extra = f", channel: ({_channel(new)})"
         if new.tx_rate:
-            extra += f", tx_rate: ({new.tx_rate:g} Mbps)"
+            extra += f", tx_rate: ({format_mbps(new.tx_rate)} Mbps)"
             fields["tx_rate_mbps"] = new.tx_rate
         extra += f", old_bssid: ({old.bssid})"
         fields["old_bssid"] = old.bssid
@@ -416,7 +417,7 @@ class EventFormatter:
             extra += f", old_rssi: ({base.rssi})"
             fields["old_rssi"] = base.rssi
         if new.tx_rate is not None:
-            extra += f", tx_rate: ({new.tx_rate:g} Mbps)"
+            extra += f", tx_rate: ({format_mbps(new.tx_rate)} Mbps)"
             fields["tx_rate_mbps"] = new.tx_rate
         return [self._fields(new, extra, "signal_quality_change", **fields)]
 

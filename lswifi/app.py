@@ -164,9 +164,12 @@ class lswifi:
                             {
                                 "connection_name": client.iface.connection_name,
                                 "description": client.iface.description,
-                                "guid": client.iface.guid_string.replace("{", "")
-                                .replace("}", "")
-                                .lower(),
+                                "guid": (
+                                    client.iface.guid_string.replace("{", "")
+                                    .replace("}", "")
+                                    .lower()
+                                    or None
+                                ),
                                 "mac": client.iface.mac,
                                 "state": client.iface.state_string,
                             }
@@ -177,13 +180,22 @@ class lswifi:
                 else:
                     print(f"There are {len(clients)} interfaces on this system:")
                     for _index, client in clients.items():
-                        print(
+                        guid = (
+                            client.iface.guid_string.replace("{", "")
+                            .replace("}", "")
+                            .lower()
+                        )
+                        lines = (
                             f"    Connection Name: {client.iface.connection_name}\n"
                             f"    Description: {client.iface.description}\n"
-                            f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
+                        )
+                        if guid:
+                            lines += f"    GUID: {guid}\n"
+                        lines += (
                             f"    MAC: {client.iface.mac}\n"
                             f"    State: {client.iface.state_string}\n"
                         )
+                        print(lines)
                 sys.exit(0)
 
             if args.append:

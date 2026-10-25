@@ -695,6 +695,19 @@ class TestInterfaceInfo:
         assert "Country Code: US" in out
         assert "Bus: USB 0e8d:7961" in out
 
+    def test_whole_tx_rate_and_missing_bus(self, kernel, backend, monkeypatch):
+        iface = self.connected(kernel, backend)
+        kernel.stations = [station_attrs(0x21, -48, 5760)]
+        monkeypatch.setattr(backend.sysfs, "bus_info", lambda name: (None, None))
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "Transmit (Tx) Rate: 576 Mbps" in out
+        assert "Bus:" not in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["bus"] is None
+        assert info["tx_rate_mbps"] == 576.0
+
     def test_ap_and_channel(self, kernel, backend):
         iface = self.connected(kernel, backend)
         assert backend.interface_info(parse(["-ap"]), iface) == (
