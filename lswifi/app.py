@@ -234,20 +234,26 @@ class lswifi:
                 ):
                     scanning = False
                     text = backend.interface_info(args, iface_infos[_index])
-                    print(text)
-                    if explicit_json and (
+                    parsed = None
+                    if args.json and (
                         args.get_interface_info
                         or args.get_current_ap
                         or args.get_current_channel
                     ):
                         with contextlib.suppress(json.JSONDecodeError):
-                            json_documents.append(json.loads(text))
+                            parsed = json.loads(text)
+                    if parsed is None:
+                        print(text)
+                    else:
+                        json_documents.append(parsed)
 
-            if explicit_json and json_documents:
+            if json_documents:
                 body = json_documents[0] if len(json_documents) == 1 else json_documents
-                log.info(f"exporting interface info as JSON to {explicit_json}")
-                with open(explicit_json, "w") as file:
-                    json.dump(body, file, indent=args.json_indent)
+                print(json.dumps(body, indent=args.json_indent))
+                if explicit_json:
+                    log.info(f"exporting interface info as JSON to {explicit_json}")
+                    with open(explicit_json, "w") as file:
+                        json.dump(body, file, indent=args.json_indent)
 
             # TODO move other non-scanning functions here
 

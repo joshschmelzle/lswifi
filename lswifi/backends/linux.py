@@ -502,9 +502,9 @@ def _public_link(link: dict[str, Any]) -> dict[str, Any]:
 def format_link(item: dict[str, Any]) -> str:
     bits = []
     if item.get("bssid"):
-        bits.append(item["bssid"])
+        bits.append(f"AP BSSID {item['bssid']}")
     if item.get("addr") and item.get("addr") != item.get("bssid"):
-        bits.append(item["addr"])
+        bits.append(f"STA {item['addr']}")
     if item.get("channel") is not None:
         bits.append(f"channel {item['channel']}")
     if item.get("frequency_mhz") is not None:
@@ -665,13 +665,36 @@ def _step_runs(ordered: list[int], step: int) -> list[list[int]]:
     return runs
 
 
-def _raster_runs(ordered: list[int]) -> list[list[int]]:
-    groups: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: []}
-    for number in ordered:
-        groups[number % 4].append(number)
+def _on_raster(band: int, number: int) -> bool:
+    residue = number % 4
+    if band == nl.BAND_6GHZ:
+        return residue == 1
+    return residue in (0, 1)
+
+
+def _break_around(
+    start: int, end: int, step: int, blockers: list[int]
+) -> list[list[int]]:
+    channels = list(range(start, end + 1, step))
+    pieces: list[list[int]] = []
+    piece_start = previous = channels[0]
+    for number in channels[1:]:
+        if any(previous < block < number for block in blockers):
+            pieces.append([piece_start, previous])
+            piece_start = number
+        previous = number
+    pieces.append([piece_start, previous])
+    return pieces
+
+
+def _raster_runs(ordered: list[int], band: int) -> list[list[int]]:
+    on = [number for number in ordered if _on_raster(band, number)]
+    off = [number for number in ordered if not _on_raster(band, number)]
     runs: list[list[int]] = []
-    for residue in (0, 1, 2, 3):
-        runs.extend(_step_runs(groups[residue], 4))
+    for start, end in _step_runs(on, 4):
+        runs.extend(_break_around(start, end, 4, off))
+    runs.extend([[number, number] for number in off])
+    runs.sort(key=lambda run: run[0])
     return runs
 
 
@@ -679,8 +702,8 @@ def _channel_runs(numbers: list[int], band: int | None = None) -> list[list[int]
     ordered = sorted(set(numbers))
     if not ordered:
         return []
-    if band in (nl.BAND_5GHZ, nl.BAND_6GHZ):
-        return _raster_runs(ordered)
+    if band == nl.BAND_5GHZ or band == nl.BAND_6GHZ:
+        return _raster_runs(ordered, band)
     if len(ordered) == 1:
         return [[ordered[0], ordered[0]]]
     step = min(b - a for a, b in zip(ordered, ordered[1:], strict=False) if b > a)

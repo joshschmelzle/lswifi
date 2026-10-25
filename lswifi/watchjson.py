@@ -22,7 +22,8 @@ The common link fields follow when known: ``bssid``, ``freq_mhz``,
 ``rssi``. Event-specific keys come after them, for example ``channel``,
 ``width_mhz``, ``band``, ``noise``, ``tx_rate_mbps``, ``scan_bssid_count``,
 ``old_bssid``, ``old_freq_mhz``, ``old_rssi``, ``old_channel``,
-``old_ssid``, ``reason_code``, ``reason_text`` and ``*_ms`` join timing.
+``old_ssid``, ``reason_code``, ``reason_text``, ``ap_mld`` and ``*_ms``
+join timing.
 
 A value that is unknown or does not apply is omitted, never ``null`` or
 ``""``. Numbers are JSON numbers. Log messages stay on stderr; only these

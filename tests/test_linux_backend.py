@@ -1042,7 +1042,7 @@ class TestInterfaceDetails:
         )
         assert line(out, "Receive (Rx) Rate:") == "Receive (Rx) Rate: 24 Mbps"
         assert line(out, "Link 0:") == (
-            "Link 0: 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
+            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
         )
         assert line(out, "RSSI:") == "RSSI: -41 dBm"
         assert "(chains" not in out
@@ -1098,7 +1098,7 @@ class TestInterfaceDetails:
         )
         assert line(out, "Receive (Rx) Rate:") == "Receive (Rx) Rate: 24 Mbps"
         assert line(out, "Link 0:") == (
-            "Link 0: 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
+            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
         )
         assert out.count("Transmit (Tx) Rate:") == 1
 
@@ -1133,10 +1133,10 @@ class TestInterfaceDetails:
         out, _iface = self.text(kernel, backend)
         assert "Transmit (Tx) Rate:" not in out
         assert line(out, "Link 0:") == (
-            "Link 0: 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
+            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
         )
         assert line(out, "Link 1:") == (
-            "Link 1: 68:51:34:7c:32:06, channel 42, 5210 MHz, 5 GHz"
+            "Link 1: AP BSSID 68:51:34:7c:32:06, channel 42, 5210 MHz, 5 GHz"
         )
 
     def test_interface_mlo_link_is_the_channel(self, kernel, backend, tmp_path):
@@ -1155,7 +1155,7 @@ class TestInterfaceDetails:
         kernel.stations = [station_message(MLD, BE_STA)]
         out, iface = self.text(kernel, backend)
         assert line(out, "Link 0:") == (
-            "Link 0: a6:b1:f5:a2:1e:29, channel 37, 6135 MHz, 6 GHz, "
+            "Link 0: STA a6:b1:f5:a2:1e:29, channel 37, 6135 MHz, 6 GHz, "
             "80 MHz, center 6145 MHz, 22 dBm"
         )
         assert line(out, "Channel:") == "Channel: 37"
@@ -1207,11 +1207,11 @@ class TestInterfaceDetails:
         assert line(out, "AP MLD:") == "AP MLD: 68:51:34:7c:32:05"
         assert "\n    BSSID:" not in out
         assert line(out, "Link 0:") == (
-            "Link 0: 68:51:34:7c:32:05, a6:b1:f5:a2:1e:29, channel 37, "
+            "Link 0: AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, channel 37, "
             "6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
         )
         assert line(out, "Link 2:") == (
-            "Link 2: 68:51:34:7c:31:f5, 7a:e3:a9:42:cd:3a, channel 11, "
+            "Link 2: AP BSSID 68:51:34:7c:31:f5, STA 7a:e3:a9:42:cd:3a, channel 11, "
             "2462 MHz, 2.4 GHz"
         )
         assert line(out, "Channel:") == "Channel: 37"
@@ -1286,11 +1286,11 @@ class TestInterfaceDetails:
         out, iface = self.text(kernel, backend)
         assert line(out, "AP MLD:") == "AP MLD: 68:51:34:7c:32:05"
         assert line(out, "Link 0:") == (
-            "Link 0: 68:51:34:7c:32:05, a6:b1:f5:a2:1e:29, channel 37, "
+            "Link 0: AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, channel 37, "
             "6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
         )
         assert line(out, "Link 2:") == (
-            "Link 2: 68:51:34:7c:31:f5, 7a:e3:a9:42:cd:3a, channel 11, "
+            "Link 2: AP BSSID 68:51:34:7c:31:f5, STA 7a:e3:a9:42:cd:3a, channel 11, "
             "2462 MHz, 2.4 GHz"
         )
         assert "02:00:00:00:00:44" not in out
@@ -1448,17 +1448,23 @@ class TestInterfaceDetails:
         kernel.band_payloads = [band_payload(nl.BAND_5GHZ, freqs, ht=True, vht=True)]
         out, iface = self.text(kernel, backend)
         assert line(out, "Supported Channels:") == (
-            "Supported Channels: 5 GHz 36-64, 100-144, 149-165, 34-46 "
-            "(20/40/80/160; DFS 52-64, 100-144)"
+            "Supported Channels: 5 GHz 34, 36, 38, 40, 42, 44, 46, 48-64, "
+            "100-144, 149-165 (20/40/80/160; DFS 52-64, 100-144)"
         )
         info = json.loads(
             backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
         )
         assert info["supported_channels"][0]["ranges"] == [
-            [36, 64],
+            [34, 34],
+            [36, 36],
+            [38, 38],
+            [40, 40],
+            [42, 42],
+            [44, 44],
+            [46, 46],
+            [48, 64],
             [100, 144],
             [149, 165],
-            [34, 46],
         ]
         assert info["supported_channels"][0]["dfs"] == [[52, 64], [100, 144]]
 
@@ -1639,7 +1645,7 @@ class TestEvents:
         assert watching.record["width_mhz"] == 80
         assert watching.record["band"] == "6 GHz"
         assert watching.record["rssi"] is None
-        assert watching.record["mld"] == "68:51:34:7c:32:05"
+        assert watching.record["ap_mld"] == "68:51:34:7c:32:05"
         assert watching.record["links"][0]["bssid"] == "68:51:34:7c:32:05"
         assert watching.record["links"][1]["channel"] == 11
         assert "width_mhz" not in watching.record["links"][1]
@@ -1697,7 +1703,7 @@ class TestEvents:
             "links: (0: 68:51:34:7c:32:05 6 GHz ch 37@80, "
             "2: 68:51:34:7c:31:f5 2.4 GHz ch 11)"
         )
-        assert watching.record["mld"] == "68:51:34:7c:32:05"
+        assert watching.record["ap_mld"] == "68:51:34:7c:32:05"
         assert watching.record["links"][1]["bssid"] == "68:51:34:7c:31:f5"
         assert watching.record["links"][1]["frequency_mhz"] == 2462
         assert watching.record["links"][1]["channel"] == 11
@@ -1791,7 +1797,8 @@ class TestEvents:
         assert "event: (disconnected)" not in removed
         assert "link: (2: 68:51:34:7c:31:f5 2.4 GHz ch 11)" in removed
         assert removed.record["link"][0]["id"] == 2
-        assert removed.record["mld"] == "68:51:34:7c:32:05"
+        assert removed.record["ap_mld"] == "68:51:34:7c:32:05"
+        assert "mld" not in removed.record
 
         other = bytes.fromhex("6851347c3206")
         (added,) = watcher.handle(
@@ -1815,6 +1822,23 @@ class TestEvents:
             )
             == []
         )
+
+    def test_mlo_disconnect_keeps_ap_mld(self, kernel, backend):
+        self._two_link(kernel)
+        watcher, _lines = self._watch(kernel, backend)
+        (line,) = watcher.handle(
+            self.msg(
+                nl.CMD_DISCONNECT,
+                nl.attr_u16(nl.ATTR_REASON_CODE, 3),
+                nl.attr_flag(nl.ATTR_DISCONNECTED_BY_AP),
+            )
+        )
+        assert "ap_mld: (68:51:34:7c:32:05)" in line
+        assert "bssid:" not in line
+        assert "event: (disconnected)" in line
+        assert line.record["ap_mld"] == "68:51:34:7c:32:05"
+        assert line.record["bssid"] == "68:51:34:7c:32:05"
+        assert "mld" not in line.record
 
     def test_missing_fields_are_hidden_and_json_null(self):
         formatter = LinkFormatter("02:00:00:00:00:13")
@@ -1924,6 +1948,29 @@ def test_bare_get_interfaces_json_stays_on_stdout(
     shown = json.loads(capsys.readouterr().out)
     assert shown["ssid"] == "ExampleNet"
     assert list(tmp_path.glob("*.json")) == []
+
+
+def test_two_interfaces_json_is_one_document(kernel, backend, tmp_path, capsys):
+    from lswifi import app
+
+    kernel.interfaces = [
+        iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=5180, last=0x13),
+        iface_attrs(4, "wlan1", ssid=b"Other", freq=2412, width=1, last=0x14),
+    ]
+    kernel.stations = [station_attrs(0x21, -48, 8645)]
+    path = tmp_path / "ifaces.json"
+    with pytest.raises(SystemExit):
+        app.run(parse(["--get-interfaces", "--json", str(path)]), backend=backend)
+    printed = json.loads(capsys.readouterr().out)
+    saved = json.loads(path.read_text())
+    assert printed == saved
+    assert [item["interface"] for item in printed] == ["wlan0", "wlan1"]
+
+    capsys.readouterr()
+    with pytest.raises(SystemExit):
+        app.run(parse(["--get-interfaces", "--json"]), backend=backend)
+    bare = json.loads(capsys.readouterr().out)
+    assert [item["interface"] for item in bare] == ["wlan0", "wlan1"]
 
 
 def test_native_lookup_by_name(kernel, backend):

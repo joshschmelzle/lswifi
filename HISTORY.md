@@ -19,9 +19,10 @@ RELEASED
 - `--json` rate lists are `[]` when an AP advertises no rates.
 - `--get-interfaces` on macOS shows more of the connected interface from CoreWLAN: PHY mode, security, MCS, spatial streams, transmit power, interface mode, power, an ARP-resolved gateway, the IPv4 address, and supported channels. Fields the platform cannot supply are omitted. JSON keeps those keys as null.
 - `--get-interfaces` on Linux shows nl80211 link stats and supported channels, including transmit and receive rates, signal, counters, channel busy, and PHY generations.
-- Linux MLO associations list each link in `--get-interfaces` and `--watchevents`: id, BSSID or link address, frequency, channel, band, width, center, and transmit power when the kernel sent them. `--watchevents` takes frequency, channel, and width from the association link and omits the kernel's 0 dBm MLD signal.
+- Linux MLO associations list each link in `--get-interfaces` and `--watchevents`: id, AP BSSID, STA link address, frequency, channel, band, width, center, and transmit power when the kernel sent them. `--watchevents` takes frequency, channel, and width from the association link, calls the MLD address `ap_mld` in the text and the JSON, and omits the kernel's 0 dBm MLD signal.
 - A link added or removed, or a channel switch that names a link, is a per-link `--watchevents` event rather than a roam or a channel change of the whole connection.
-- `--get-interfaces --json <file>` writes that file. `--json` with no path still prints the interface JSON to stdout.
+- `--get-interfaces --json <file>` writes that file. `--json` with no path still prints to stdout. One interface is one JSON object. More than one interface is one JSON list, the same document in the file and on stdout.
+- Linux 5 GHz and 6 GHz supported-channel summaries stay in channel order. A standard 20 MHz run is a range. Channels off that raster, such as 34, 38, 42 and 46, are listed on their own.
 
 0.3.0 (2026-10-23)
 ------------------

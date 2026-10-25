@@ -216,6 +216,7 @@ class LinkFormatter:
         self, link: LinkInfo, event: str, extra: str = "", **fields: Any
     ) -> EventLine:
         affected = fields.pop("affected", None)
+        mlo_address = fields.pop("_mlo_address", False)
         snap = _snapshot(link)
         mlo_text, mlo_fields = self._mlo(link, snap)
         record = event_record(
@@ -238,7 +239,7 @@ class LinkFormatter:
             record["band"] = snap["band"]
         parts = [f"({self.mac})"]
         if link.bssid:
-            if link.connected and snap["links"]:
+            if mlo_address or (link.connected and snap["links"]):
                 parts.append(f"ap_mld: ({link.bssid})")
             else:
                 parts.append(f"bssid: ({link.bssid})")
@@ -259,7 +260,7 @@ class LinkFormatter:
         fields: dict[str, Any] = {"links": [dict(item) for item in links]}
         extra = ""
         if link.bssid:
-            fields["mld"] = link.bssid
+            fields["ap_mld"] = link.bssid
         rendered = describe_links(links)
         if rendered:
             extra += f", links: ({rendered})"
@@ -328,10 +329,14 @@ class LinkFormatter:
 
     def disconnected(self, reason: int | None, by_ap: bool) -> EventLine:
         old = self.last
+        was_mlo = bool(old.extra.get("links"))
         self.last = LinkInfo(bssid=old.bssid)
         gone = LinkInfo(bssid=old.bssid)
         extra = ""
         fields: dict[str, Any] = {}
+        if was_mlo and old.bssid:
+            fields["ap_mld"] = old.bssid
+            fields["_mlo_address"] = True
         if reason is not None:
             extra += f", reason: ({reason} {reason_text(reason)})"
             fields.update(reason_code=reason, reason_text=reason_text(reason))
