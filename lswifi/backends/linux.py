@@ -712,6 +712,22 @@ def _range_text(ranges: list[list[int]]) -> str:
     )
 
 
+def _five_ghz_display(ranges: list[list[int]]) -> tuple[list[list[int]], list[int]]:
+    numbers: list[int] = []
+    for start, end in ranges:
+        if start == end:
+            numbers.append(start)
+        else:
+            numbers.extend(range(start, end + 1, 4))
+    on = sorted(number for number in set(numbers) if _on_raster(nl.BAND_5GHZ, number))
+    off = sorted(
+        number for number in set(numbers) if not _on_raster(nl.BAND_5GHZ, number)
+    )
+    if not on:
+        return [[number, number] for number in off], []
+    return _step_runs(on, 4), off
+
+
 def _freq_widths(attrs: dict[int, bytes], ht: bool, wide: bool, eht: bool) -> list[int]:
     widths = []
     if nl.FREQ_ATTR_NO_20MHZ not in attrs:
@@ -848,11 +864,13 @@ def summarize_bands(bands: dict[int, bytes]) -> tuple[list[dict], list[str]]:
 def format_supported_channels(summary: list[dict]) -> str:
     parts = []
     for band in summary:
-        ranges = [
-            str(start) if start == end else f"{start}-{end}"
-            for start, end in band["ranges"]
-        ]
-        text = f"{band['band']} {', '.join(ranges)}"
+        ranges = band["ranges"]
+        off: list[int] = []
+        if band.get("id") == nl.BAND_5GHZ:
+            ranges, off = _five_ghz_display(ranges)
+        text = f"{band['band']} {_range_text(ranges)}"
+        if off:
+            text += f" (also {', '.join(str(number) for number in off)})"
         notes = []
         if band.get("dfs"):
             notes.append(

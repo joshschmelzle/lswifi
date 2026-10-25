@@ -1508,8 +1508,8 @@ class TestInterfaceDetails:
         kernel.band_payloads = [band_payload(nl.BAND_5GHZ, freqs, ht=True, vht=True)]
         out, iface = self.text(kernel, backend)
         assert line(out, "Supported Channels:") == (
-            "Supported Channels: 5 GHz 34, 36, 38, 40, 42, 44, 46, 48-64, "
-            "100-144, 149-165 (20/40/80/160; DFS 52-64, 100-144)"
+            "Supported Channels: 5 GHz 36-64, 100-144, 149-165 "
+            "(also 34, 38, 42, 46) (20/40/80/160; DFS 52-64, 100-144)"
         )
         info = json.loads(
             backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
@@ -1523,6 +1523,38 @@ class TestInterfaceDetails:
             [44, 44],
             [46, 46],
             [48, 64],
+            [100, 144],
+            [149, 165],
+        ]
+        assert info["supported_channels"][0]["dfs"] == [[52, 64], [100, 144]]
+
+    def test_standard_five_ghz_runs(self, kernel, backend):
+        def mhz(channel):
+            return 5000 + 5 * channel
+
+        standard = (
+            list(range(36, 65, 4)) + list(range(100, 145, 4)) + list(range(149, 166, 4))
+        )
+        radar = set(range(52, 65, 4)) | set(range(100, 145, 4))
+        freqs = [
+            freq_attr(index, mhz(channel), radar=channel in radar)
+            for index, channel in enumerate(standard, start=1)
+        ]
+        kernel.interfaces = [
+            iface_attrs(3, "wlan0", freq=5180, width=1, center1=5180, tx_mbm=None)
+        ]
+        kernel.band_payloads = [band_payload(nl.BAND_5GHZ, freqs, ht=True, vht=True)]
+        out, iface = self.text(kernel, backend)
+        assert line(out, "Supported Channels:") == (
+            "Supported Channels: 5 GHz 36-64, 100-144, 149-165 "
+            "(20/40/80/160; DFS 52-64, 100-144)"
+        )
+        assert "(also" not in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["supported_channels"][0]["ranges"] == [
+            [36, 64],
             [100, 144],
             [149, 165],
         ]
