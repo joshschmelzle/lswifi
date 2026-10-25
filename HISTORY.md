@@ -4,6 +4,26 @@ Release History
 RELEASED
 --------
 
+0.3.1 (2026-10-24)
+------------------
+
+- Detect legacy WPA from vendor IE 221 (OUI 00:50:F2, type 1) in the auth, encryption, and security columns. Suites are merged when an RSN element is also present (#123).
+- `--json` keeps every scan in `scan_data` as a flat list of BSS objects. A file from 0.3.0, where later scans were nested lists, is flattened on the next append. Rewriting the file no longer leaves trailing bytes that make it invalid (#127).
+- On Windows, `--uptime` sorts by elapsed time. A BSS with no uptime sorts last. JSON and CSV use that same order.
+- The AP uptime column is omitted from the table and from CSV on macOS and Linux. JSON still has `uptime`, set to null. `--uptime` is only a flag on Windows: on macOS and Linux it is absent from `--help` and from shell completion, and argparse rejects it. `--supported` says AP uptime isn't available.
+- Interface text omits fields the platform cannot supply, including an empty GUID and an unsupported bus. JSON keeps those keys as null.
+- Transmit and receive rates print as whole numbers when they have no fractional part (`576 Mbps`) and keep one decimal when they do (`6.5 Mbps`).
+- Unknown RSSI is printed as `--`. It still sorts as the weakest signal and is not removed by `-t`.
+- `-export` with `--channel-width 20` no longer includes 320 MHz networks. A width of `80+80` does not crash the filter.
+- A short Extended Capabilities or vendor-specific element no longer fails that BSS. One BSS that still cannot be parsed is skipped instead of dropping the scan.
+- `--json` rate lists are `[]` when an AP advertises no rates.
+- `--get-interfaces` on macOS shows more of the connected interface from CoreWLAN: PHY mode, security, MCS, spatial streams, transmit power, interface mode, power, an ARP-resolved gateway, the IPv4 address, and supported channels. Fields the platform cannot supply are omitted. JSON keeps those keys as null.
+- `--get-interfaces` on Linux shows nl80211 link stats and supported channels, including transmit and receive rates, signal, counters, channel busy, and PHY generations.
+- Linux MLO associations list each link in `--get-interfaces` and `--watchevents`: id, AP BSSID, STA link address, frequency, channel, band, width, center, and transmit power when the kernel sent them. `--watchevents` takes frequency, channel, and width from the association link, calls the MLD address `ap_mld` in the text and the JSON, and omits the kernel's 0 dBm MLD signal.
+- A link added or removed, or a channel switch that names a link, is a per-link `--watchevents` event rather than a roam or a channel change of the whole connection.
+- `--get-interfaces --json <file>` writes that file. `--json` with no path still prints to stdout. One interface is one JSON object. More than one interface is one JSON list, the same document in the file and on stdout.
+- Linux 5 GHz text keeps a standard 20 MHz run together and lists off-raster channels after it, for example `36-64, 100-144, 149-165 (also 34, 38, 42, 46)`. 6 GHz summaries stay in channel order. JSON still includes every channel the driver reports.
+
 0.3.0 (2026-10-23)
 ------------------
 

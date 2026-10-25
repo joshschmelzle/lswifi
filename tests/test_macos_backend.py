@@ -7,6 +7,7 @@ on any OS and never imports CoreWLAN.
 """
 
 import asyncio
+import json
 import logging
 import subprocess
 import sys
@@ -15,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from lswifi import appsetup
+from lswifi import app, appsetup
 from lswifi.backends import macos
 from lswifi.backends.base import BackendError, BssRecord
 from lswifi.backends.macos import (
@@ -372,13 +373,376 @@ class TestBackend:
         backend = MacOSBackend(fake_corewlan(FakeInterface(bssid="AA:BB:CC:DD:EE:FF")))
         out = backend.interface_info(parse(argv), backend.list_interfaces()[0])
         assert expected in out
+        if "--supported" in argv:
+            assert "AP uptime isn't available on macOS" in out
 
-    def test_get_interfaces_bus_unsupported(self):
-        backend = MacOSBackend(fake_corewlan(FakeInterface()))
-        out = backend.interface_info(parse(["--get-interfaces"]), backend.list_interfaces()[0])
-        assert "Bus: unsupported on macOS" in out
+    def test_get_interfaces_hides_unavailable_fields(self):
+        cw = FakeInterface(bssid="AA:BB:CC:DD:EE:FF")
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "Bus:" not in out
+        assert "GUID" not in out
+        assert "unsupported" not in out
         assert "Channel: 44" in out
         assert "Band: 5 GHz" in out
+        assert "Transmit (Tx) Rate: 286 Mbps" in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["bus"] is None
+        assert info["tx_rate_mbps"] == 286.0
+
+    def test_fractional_tx_rate(self):
+        cw = FakeInterface(bssid="aa:bb:cc:dd:ee:ff")
+        cw.transmitRate = lambda: 6.5
+        backend = MacOSBackend(fake_corewlan(cw))
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "Transmit (Tx) Rate: 6.5 Mbps" in out
+
+    def test_list_interfaces_hides_empty_guid(self, capsys):
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        with pytest.raises(SystemExit):
+            app.run(parse(["--list-interfaces"]), backend=backend)
+        out = capsys.readouterr().out
+        assert "Connection Name: en0" in out
+        assert "GUID" not in out
+        assert "MAC: c0:c7:db:00:00:01" in out
+
+    def test_list_interfaces_json_keeps_null_guid(self, capsys):
+        backend = MacOSBackend(fake_corewlan(FakeInterface()))
+        with pytest.raises(SystemExit):
+            app.run(parse(["--list-interfaces", "--json"]), backend=backend)
+        payload = json.loads(capsys.readouterr().out)
+        assert payload["interfaces"][0]["guid"] is None
+        assert payload["interfaces"][0]["mac"] == "c0:c7:db:00:00:01"
+
+
+def _sample_channels():
+    channels = []
+    for number in range(1, 15):
+        for width in (1, 2):
+            channels.append(FakeChannel(number, macos.CW_CHANNEL_BAND_2GHZ, width))
+    five = list(range(36, 65, 4)) + list(range(100, 145, 4)) + list(range(149, 166, 4))
+    for number in five:
+        for width in (1, 2, 3, 4):
+            channels.append(FakeChannel(number, macos.CW_CHANNEL_BAND_5GHZ, width))
+    for number in range(1, 234, 4):
+        for width in (1, 2, 3, 4):
+            channels.append(FakeChannel(number, macos.CW_CHANNEL_BAND_6GHZ, width))
+    return channels
+
+
+class _WifiMonitor:
+    """CWIPMonitor selectors observed on macOS: no ipv4State."""
+
+    def ipv4WiFiStateConfig(self):
+        return {
+            "ARPResolvedHardwareAddress": "64:e8:81:b8:e9:80",
+            "ARPResolvedIPAddress": "192.168.1.1",
+            "AdditionalRoutes": [],
+        }
+
+    def ipv4Router(self):
+        return "10.9.9.9"
+
+    def ipv4Addresses(self):
+        return ["192.168.1.50", "10.1.1.5"]
+
+
+class RichInterface(FakeInterface):
+    def __init__(self):
+        super().__init__(bssid="AA:BB:CC:DD:EE:FF")
+        self.calls = []
+
+    def ssidData(self):
+        return b"office"
+
+    def activePHYMode(self):
+        self.calls.append("activePHYMode")
+        return 7
+
+    def security(self):
+        self.calls.append("security")
+        return 11
+
+    def mcsIndex(self):
+        self.calls.append("mcsIndex")
+        return 6
+
+    def numberOfSpatialStreams(self):
+        return 2
+
+    def maxNSSSupportedForAP(self):
+        return 2
+
+    def serviceActive(self):
+        return True
+
+    def ipMonitor(self):
+        return _WifiMonitor()
+
+    def supportedWLANChannels(self):
+        return _sample_channels()
+
+    def transmitPower(self):
+        return 10.0
+
+
+class RaisingInterface(FakeInterface):
+    def __init__(self):
+        super().__init__(bssid="aa:bb:cc:dd:ee:ff")
+
+    def activePHYMode(self):
+        raise RuntimeError("phy")
+
+    def security(self):
+        raise RuntimeError("security")
+
+    def mcsIndex(self):
+        raise RuntimeError("mcs")
+
+    def numberOfSpatialStreams(self):
+        raise RuntimeError("nss")
+
+    def maxNSSSupportedForAP(self):
+        raise RuntimeError("max")
+
+    def serviceActive(self):
+        raise RuntimeError("service")
+
+    def ipMonitor(self):
+        raise RuntimeError("ip")
+
+    def supportedWLANChannels(self):
+        raise RuntimeError("channels")
+
+
+class GuardedInterface(FakeInterface):
+    def __init__(self):
+        super().__init__(bssid="aa:bb:cc:dd:ee:ff")
+        self.calls = []
+
+    def respondsToSelector_(self, selector):
+        name = getattr(selector, "selector", None) or selector
+        if isinstance(name, bytes):
+            name = name.decode()
+        blocked = {
+            "mcsIndex",
+            "numberOfSpatialStreams",
+            "maxNSSSupportedForAP",
+            "ipMonitor",
+            "activePHYMode",
+            "security",
+            "serviceActive",
+            "supportedWLANChannels",
+        }
+        return str(name) not in blocked
+
+    def mcsIndex(self):
+        self.calls.append("mcsIndex")
+        return 9
+
+    def activePHYMode(self):
+        self.calls.append("activePHYMode")
+        return 7
+
+
+class TestMacInterfaceInfo:
+    def test_connected_stats_and_channels(self):
+        cw = RichInterface()
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "SSID: office" in out
+        assert "PHY Mode: 802.11be" in out
+        assert "Security: WPA3 Personal" in out
+        assert "MCS: 6" in out
+        assert "Spatial Streams: 2" in out
+        assert "Max Spatial Streams: 2" in out
+        assert "Gateway: 192.168.1.1" in out
+        assert "Gateway MAC: 64:e8:81:b8:e9:80" in out
+        assert "IPv4 Address: 192.168.1.50, 10.1.1.5" in out
+        assert "10.9.9.9" not in out
+        assert "Tx Power: 10 mW" in out
+        assert "Interface Mode: station" in out
+        assert "Power: on" in out
+        assert "Service Active: yes" in out
+        assert "Supported Channels: 2.4 GHz 1-14 (20/40), " in out
+        assert "5 GHz 36-64, 100-144, 149-165 (20/40/80/160)" in out
+        assert "6 GHz 1-233 (20/40/80/160)" in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["phy_mode"] == "802.11be"
+        assert info["security"] == "WPA3 Personal"
+        assert info["mcs_index"] == 6
+        assert info["spatial_streams"] == 2
+        assert info["max_spatial_streams"] == 2
+        assert info["gateway_ip"] == "192.168.1.1"
+        assert info["gateway_mac"] == "64:e8:81:b8:e9:80"
+        assert info["ipv4_addresses"] == ["192.168.1.50", "10.1.1.5"]
+        assert info["tx_power_mw"] == 10.0
+        assert info["interface_mode"] == "station"
+        assert info["power_on"] is True
+        assert info["service_active"] is True
+        assert info["supported_channels"][0] == {
+            "band": "2.4 GHz",
+            "ranges": [[1, 14]],
+            "widths_mhz": [20, 40],
+        }
+        assert info["supported_channels"][2]["band"] == "6 GHz"
+        assert info["supported_channels"][2]["ranges"] == [[1, 233]]
+
+    def test_unknown_enum_prints_raw_number(self):
+        cw = FakeInterface(bssid="aa:bb:cc:dd:ee:ff")
+        cw.activePHYMode = lambda: 99
+        cw.security = lambda: 99
+        backend = MacOSBackend(fake_corewlan(cw))
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "PHY Mode: 99" in out
+        assert "Security: 99" in out
+
+    def test_gateway_falls_back_to_state_config_then_router(self):
+        class StateConfig:
+            def ipv4StateConfig(self):
+                return {
+                    "ARPResolvedIPAddress": "192.168.4.1",
+                    "ARPResolvedHardwareAddress": "AA:BB:CC:DD:EE:10",
+                }
+
+            def ipv4Router(self):
+                return "10.0.0.1"
+
+        cw = FakeInterface(bssid="aa:bb:cc:dd:ee:ff")
+        cw.ipMonitor = lambda: StateConfig()
+        backend = MacOSBackend(fake_corewlan(cw))
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "Gateway: 192.168.4.1" in out
+        assert "Gateway MAC: aa:bb:cc:dd:ee:10" in out
+        assert "10.0.0.1" not in out
+
+        class RouterOnly:
+            def ipv4Router(self):
+                return "192.168.8.1"
+
+            def ipv4Addresses(self):
+                return ["192.168.8.20"]
+
+        cw.ipMonitor = lambda: RouterOnly()
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert "Gateway: 192.168.8.1" in out
+        assert "Gateway MAC" not in out
+        assert "IPv4 Address: 192.168.8.20" in out
+
+    def test_disconnected_omits_connected_fields(self):
+        cw = FakeInterface()
+        cw.interfaceMode = lambda: 0
+        cw.activePHYMode = lambda: 7
+        cw.security = lambda: 11
+        cw.mcsIndex = lambda: 6
+        cw.numberOfSpatialStreams = lambda: 2
+        cw.ipMonitor = lambda: {
+            "ipv4State": {
+                "ARPResolvedIPAddress": "192.168.1.1",
+                "ARPResolvedHardwareAddress": "aa:bb:cc:dd:ee:01",
+            }
+        }
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "is disconnected" in out
+        assert "Interface Mode: none" in out
+        assert "Power: on" in out
+        for label in (
+            "SSID",
+            "PHY Mode",
+            "Security",
+            "MCS",
+            "Spatial Streams",
+            "Gateway",
+            "Transmit (Tx) Rate",
+            "RSSI",
+        ):
+            assert label not in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["state"] == "disconnected"
+        assert info["phy_mode"] is None
+        assert info["security"] is None
+        assert info["mcs_index"] is None
+        assert info["spatial_streams"] is None
+        assert info["gateway_ip"] is None
+        assert info["tx_rate_mbps"] is None
+        assert info["interface_mode"] == "none"
+
+    def test_missing_selectors_are_null(self):
+        cw = FakeInterface(bssid="aa:bb:cc:dd:ee:ff")
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        out = backend.interface_info(parse(["--get-interfaces"]), iface)
+        assert "Tx Power: 17 mW" in out
+        assert "Interface Mode: station" in out
+        for label in (
+            "PHY Mode",
+            "Security",
+            "MCS",
+            "Spatial Streams",
+            "Gateway",
+            "Service Active",
+            "Supported Channels",
+        ):
+            assert label not in out
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        for key in (
+            "phy_mode",
+            "security",
+            "mcs_index",
+            "spatial_streams",
+            "max_spatial_streams",
+            "gateway_ip",
+            "gateway_mac",
+            "ipv4_addresses",
+            "service_active",
+            "supported_channels",
+        ):
+            assert info[key] is None
+
+    def test_raising_selectors_are_skipped(self, caplog):
+        cw = RaisingInterface()
+        backend = MacOSBackend(fake_corewlan(cw))
+        with caplog.at_level(logging.WARNING):
+            out = backend.interface_info(
+                parse(["--get-interfaces"]), backend.list_interfaces()[0]
+            )
+        assert "PHY Mode" not in out
+        assert "Security" not in out
+        assert "MCS" not in out
+        assert "Supported Channels" not in out
+        assert "Service Active" not in out
+        assert "Gateway" not in out
+        assert caplog.records == []
+
+    def test_responds_to_selector_false_does_not_call(self):
+        cw = GuardedInterface()
+        backend = MacOSBackend(fake_corewlan(cw))
+        out = backend.interface_info(
+            parse(["--get-interfaces"]), backend.list_interfaces()[0]
+        )
+        assert cw.calls == []
+        assert "MCS" not in out
+        assert "PHY Mode" not in out
 
 
 def test_import_does_not_load_corewlan():

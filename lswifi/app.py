@@ -29,10 +29,10 @@ import sys
 import time
 import traceback
 from ctypes import POINTER, cast, create_string_buffer
-from operator import itemgetter
 from time import sleep
 
 # app imports
+from lswifi import helpers
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
 from lswifi.constants import APNAMEJSONFILE, DECORS, DECORS_END, DECORS_START
@@ -64,6 +64,23 @@ def export_rssi_sort_key(row):
         return rssi_sort_key(int(row["rssi"]))
     except ValueError:
         return rssi_sort_key(None)
+
+
+def uptime_sort_key(uptime):
+    try:
+        days, clock = str(uptime).split("d", 1)
+        hours, minutes, seconds = clock.strip().split(":")
+        elapsed = (
+            int(days) * 86400 + int(hours) * 3600 + int(minutes) * 60 + int(seconds)
+        )
+    except (ValueError, TypeError):
+        return (1, 0)
+    return (0, elapsed)
+
+
+def rate_list(rates):
+    text = str(rates).strip()
+    return text.split(" ") if text else []
 
 
 class lswifi:
@@ -148,9 +165,12 @@ class lswifi:
                             {
                                 "connection_name": client.iface.connection_name,
                                 "description": client.iface.description,
-                                "guid": client.iface.guid_string.replace("{", "")
-                                .replace("}", "")
-                                .lower(),
+                                "guid": (
+                                    client.iface.guid_string.replace("{", "")
+                                    .replace("}", "")
+                                    .lower()
+                                    or None
+                                ),
                                 "mac": client.iface.mac,
                                 "state": client.iface.state_string,
                             }
@@ -161,13 +181,22 @@ class lswifi:
                 else:
                     print(f"There are {len(clients)} interfaces on this system:")
                     for _index, client in clients.items():
-                        print(
+                        guid = (
+                            client.iface.guid_string.replace("{", "")
+                            .replace("}", "")
+                            .lower()
+                        )
+                        lines = (
                             f"    Connection Name: {client.iface.connection_name}\n"
                             f"    Description: {client.iface.description}\n"
-                            f"    GUID: {client.iface.guid_string.replace('{', '').replace('}', '').lower()}\n"
+                        )
+                        if guid:
+                            lines += f"    GUID: {guid}\n"
+                        lines += (
                             f"    MAC: {client.iface.mac}\n"
                             f"    State: {client.iface.state_string}\n"
                         )
+                        print(lines)
                 sys.exit(0)
 
             if args.append:
@@ -179,6 +208,13 @@ class lswifi:
                 sys.exit(0)
 
             scanning = True
+            explicit_json = None
+            if getattr(args, "json", None):
+                from lswifi.appsetup import BOOT_TIME
+
+                if args.json != f"lswifi_{BOOT_TIME}.json":
+                    explicit_json = args.json
+            json_documents = []
 
             # for _index, interface in interfaces.items():
             #     if (
@@ -197,7 +233,27 @@ class lswifi:
                     or args.supported
                 ):
                     scanning = False
-                    print(backend.interface_info(args, iface_infos[_index]))
+                    text = backend.interface_info(args, iface_infos[_index])
+                    parsed = None
+                    if args.json and (
+                        args.get_interface_info
+                        or args.get_current_ap
+                        or args.get_current_channel
+                    ):
+                        with contextlib.suppress(json.JSONDecodeError):
+                            parsed = json.loads(text)
+                    if parsed is None:
+                        print(text)
+                    else:
+                        json_documents.append(parsed)
+
+            if json_documents:
+                body = json_documents[0] if len(json_documents) == 1 else json_documents
+                print(json.dumps(body, indent=args.json_indent))
+                if explicit_json:
+                    log.info(f"exporting interface info as JSON to {explicit_json}")
+                    with open(explicit_json, "w") as file:
+                        json.dump(body, file, indent=args.json_indent)
 
             # TODO move other non-scanning functions here
 
@@ -529,6 +585,7 @@ class lswifi:
         wireless_network_bss_list = client.data
 
         log = logging.getLogger(__name__)
+        show_uptime = helpers.uptime_available()
 
         if args.ethers:
             ethers = self.loadEthers()
@@ -761,7 +818,7 @@ class lswifi:
                             pass
 
                 # handle width filter
-                if args.width is not None and int(args.width) != int(
+                if args.width is not None and str(args.width) != str(
                     bss.channel_width.value
                 ):
                     continue
@@ -850,66 +907,68 @@ class lswifi:
                             "modes": sorted(bss.modes.elements),
                             "pmf": str(bss.pmf).strip(),
                             "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": bss.wlanrateset.basic.split(" "),
-                            "rates_data": bss.wlanrateset.data.split(" "),
+                            "rates_basic": rate_list(bss.wlanrateset.basic),
+                            "rates_data": rate_list(bss.wlanrateset.data),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
                             "spatial_streams": str(bss.spatial_streams),
                             "ssid": str(bss.ssid),
                             "stations": str(bss.stations),
-                            "uptime": str(bss.uptime).strip(),
+                            "uptime": (
+                                str(bss.uptime).strip() if show_uptime else None
+                            ),
                             "utilization": str(bss.utilization).strip(),
                         }
                     )
                 if args.csv:
-                    csv_out.append(
-                        {
-                            "timestamp": client.last_scan_time_iso,
-                            "interface_mac": client.mac,
-                            "amendments": "/".join(sorted(bss.amendments.elements)),
-                            "apname": str(bss.apname).strip(),
-                            "bssid": str(bss.bssid).strip(),
-                            "bss_type": str(bss.bss_type).strip(),
-                            "channel_frequency": str(bss.channel_frequency).strip(),
-                            "channel_number": str(bss.channel_number).strip(),
-                            "channel_width": str(bss.channel_width).strip(),
-                            "connected": bss.bssid.connected,
-                            "country_code": str(bss.country_code).strip(),
-                            "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
-                            "ies_extension": "/".join(
-                                map(str, sorted(bss.exie_numbers.elements))
-                            ),
-                            "modes": "/".join(sorted(bss.modes.elements)),
-                            "pmf": str(bss.pmf).strip(),
-                            "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": "/".join(bss.wlanrateset.basic.split(" ")),
-                            "rates_data": "/".join(bss.wlanrateset.data.split(" ")),
-                            "rssi": str(bss.rssi),
-                            "security": str(bss.security).strip(),
-                            "spatial_streams": str(bss.spatial_streams),
-                            "ssid": bss.ssid,
-                            "stations": str(bss.stations),
-                            "utilization": str(bss.utilization).strip(),
-                            "uptime": str(bss.uptime).strip(),
-                        }
-                    )
-                out_results.append(
-                    [
-                        bss.ssid.out(),
-                        bss.bssid.out(),
-                        bss.rssi.out(),
-                        bss.phy_type.out(),
-                        bss.channel_number_marked.out(),
-                        bss.channel_frequency.out(),
-                        bss.spatial_streams.out(),
-                        bss.amendments.out(),
-                        # bss.security.out(),
-                        bss.auth.out(),
-                        bss.encryption.out(),
-                        bss.pmf.out(),
-                        bss.uptime.out(),
-                    ]
-                )
+                    csv_row = {
+                        "timestamp": client.last_scan_time_iso,
+                        "interface_mac": client.mac,
+                        "amendments": "/".join(sorted(bss.amendments.elements)),
+                        "apname": str(bss.apname).strip(),
+                        "bssid": str(bss.bssid).strip(),
+                        "bss_type": str(bss.bss_type).strip(),
+                        "channel_frequency": str(bss.channel_frequency).strip(),
+                        "channel_number": str(bss.channel_number).strip(),
+                        "channel_width": str(bss.channel_width).strip(),
+                        "connected": bss.bssid.connected,
+                        "country_code": str(bss.country_code).strip(),
+                        "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
+                        "ies_extension": "/".join(
+                            map(str, sorted(bss.exie_numbers.elements))
+                        ),
+                        "modes": "/".join(sorted(bss.modes.elements)),
+                        "pmf": str(bss.pmf).strip(),
+                        "phy_type": str(bss.phy_type).strip(),
+                        "rates_basic": "/".join(rate_list(bss.wlanrateset.basic)),
+                        "rates_data": "/".join(rate_list(bss.wlanrateset.data)),
+                        "rssi": str(bss.rssi),
+                        "security": str(bss.security).strip(),
+                        "spatial_streams": str(bss.spatial_streams),
+                        "ssid": bss.ssid,
+                        "stations": str(bss.stations),
+                        "utilization": str(bss.utilization).strip(),
+                    }
+                    if show_uptime:
+                        csv_row["uptime"] = str(bss.uptime).strip()
+                    csv_out.append(csv_row)
+                columns = [
+                    bss.ssid.out(),
+                    bss.bssid.out(),
+                    bss.rssi.out(),
+                    bss.phy_type.out(),
+                    bss.channel_number_marked.out(),
+                    bss.channel_frequency.out(),
+                    bss.spatial_streams.out(),
+                    bss.amendments.out(),
+                    # bss.security.out(),
+                    bss.auth.out(),
+                    bss.encryption.out(),
+                    bss.pmf.out(),
+                ]
+                if show_uptime:
+                    columns.append(bss.uptime.out())
+                out_results.append(columns)
 
                 if args.country:
                     # insert between amendments and auth columns
@@ -934,16 +993,15 @@ class lswifi:
             reverse=False,
         )
 
-        if args.uptime:  # sort by uptime
+        if getattr(args, "uptime", False) and show_uptime:
             out_results = sorted(
                 out_results,
-                key=lambda x: int(
-                    x[get_index("UPTIME", out_results)].value.split("d")[0]
+                key=lambda x: uptime_sort_key(
+                    x[get_index("UPTIME", out_results)].value
                 ),
-                reverse=False,
             )
-            csv_out = sorted(csv_out, key=itemgetter("uptime"), reverse=False)
-            json_out = sorted(json_out, key=itemgetter("uptime"), reverse=False)
+            csv_out = sorted(csv_out, key=lambda row: uptime_sort_key(row["uptime"]))
+            json_out = sorted(json_out, key=lambda row: uptime_sort_key(row["uptime"]))
         else:  # sort by RSSI
             out_results = sorted(
                 out_results,
@@ -955,26 +1013,28 @@ class lswifi:
 
         if args.json:
             json_file_exists = os.path.exists(json_file_name)
-            mode = "r+" if json_file_exists else "w"
             if not json_out:
                 log.info(f"nothing found to export as JSON to {json_file_name}")
             else:
                 log.info(f"exporting scans as JSON to {json_file_name}")
-                with open(json_file_name, mode) as file:
-                    if json_file_exists:
+                if json_file_exists:
+                    with open(json_file_name) as file:
                         file_data = json.load(file)
-                        file_data["scan_data"].extend(json_out)
-                        file.seek(0)
-                        json.dump(file_data, file, indent=args.json_indent)
-                    else:
-                        file_data = json.dumps(
-                            {
-                                "lswifi": {"version": f"lswifi {__version__}"},
-                                "scan_data": json_out,
-                            },
-                            indent=args.json_indent,
-                        )
-                        file.write(file_data)
+                    flat = []
+                    for item in file_data["scan_data"]:
+                        if isinstance(item, list):
+                            flat.extend(item)
+                        else:
+                            flat.append(item)
+                    flat.extend(json_out)
+                    file_data["scan_data"] = flat
+                else:
+                    file_data = {
+                        "lswifi": {"version": f"lswifi {__version__}"},
+                        "scan_data": json_out,
+                    }
+                with open(json_file_name, "w") as file:
+                    json.dump(file_data, file, indent=args.json_indent)
 
         if args.csv:
             has_headings = False
@@ -1025,7 +1085,9 @@ class lswifi:
                 ):
                     continue
 
-                if args.width is not None and args.width not in str(bss.channel_width):
+                if args.width is not None and str(args.width) != str(
+                    bss.channel_width.value
+                ):
                     continue
 
                 if args.include is not None and args.include not in str(bss.ssid):

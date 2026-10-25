@@ -10,6 +10,8 @@ lswifi.completions
 Provides PowerShell tab completion support for lswifi.
 """
 
+from lswifi import helpers
+
 GLOBAL_OPTIONS = [
     "--scans",
     "--interval",
@@ -27,7 +29,6 @@ GLOBAL_OPTIONS = [
     "--qbss",
     "--tpc",
     "--period",
-    "--uptime",
     "--rnr",
     "--channel-width",
     "-ethers",
@@ -64,10 +65,17 @@ OPTIONS_WITH_VALUES = {
 }
 
 
+def global_options() -> list[str]:
+    options = list(GLOBAL_OPTIONS)
+    if helpers.uptime_available():
+        options.insert(options.index("--period") + 1, "--uptime")
+    return options
+
+
 def get_completions(args: list[str], current_word: str) -> list[str]:
     """Return context-aware completion suggestions."""
     if not args:
-        return _filter_completions(GLOBAL_OPTIONS, current_word)
+        return _filter_completions(global_options(), current_word)
 
     last_arg = args[-1] if args else ""
 
@@ -82,7 +90,7 @@ def get_completions(args: list[str], current_word: str) -> list[str]:
     if command == "completion":
         return _filter_completions(SHELLS, current_word)
 
-    available_options = [opt for opt in GLOBAL_OPTIONS if opt not in args]
+    available_options = [opt for opt in global_options() if opt not in args]
     return _filter_completions(available_options, current_word)
 
 

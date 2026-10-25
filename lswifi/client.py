@@ -33,6 +33,7 @@ from typing import Any
 
 from lswifi import wlanapi as WLAN_API
 from lswifi.helpers import (
+    format_mbps,
     is_five_band,
     is_six_band,
     is_two_four_band,
@@ -712,8 +713,12 @@ def get_interface_info(args, iface) -> str:
                 outstr += f"    Signal Quality: {wlanSignalQuality}%\n"
                 if rssi is not None:
                     outstr += f"    RSSI: {rssi} dBm\n"
-                outstr += f"    Receive (Rx) Rate: {ulRxRate / 1000} Mbps\n"
-                outstr += f"    Transmit (Tx) Rate: {ulTxRate / 1000} Mbps\n"
+                outstr += (
+                    f"    Receive (Rx) Rate: {format_mbps(ulRxRate / 1000)} Mbps\n"
+                )
+                outstr += (
+                    f"    Transmit (Tx) Rate: {format_mbps(ulTxRate / 1000)} Mbps\n"
+                )
                 outstr += (
                     f"    Security: {'Enabled' if SecurityEnabled else 'Disabled'}\n"
                 )

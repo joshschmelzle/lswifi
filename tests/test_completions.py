@@ -9,7 +9,15 @@ class TestCompletions:
     def test_get_completions_empty_args(self):
         """Empty args returns all global options."""
         result = completions.get_completions([], "")
-        assert result == completions.GLOBAL_OPTIONS
+        assert result == completions.global_options()
+
+    def test_uptime_completion_follows_platform(self, monkeypatch):
+        monkeypatch.setattr("lswifi.helpers.uptime_available", lambda: False)
+        assert "--uptime" not in completions.get_completions([], "")
+        assert "--uptime" not in completions.get_completions([], "--up")
+        monkeypatch.setattr("lswifi.helpers.uptime_available", lambda: True)
+        assert "--uptime" in completions.get_completions([], "")
+        assert completions.get_completions([], "--up") == ["--uptime"]
 
     def test_get_completions_with_prefix(self):
         """Filters options by prefix."""

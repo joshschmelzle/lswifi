@@ -35,6 +35,7 @@ from lswifi.backends.base import (
     RecordScanSession,
 )
 from lswifi.helpers import (
+    format_mbps,
     get_2ghz5ghz_frequency_from_channel_number,
     get_6ghz_frequency_from_channel_number,
 )
@@ -50,6 +51,41 @@ BAND_NAMES = {
     CW_CHANNEL_BAND_2GHZ: "2.4 GHz",
     CW_CHANNEL_BAND_5GHZ: "5 GHz",
     CW_CHANNEL_BAND_6GHZ: "6 GHz",
+}
+CW_PHY_MODE_NAMES = {
+    0: "none",
+    1: "802.11a",
+    2: "802.11b",
+    3: "802.11g",
+    4: "802.11n",
+    5: "802.11ac",
+    6: "802.11ax",
+    7: "802.11be",
+}
+CW_INTERFACE_MODE_NAMES = {
+    0: "none",
+    1: "station",
+    2: "IBSS",
+    3: "Host AP",
+}
+# CWSecurity in CoreWLAN/CWTypes.h (kCWSecurityWPA3Personal is 11)
+CW_SECURITY_NAMES = {
+    0: "Open",
+    1: "WEP",
+    2: "WPA Personal",
+    3: "WPA Personal Mixed",
+    4: "WPA2 Personal",
+    5: "Personal",
+    6: "Dynamic WEP",
+    7: "WPA Enterprise",
+    8: "WPA Enterprise Mixed",
+    9: "WPA2 Enterprise",
+    10: "Enterprise",
+    11: "WPA3 Personal",
+    12: "WPA3 Enterprise",
+    13: "WPA3 Transition",
+    14: "OWE",
+    15: "OWE Transition",
 }
 
 UNSUPPORTED = "unsupported on macOS"
@@ -121,6 +157,224 @@ def network_to_record(network, connected_bssid: str | None = None) -> BssRecord:
 def is_redacted(record: BssRecord) -> bool:
     """Location Services withheld this record's identity and IEs"""
     return not record.bssid and not record.ies
+
+
+def _responds(obj, selector: str) -> bool:
+    checker = getattr(obj, "respondsToSelector_", None)
+    if not callable(checker):
+        return hasattr(obj, selector)
+    try:
+        import objc  # type: ignore[import-not-found,import-untyped]
+    except ImportError:
+        query = selector
+    else:
+        try:
+            query = objc.selector(None, selector=selector.encode(), signature=b"@@:@")
+        except Exception:
+            query = selector
+    try:
+        return bool(checker(query))
+    except Exception:
+        return False
+
+
+def _call(obj, selector: str):
+    if obj is None or not _responds(obj, selector):
+        return None
+    try:
+        return getattr(obj, selector)()
+    except Exception:
+        return None
+
+
+def _as_int(value):
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _enum_name(value, names: dict):
+    number = _as_int(value)
+    if number is None:
+        return None
+    return names.get(number, number)
+
+
+def _mapping_get(obj, key: str):
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(key)
+    getter = getattr(obj, "objectForKey_", None)
+    if callable(getter):
+        try:
+            return getter(key)
+        except Exception:
+            return None
+    try:
+        return obj[key]
+    except Exception:
+        pass
+    if _responds(obj, key):
+        try:
+            attr = getattr(obj, key)
+            return attr() if callable(attr) else attr
+        except Exception:
+            return None
+    return None
+
+
+def _text(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        try:
+            value = value.decode()
+        except UnicodeDecodeError:
+            return None
+    text = str(value).strip()
+    return text or None
+
+
+def _monitor_value(monitor, selector: str):
+    if monitor is None:
+        return None
+    if isinstance(monitor, dict):
+        return monitor.get(selector)
+    return _call(monitor, selector)
+
+
+def _string_list(value) -> list[str]:
+    if value is None or isinstance(value, (str, bytes)):
+        text = _text(value)
+        return [text] if text else []
+    try:
+        items = list(value)
+    except Exception:
+        return []
+    found = []
+    for item in items:
+        text = _text(item)
+        if text:
+            found.append(text)
+    return found
+
+
+def _config_gateway(state) -> tuple[str | None, str | None]:
+    ip = _text(_mapping_get(state, "ARPResolvedIPAddress"))
+    hardware = _text(_mapping_get(state, "ARPResolvedHardwareAddress"))
+    if hardware and ":" in hardware:
+        hardware = hardware.lower()
+    return ip, hardware
+
+
+def _gateway(cw_iface) -> tuple[str | None, str | None]:
+    monitor = _call(cw_iface, "ipMonitor")
+    ip = hardware = None
+    for selector in ("ipv4WiFiStateConfig", "ipv4StateConfig", "ipv4State"):
+        state = _monitor_value(monitor, selector)
+        if state is None:
+            continue
+        found_ip, found_mac = _config_gateway(state)
+        if ip is None:
+            ip = found_ip
+        if hardware is None:
+            hardware = found_mac
+        if ip and hardware:
+            break
+    if not ip:
+        ip = _text(_monitor_value(monitor, "ipv4Router"))
+    return ip, hardware
+
+
+def _ipv4_addresses(cw_iface) -> list[str]:
+    return _string_list(_monitor_value(_call(cw_iface, "ipMonitor"), "ipv4Addresses"))
+
+
+def _channel_runs(numbers: list[int]) -> list[list[int]]:
+    ordered = sorted(set(numbers))
+    if not ordered:
+        return []
+    if len(ordered) == 1:
+        return [[ordered[0], ordered[0]]]
+    step = min(b - a for a, b in zip(ordered, ordered[1:], strict=False) if b > a)
+    runs: list[list[int]] = []
+    start = previous = ordered[0]
+    for number in ordered[1:]:
+        if number - previous == step:
+            previous = number
+            continue
+        runs.append([start, previous])
+        start = previous = number
+    runs.append([start, previous])
+    return runs
+
+
+def summarize_supported_channels(channels) -> list[dict] | None:
+    """Per-band channel runs and widths from CWChannel objects"""
+    if not channels:
+        return None
+    grouped: dict[int, dict] = {}
+    for channel in channels:
+        try:
+            number = int(channel.channelNumber())
+            band = int(channel.channelBand())
+            width = channel.channelWidth()
+        except Exception:
+            continue
+        slot = grouped.setdefault(band, {"numbers": [], "widths": []})
+        slot["numbers"].append(number)
+        if width:
+            slot["widths"].append(width)
+    if not grouped:
+        return None
+    preferred = (
+        CW_CHANNEL_BAND_2GHZ,
+        CW_CHANNEL_BAND_5GHZ,
+        CW_CHANNEL_BAND_6GHZ,
+    )
+    order = [band for band in preferred if band in grouped]
+    order.extend(sorted(band for band in grouped if band not in preferred))
+    summary = []
+    for band in order:
+        slot = grouped[band]
+        known = sorted(
+            {
+                CW_CHANNEL_WIDTH_MHZ[code]
+                for code in set(slot["widths"])
+                if code in CW_CHANNEL_WIDTH_MHZ
+            }
+        )
+        unknown = sorted(
+            int(code)
+            for code in set(slot["widths"])
+            if code not in CW_CHANNEL_WIDTH_MHZ
+        )
+        summary.append(
+            {
+                "band": BAND_NAMES.get(band, str(band)),
+                "ranges": _channel_runs(slot["numbers"]),
+                "widths_mhz": known + unknown,
+            }
+        )
+    return summary
+
+
+def format_supported_channels(summary: list[dict]) -> str:
+    parts = []
+    for band in summary:
+        ranges = [
+            str(start) if start == end else f"{start}-{end}"
+            for start, end in band["ranges"]
+        ]
+        text = f"{band['band']} {', '.join(ranges)}"
+        if band["widths_mhz"]:
+            text += f" ({'/'.join(str(width) for width in band['widths_mhz'])})"
+        parts.append(text)
+    return ", ".join(parts)
 
 
 def _interface_state(cw_iface) -> str:
@@ -211,7 +465,9 @@ class MacOSBackend:
             log.debug("scanForNetworksWithSSID failed: %s; using scan cache", error)
             networks = cw_iface.cachedScanResults()
             if networks is None:
-                raise BackendError(f"CoreWLAN scan failed on {iface.connection_name}: {error}")
+                raise BackendError(
+                    f"CoreWLAN scan failed on {iface.connection_name}: {error}"
+                )
         elif error is not None:
             # observed: kCWTimeoutErr (-3905) alongside a full result set
             log.debug("scanForNetworksWithSSID returned results and %s", error)
@@ -242,7 +498,10 @@ class MacOSBackend:
         """-ap, -channel, --get-interfaces from the associated CWInterface"""
         cw_iface = self._native(iface)
         if args.supported:
-            return f"    --supported: {UNSUPPORTED}\n"
+            return (
+                f"    --supported: {UNSUPPORTED}\n"
+                "    AP uptime isn't available on macOS\n"
+            )
         bssid = (cw_iface.bssid() or "").lower()
         ssid = _nsdata_bytes(cw_iface.ssidData()).decode("utf-8", errors="replace")
         channel = cw_iface.wlanChannel()
@@ -275,6 +534,23 @@ class MacOSBackend:
                 ).items()
             )
 
+        connected = state == "connected"
+        channels = summarize_supported_channels(
+            _call(cw_iface, "supportedWLANChannels")
+        )
+        # mcsIndex, numberOfSpatialStreams, maxNSSSupportedForAP, and ipMonitor
+        # are undocumented CoreWLAN selectors. They answer on some macOS builds
+        # and are absent from the public header, so a missing or failing selector
+        # is skipped.
+        gateway_ip, gateway_mac = _gateway(cw_iface) if connected else (None, None)
+        ipv4_addresses = _ipv4_addresses(cw_iface) or None
+        mcs_index = _as_int(_call(cw_iface, "mcsIndex")) if connected else None
+        spatial_streams = (
+            _as_int(_call(cw_iface, "numberOfSpatialStreams")) if connected else None
+        )
+        max_spatial_streams = (
+            _as_int(_call(cw_iface, "maxNSSSupportedForAP")) if connected else None
+        )
         info = base | {
             "description": iface.description,
             "state": state,
@@ -283,31 +559,87 @@ class MacOSBackend:
             "channel": channel_number,
             "band": band,
             "width_mhz": width,
-            "rssi": cw_iface.rssiValue() if state == "connected" else None,
-            "noise": cw_iface.noiseMeasurement() if state == "connected" else None,
-            "tx_rate_mbps": cw_iface.transmitRate() if state == "connected" else None,
+            "rssi": cw_iface.rssiValue() if connected else None,
+            "noise": cw_iface.noiseMeasurement() if connected else None,
+            "tx_rate_mbps": cw_iface.transmitRate() if connected else None,
             "tx_power_mw": cw_iface.transmitPower(),
+            "phy_mode": (
+                _enum_name(_call(cw_iface, "activePHYMode"), CW_PHY_MODE_NAMES)
+                if connected
+                else None
+            ),
+            "security": (
+                _enum_name(_call(cw_iface, "security"), CW_SECURITY_NAMES)
+                if connected
+                else None
+            ),
+            "interface_mode": _enum_name(
+                _call(cw_iface, "interfaceMode"), CW_INTERFACE_MODE_NAMES
+            ),
+            "power_on": bool(cw_iface.powerOn()),
+            "service_active": (
+                None
+                if (service := _call(cw_iface, "serviceActive")) is None
+                else bool(service)
+            ),
+            "supported_channels": channels,
+            "mcs_index": mcs_index,
+            "spatial_streams": spatial_streams,
+            "max_spatial_streams": max_spatial_streams,
+            "gateway_ip": gateway_ip,
+            "gateway_mac": gateway_mac,
+            "ipv4_addresses": ipv4_addresses,
             "country_code": cw_iface.countryCode(),
-            "bus": UNSUPPORTED,
+            "bus": None,
         }
         if args.json:
             return json.dumps(info, indent=args.json_indent, default=str)
         outstr = f"Interface: {iface.connection_name} is {state}\n"
         outstr += f"    Description: {iface.description}\n"
         outstr += f"    MAC: {iface.mac}\n"
-        outstr += f"    Bus: {UNSUPPORTED}\n"
         outstr += f"    State: {state}\n"
-        if state == "connected":
+        if connected:
             outstr += f"    SSID: {ssid}\n"
             outstr += f"    BSSID: {bssid}\n"
-            outstr += f"    Channel: {channel_number}\n"
+            if channel_number is not None:
+                outstr += f"    Channel: {channel_number}\n"
             if band is not None:
                 outstr += f"    Band: {band}\n"
             if width is not None:
                 outstr += f"    Width: {width} MHz\n"
-            outstr += f"    RSSI: {info['rssi']} dBm\n"
-            outstr += f"    Noise: {info['noise']} dBm\n"
-            outstr += f"    Transmit (Tx) Rate: {info['tx_rate_mbps']} Mbps\n"
+            if info["rssi"] is not None:
+                outstr += f"    RSSI: {info['rssi']} dBm\n"
+            if info["noise"] is not None:
+                outstr += f"    Noise: {info['noise']} dBm\n"
+            if info["tx_rate_mbps"] is not None:
+                outstr += f"    Transmit (Tx) Rate: {format_mbps(info['tx_rate_mbps'])} Mbps\n"
+            if info["phy_mode"] is not None:
+                outstr += f"    PHY Mode: {info['phy_mode']}\n"
+            if info["security"] is not None:
+                outstr += f"    Security: {info['security']}\n"
+            if info["mcs_index"] is not None:
+                outstr += f"    MCS: {info['mcs_index']}\n"
+            if info["spatial_streams"] is not None:
+                outstr += f"    Spatial Streams: {info['spatial_streams']}\n"
+            if info["max_spatial_streams"] is not None:
+                outstr += f"    Max Spatial Streams: {info['max_spatial_streams']}\n"
+            if info["gateway_ip"] is not None:
+                outstr += f"    Gateway: {info['gateway_ip']}\n"
+            if info["gateway_mac"] is not None:
+                outstr += f"    Gateway MAC: {info['gateway_mac']}\n"
+        if info["ipv4_addresses"]:
+            outstr += f"    IPv4 Address: {', '.join(info['ipv4_addresses'])}\n"
+        if info["tx_power_mw"] is not None:
+            outstr += f"    Tx Power: {format_mbps(info['tx_power_mw'])} mW\n"
+        if info["interface_mode"] is not None:
+            outstr += f"    Interface Mode: {info['interface_mode']}\n"
+        outstr += f"    Power: {'on' if info['power_on'] else 'off'}\n"
+        if info["service_active"] is not None:
+            outstr += (
+                f"    Service Active: {'yes' if info['service_active'] else 'no'}\n"
+            )
+        if channels:
+            outstr += f"    Supported Channels: {format_supported_channels(channels)}\n"
         if info["country_code"]:
             outstr += f"    Country Code: {info['country_code']}\n"
         return outstr

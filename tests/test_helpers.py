@@ -11,6 +11,13 @@ from lswifi import helpers
 
 
 class TestHelpers(object):
+    @pytest.mark.parametrize(
+        "rate, text",
+        [(576.0, "576"), (286, "286"), (864.5, "864.5"), (6.5, "6.5"), (1.5, "1.5")],
+    )
+    def test_format_mbps(self, rate, text):
+        assert helpers.format_mbps(rate) == text
+
     def test_bytes_to_int(self):
         assert helpers.bytes_to_int(b"\x00") == 0
         assert helpers.bytes_to_int(b"\x8c") == 140

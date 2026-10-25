@@ -89,6 +89,29 @@ class TestSyslogIp:
             appsetup.syslog_ip("not.an.ip.address")
 
 
+class TestUptimeFlag:
+    def test_hidden_off_windows(self, monkeypatch):
+        monkeypatch.setattr("lswifi.helpers.uptime_available", lambda: False)
+        parser = appsetup.setup_parser()
+        help_text = parser.format_help()
+        assert "--uptime" not in help_text
+        assert "-uptime" not in help_text
+        args = parser.parse_args([])
+        assert args.uptime is False
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--uptime"])
+        with pytest.raises(SystemExit):
+            parser.parse_args(["-uptime"])
+
+    def test_registered_on_windows(self, monkeypatch):
+        monkeypatch.setattr("lswifi.helpers.uptime_available", lambda: True)
+        parser = appsetup.setup_parser()
+        help_text = parser.format_help()
+        assert "--uptime" in help_text
+        assert parser.parse_args(["--uptime"]).uptime is True
+        assert parser.parse_args([]).uptime is False
+
+
 class TestParseCompletionArgs:
     def test_no_complete_flag(self):
         """Returns None when --_complete not present."""
