@@ -10,7 +10,7 @@ RELEASED
 - Detect legacy WPA from vendor IE 221 (OUI 00:50:F2, type 1) in the auth, encryption, and security columns. Suites are merged when an RSN element is also present (#123).
 - `--json` keeps every scan in `scan_data` as a flat list of BSS objects. A file from 0.3.0, where later scans were nested lists, is flattened on the next append. Rewriting the file no longer leaves trailing bytes that make it invalid (#127).
 - On Windows, `--uptime` sorts by elapsed time. A BSS with no uptime sorts last. JSON and CSV use that same order.
-- The AP uptime column is omitted from the table and from CSV on macOS and Linux. JSON still has `uptime`, set to null. `--uptime` on those platforms warns once and sorts by RSSI. `--supported` says AP uptime isn't available.
+- The AP uptime column is omitted from the table and from CSV on macOS and Linux. JSON still has `uptime`, set to null. `--uptime` is only a flag on Windows: on macOS and Linux it is absent from `--help` and from shell completion, and argparse rejects it. `--supported` says AP uptime isn't available.
 - Interface text omits fields the platform cannot supply, including an empty GUID and an unsupported bus. JSON keeps those keys as null.
 - Transmit and receive rates print as whole numbers when they have no fractional part (`576 Mbps`) and keep one decimal when they do (`6.5 Mbps`).
 - Unknown RSSI is printed as `--`. It still sorts as the weakest signal and is not removed by `-t`.

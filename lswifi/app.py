@@ -32,6 +32,7 @@ from ctypes import POINTER, cast, create_string_buffer
 from time import sleep
 
 # app imports
+from lswifi import helpers
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
 from lswifi.constants import APNAMEJSONFILE, DECORS, DECORS_END, DECORS_START
@@ -63,27 +64,6 @@ def export_rssi_sort_key(row):
         return rssi_sort_key(int(row["rssi"]))
     except ValueError:
         return rssi_sort_key(None)
-
-
-def uptime_available() -> bool:
-    return sys.platform == "win32"
-
-
-_uptime_warning_sent = False
-
-
-def warn_uptime_unavailable(log) -> None:
-    global _uptime_warning_sent
-    if _uptime_warning_sent:
-        return
-    _uptime_warning_sent = True
-    if sys.platform == "darwin":
-        where = "macOS"
-    elif sys.platform.startswith("linux"):
-        where = "Linux"
-    else:
-        where = sys.platform
-    log.warning("AP uptime isn't available on %s", where)
 
 
 def uptime_sort_key(uptime):
@@ -578,9 +558,7 @@ class lswifi:
         wireless_network_bss_list = client.data
 
         log = logging.getLogger(__name__)
-        show_uptime = uptime_available()
-        if args.uptime and not show_uptime:
-            warn_uptime_unavailable(log)
+        show_uptime = helpers.uptime_available()
 
         if args.ethers:
             ethers = self.loadEthers()
@@ -988,7 +966,7 @@ class lswifi:
             reverse=False,
         )
 
-        if args.uptime and show_uptime:
+        if getattr(args, "uptime", False) and show_uptime:
             out_results = sorted(
                 out_results,
                 key=lambda x: uptime_sort_key(

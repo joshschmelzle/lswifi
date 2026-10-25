@@ -26,9 +26,12 @@ import textwrap
 import time
 from pathlib import Path
 
-from lswifi import slog
+from lswifi import helpers, slog
 from lswifi.__version__ import __version__
-from lswifi.completions import get_completions, get_completion_script
+from lswifi.completions import (
+    get_completion_script as get_completion_script,
+)
+from lswifi.completions import get_completions
 
 
 def parse_completion_args(argv: list[str]) -> tuple[str, str] | None:
@@ -466,13 +469,15 @@ def setup_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="adds beacon period column to output using information from AP beacon",
     )
-    parser.add_argument(
-        "--uptime",
-        "-uptime",
-        dest="uptime",
-        action="store_true",
-        help="sort output by access point uptime based on beacon timestamp",
-    )
+    if helpers.uptime_available():
+        parser.add_argument(
+            "--uptime",
+            "-uptime",
+            dest="uptime",
+            action="store_true",
+            help="sort output by access point uptime based on beacon timestamp",
+        )
+    parser.set_defaults(uptime=False)
     parser.add_argument(
         "-d",
         "--country",

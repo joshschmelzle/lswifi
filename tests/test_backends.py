@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from lswifi import app, appsetup
+from lswifi import app, appsetup, helpers
 from lswifi.backends.base import (
     BackendNotImplementedError,
     BackendUnavailableError,
@@ -221,7 +221,7 @@ class TestWindowsMapper:
         assert row["modes"] == ["ax", "be", "g", "n"]
         assert row["rates_basic"] == ["1", "2", "5.5", "11"]
         assert row["rates_data"] == ["6", "9", "12", "18", "24", "36", "48", "54"]
-        if app.uptime_available():
+        if helpers.uptime_available():
             assert row["uptime"] == "00d 0:03:32"
         else:
             assert row["uptime"] is None

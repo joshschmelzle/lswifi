@@ -40,6 +40,10 @@ def remove_control_chars(text: str) -> str:
     return __control_char_re.sub("", text)
 
 
+def uptime_available() -> bool:
+    return sys.platform == "win32"
+
+
 def format_mbps(rate) -> str:
     text = f"{float(rate):.1f}"
     whole, frac = text.split(".", 1)
