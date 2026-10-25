@@ -633,12 +633,8 @@ def _fill_from_link(
 
 
 def _drop_placeholder_mld_signal(station: dict[str, Any] | None, links: list) -> None:
-    if not station or station.get("signal") != 0 or not links:
-        return
-    for link in links:
-        if "signal" in (link.get("station") or {}):
-            return
-    station.pop("signal", None)
+    if station and station.get("signal") == 0 and links:
+        station.pop("signal", None)
 
 
 def station_to_link(attrs: dict[int, bytes]) -> tuple[str, int | None, float | None]:

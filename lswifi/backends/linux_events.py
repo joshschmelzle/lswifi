@@ -415,6 +415,10 @@ class LinkFormatter:
     def link_removed(self, link: LinkInfo, removed: list[dict[str, Any]]) -> EventLine:
         previous = list(self.last.extra.get("links") or [])
         described = _prefer(previous, removed)
+        gone = {item.get("id") for item in removed if item.get("id") is not None}
+        source = link.extra.get("links")
+        current = list(previous if source is None else source)
+        link.extra["links"] = [item for item in current if item.get("id") not in gone]
         self.last = link
         return self.line(
             link,

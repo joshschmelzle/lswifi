@@ -1250,6 +1250,66 @@ class TestInterfaceDetails:
         assert "width_mhz" not in info["links"][1]
         assert "tx_power_dbm" not in info["links"][1]
 
+    def test_placeholder_mld_signal_dropped_with_per_link_signal(
+        self, kernel, backend, tmp_path
+    ):
+        backend.proc_net = str(tmp_path)
+        active = bytes.fromhex("a6b1f5a21e29")
+        quiet = bytes.fromhex("7ae3a942cd3a")
+        link2 = bytes.fromhex("6851347c31f5")
+        kernel.interfaces = [
+            iface_attrs(
+                3,
+                "wlan0",
+                ssid=b"sae-6",
+                freq=None,
+                links=[
+                    mlo_link(0, active, 6135, width=3, center1=6145, tx_mbm=2200),
+                    mlo_link(2, quiet),
+                ],
+                last=0x63,
+            )
+        ]
+        kernel.stations = [
+            station_message(
+                MLD,
+                [
+                    s8(nl.STA_INFO_SIGNAL, 0),
+                    EHT_TX,
+                    legacy_bitrate(nl.STA_INFO_RX_BITRATE, 240),
+                ],
+                [
+                    mlo_link(0, MLD, 6135, [s8(nl.STA_INFO_SIGNAL, -40)]),
+                    mlo_link(2, link2, 2462, [s8(nl.STA_INFO_SIGNAL, -62)]),
+                ],
+            )
+        ]
+        out, iface = self.text(kernel, backend)
+        assert "RSSI" not in out
+        assert line(out, "Link 0:") == (
+            "Link 0: AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, channel 37, "
+            "6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
+        )
+        assert line(out, "Link 2:") == (
+            "Link 2: AP BSSID 68:51:34:7c:31:f5, STA 7a:e3:a9:42:cd:3a, channel 11, "
+            "2462 MHz, 2.4 GHz"
+        )
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["rssi"] is None
+        lines: list = []
+        watcher = LinuxEventWatcher(
+            backend,
+            backend.list_interfaces(),
+            parse(["--watchevents"]),
+            emit=lines.append,
+        )
+        (watching,) = watcher.start()
+        assert "rssi:" not in watching
+        assert watching.record["rssi"] is None
+        assert [item["id"] for item in watching.record["links"]] == [0, 2]
+
     def test_bss_dump_supplies_ap_link_bssid_and_frequency(
         self, kernel, backend, tmp_path
     ):
@@ -1796,9 +1856,23 @@ class TestEvents:
         assert "event: (roamed)" not in removed
         assert "event: (disconnected)" not in removed
         assert "link: (2: 68:51:34:7c:31:f5 2.4 GHz ch 11)" in removed
+        assert removed.split("links:", 1)[1] == (
+            " (0: 68:51:34:7c:32:05 6 GHz ch 37@80)"
+        )
         assert removed.record["link"][0]["id"] == 2
+        assert [item["id"] for item in removed.record["links"]] == [0]
         assert removed.record["ap_mld"] == "68:51:34:7c:32:05"
         assert "mld" not in removed.record
+        stored = watcher.formatters[3].last.extra["links"]
+        assert [item["id"] for item in stored] == [0]
+
+        watcher.scan_events = True
+        (cached,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
+        assert "event: (scan_cache_updated)" in cached
+        assert cached.split("links:", 1)[1] == (
+            " (0: 68:51:34:7c:32:05 6 GHz ch 37@80)"
+        )
+        assert [item["id"] for item in cached.record["links"]] == [0]
 
         other = bytes.fromhex("6851347c3206")
         (added,) = watcher.handle(
