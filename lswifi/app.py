@@ -65,6 +65,27 @@ def export_rssi_sort_key(row):
         return rssi_sort_key(None)
 
 
+def uptime_available() -> bool:
+    return sys.platform == "win32"
+
+
+_uptime_warning_sent = False
+
+
+def warn_uptime_unavailable(log) -> None:
+    global _uptime_warning_sent
+    if _uptime_warning_sent:
+        return
+    _uptime_warning_sent = True
+    if sys.platform == "darwin":
+        where = "macOS"
+    elif sys.platform.startswith("linux"):
+        where = "Linux"
+    else:
+        where = sys.platform
+    log.warning("AP uptime isn't available on %s", where)
+
+
 def uptime_sort_key(uptime):
     try:
         days, clock = str(uptime).split("d", 1)
@@ -557,6 +578,9 @@ class lswifi:
         wireless_network_bss_list = client.data
 
         log = logging.getLogger(__name__)
+        show_uptime = uptime_available()
+        if args.uptime and not show_uptime:
+            warn_uptime_unavailable(log)
 
         if args.ethers:
             ethers = self.loadEthers()
@@ -885,59 +909,61 @@ class lswifi:
                             "spatial_streams": str(bss.spatial_streams),
                             "ssid": str(bss.ssid),
                             "stations": str(bss.stations),
-                            "uptime": str(bss.uptime).strip(),
+                            "uptime": (
+                                str(bss.uptime).strip() if show_uptime else None
+                            ),
                             "utilization": str(bss.utilization).strip(),
                         }
                     )
                 if args.csv:
-                    csv_out.append(
-                        {
-                            "timestamp": client.last_scan_time_iso,
-                            "interface_mac": client.mac,
-                            "amendments": "/".join(sorted(bss.amendments.elements)),
-                            "apname": str(bss.apname).strip(),
-                            "bssid": str(bss.bssid).strip(),
-                            "bss_type": str(bss.bss_type).strip(),
-                            "channel_frequency": str(bss.channel_frequency).strip(),
-                            "channel_number": str(bss.channel_number).strip(),
-                            "channel_width": str(bss.channel_width).strip(),
-                            "connected": bss.bssid.connected,
-                            "country_code": str(bss.country_code).strip(),
-                            "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
-                            "ies_extension": "/".join(
-                                map(str, sorted(bss.exie_numbers.elements))
-                            ),
-                            "modes": "/".join(sorted(bss.modes.elements)),
-                            "pmf": str(bss.pmf).strip(),
-                            "phy_type": str(bss.phy_type).strip(),
-                            "rates_basic": "/".join(rate_list(bss.wlanrateset.basic)),
-                            "rates_data": "/".join(rate_list(bss.wlanrateset.data)),
-                            "rssi": str(bss.rssi),
-                            "security": str(bss.security).strip(),
-                            "spatial_streams": str(bss.spatial_streams),
-                            "ssid": bss.ssid,
-                            "stations": str(bss.stations),
-                            "utilization": str(bss.utilization).strip(),
-                            "uptime": str(bss.uptime).strip(),
-                        }
-                    )
-                out_results.append(
-                    [
-                        bss.ssid.out(),
-                        bss.bssid.out(),
-                        bss.rssi.out(),
-                        bss.phy_type.out(),
-                        bss.channel_number_marked.out(),
-                        bss.channel_frequency.out(),
-                        bss.spatial_streams.out(),
-                        bss.amendments.out(),
-                        # bss.security.out(),
-                        bss.auth.out(),
-                        bss.encryption.out(),
-                        bss.pmf.out(),
-                        bss.uptime.out(),
-                    ]
-                )
+                    csv_row = {
+                        "timestamp": client.last_scan_time_iso,
+                        "interface_mac": client.mac,
+                        "amendments": "/".join(sorted(bss.amendments.elements)),
+                        "apname": str(bss.apname).strip(),
+                        "bssid": str(bss.bssid).strip(),
+                        "bss_type": str(bss.bss_type).strip(),
+                        "channel_frequency": str(bss.channel_frequency).strip(),
+                        "channel_number": str(bss.channel_number).strip(),
+                        "channel_width": str(bss.channel_width).strip(),
+                        "connected": bss.bssid.connected,
+                        "country_code": str(bss.country_code).strip(),
+                        "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
+                        "ies_extension": "/".join(
+                            map(str, sorted(bss.exie_numbers.elements))
+                        ),
+                        "modes": "/".join(sorted(bss.modes.elements)),
+                        "pmf": str(bss.pmf).strip(),
+                        "phy_type": str(bss.phy_type).strip(),
+                        "rates_basic": "/".join(rate_list(bss.wlanrateset.basic)),
+                        "rates_data": "/".join(rate_list(bss.wlanrateset.data)),
+                        "rssi": str(bss.rssi),
+                        "security": str(bss.security).strip(),
+                        "spatial_streams": str(bss.spatial_streams),
+                        "ssid": bss.ssid,
+                        "stations": str(bss.stations),
+                        "utilization": str(bss.utilization).strip(),
+                    }
+                    if show_uptime:
+                        csv_row["uptime"] = str(bss.uptime).strip()
+                    csv_out.append(csv_row)
+                columns = [
+                    bss.ssid.out(),
+                    bss.bssid.out(),
+                    bss.rssi.out(),
+                    bss.phy_type.out(),
+                    bss.channel_number_marked.out(),
+                    bss.channel_frequency.out(),
+                    bss.spatial_streams.out(),
+                    bss.amendments.out(),
+                    # bss.security.out(),
+                    bss.auth.out(),
+                    bss.encryption.out(),
+                    bss.pmf.out(),
+                ]
+                if show_uptime:
+                    columns.append(bss.uptime.out())
+                out_results.append(columns)
 
                 if args.country:
                     # insert between amendments and auth columns
@@ -962,7 +988,7 @@ class lswifi:
             reverse=False,
         )
 
-        if args.uptime:
+        if args.uptime and show_uptime:
             out_results = sorted(
                 out_results,
                 key=lambda x: uptime_sort_key(

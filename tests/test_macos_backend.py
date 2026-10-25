@@ -373,6 +373,8 @@ class TestBackend:
         backend = MacOSBackend(fake_corewlan(FakeInterface(bssid="AA:BB:CC:DD:EE:FF")))
         out = backend.interface_info(parse(argv), backend.list_interfaces()[0])
         assert expected in out
+        if "--supported" in argv:
+            assert "AP uptime isn't available on macOS" in out
 
     def test_get_interfaces_hides_unavailable_fields(self):
         cw = FakeInterface(bssid="AA:BB:CC:DD:EE:FF")

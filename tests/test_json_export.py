@@ -55,7 +55,8 @@ def test_json_append_flattens_legacy_nesting_and_truncates(tmp_path):
     assert scan_data[-1]["bssid"] == "98:8f:00:9a:a4:80"
 
 
-def test_uptime_sorts_by_elapsed_time_and_keeps_unknown(tmp_path):
+def test_uptime_sorts_by_elapsed_time_and_keeps_unknown(tmp_path, monkeypatch):
+    monkeypatch.setattr(app, "uptime_available", lambda: True)
     records = []
     for days, hour, last in (
         (2, 10, "02"),
@@ -93,6 +94,74 @@ def test_uptime_sorts_by_elapsed_time_and_keeps_unknown(tmp_path):
     ]
     assert [row["uptime"] for row in json_out] == expected
     assert [row[11].value for row in out] == expected
+    assert [col.header.value for col in out[0]][-1] == "AP UPTIME"
+
+
+def test_uptime_hidden_off_windows(tmp_path, caplog, monkeypatch):
+    import logging
+
+    monkeypatch.setattr(app, "uptime_available", lambda: False)
+    monkeypatch.setattr(app, "_uptime_warning_sent", False)
+    short = WirelessNetworkBss(
+        BssRecord(
+            **{
+                **ARUBA,
+                "bssid": "02:00:00:00:00:01",
+                "rssi_dbm": -80,
+                "tsf": 2 * 86400 * 1_000_000,
+            }
+        )
+    )
+    long = WirelessNetworkBss(
+        BssRecord(
+            **{
+                **ARUBA,
+                "bssid": "02:00:00:00:00:02",
+                "rssi_dbm": -40,
+                "tsf": 100 * 86400 * 1_000_000,
+            }
+        )
+    )
+    json_path = tmp_path / "uptime.json"
+    csv_path = tmp_path / "uptime.csv"
+    args = parse(
+        [
+            "-all",
+            "--uptime",
+            "--json",
+            str(json_path),
+            "--csv",
+            str(csv_path),
+        ]
+    )
+    caplog.set_level(logging.WARNING)
+    scanner = app.lswifi()
+    out, *_rest, json_out, _new = scanner.parse_bss_list(
+        Session([short, long]), False, str(csv_path), str(json_path), args
+    )
+    scanner.parse_bss_list(
+        Session([short, long]), False, str(csv_path), str(json_path), args
+    )
+    assert [col.header.value for col in out[0] if "UPTIME" in col.header.value] == []
+    assert [row["uptime"] for row in json_out] == [None, None]
+    assert [row["bssid"] for row in json_out] == [
+        "02:00:00:00:00:02",
+        "02:00:00:00:00:01",
+    ]
+    assert [row[1].value for row in out] == [
+        "02:00:00:00:00:02",
+        "02:00:00:00:00:01",
+    ]
+    document = json.loads(json_path.read_text())
+    assert document["scan_data"][0]["uptime"] is None
+    header = csv_path.read_text().splitlines()[0]
+    assert "uptime" not in header.split(",")
+    warnings = [
+        record
+        for record in caplog.records
+        if "AP uptime isn't available" in record.getMessage()
+    ]
+    assert len(warnings) == 1
 
 
 def test_json_rates_are_empty_when_unadvertised(tmp_path):

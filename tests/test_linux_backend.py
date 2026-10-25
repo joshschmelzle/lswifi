@@ -742,6 +742,7 @@ class TestInterfaceInfo:
             parse(["--get-interfaces", "--supported"]), backend.list_interfaces()[0]
         )
         assert "unsupported on Linux" in out
+        assert "AP uptime isn't available on Linux" in out
 
 
 class TestEvents:

@@ -628,7 +628,10 @@ class LinuxBackend:
         """-ap, -channel, --get-interfaces from nl80211 and sysfs"""
         native = self._native(iface)
         if args.supported:
-            return f"    --supported: {UNSUPPORTED}\n"
+            return (
+                f"    --supported: {UNSUPPORTED}\n"
+                "    AP uptime isn't available on Linux\n"
+            )
         link = self.link(native)
         up = self.sysfs.is_up(native.name)
         state = (

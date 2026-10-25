@@ -221,7 +221,10 @@ class TestWindowsMapper:
         assert row["modes"] == ["ax", "be", "g", "n"]
         assert row["rates_basic"] == ["1", "2", "5.5", "11"]
         assert row["rates_data"] == ["6", "9", "12", "18", "24", "36", "48", "54"]
-        assert row["uptime"] == "00d 0:03:32"
+        if app.uptime_available():
+            assert row["uptime"] == "00d 0:03:32"
+        else:
+            assert row["uptime"] is None
 
 
 class TestFactory:

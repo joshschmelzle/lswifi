@@ -243,7 +243,10 @@ class MacOSBackend:
         """-ap, -channel, --get-interfaces from the associated CWInterface"""
         cw_iface = self._native(iface)
         if args.supported:
-            return f"    --supported: {UNSUPPORTED}\n"
+            return (
+                f"    --supported: {UNSUPPORTED}\n"
+                "    AP uptime isn't available on macOS\n"
+            )
         bssid = (cw_iface.bssid() or "").lower()
         ssid = _nsdata_bytes(cw_iface.ssidData()).decode("utf-8", errors="replace")
         channel = cw_iface.wlanChannel()
