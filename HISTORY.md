@@ -1,13 +1,17 @@
 Release History
 ===============
 
-UNRELEASED
-----------
-
-- On macOS, check Location Services before a scan. When the status is not determined, ask for access and run the run loop for a bounded wait so the system prompt can appear (#133). The warning names the state. `--get-interfaces` prints it, and `--get-interfaces --json` includes `location_authorization`. Warnings stay on stderr.
-
 RELEASED
 --------
+
+0.3.3 (2026-10-25)
+------------------
+
+- On macOS, ask for Location Services authorization and name the state in a stderr warning. A code-signed Python such as the python.org build is required (#135, #133).
+- `--get-interfaces` prints `Location Services:`, and `--get-interfaces --json` includes `location_authorization`.
+- macOS depends on `pyobjc-framework-CoreLocation`.
+- On macOS and Linux, derive PHY from information elements, so the PHY column is no longer blank in the table, JSON, and CSV. A 2.4 GHz network that advertises VHT shows `n`, and `-ies` still lists those elements (#136).
+- CI tags and releases when the version changes on `main` (#134).
 
 0.3.2 (2026-10-25)
 ------------------
