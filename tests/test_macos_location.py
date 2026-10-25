@@ -5,7 +5,9 @@ The ObjC objects are fakes. Nothing here imports CoreLocation or Foundation.
 
 import subprocess
 import sys
+import weakref
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 import pytest
 
@@ -63,6 +65,22 @@ def corelocation_for(manager, enabled=True):
 
 def no_delegate(manager):
     return None
+
+
+def download_url(message: str):
+    """The download URL embedded in a Location Services warning."""
+    start = message.index("https://")
+    end = message.find(")", start)
+    if end == -1:
+        end = len(message)
+    return urlparse(message[start:end].rstrip("."))
+
+
+def assert_download_page(message: str) -> None:
+    parsed = download_url(message)
+    assert parsed.scheme == "https"
+    assert parsed.hostname == "www.python.org"
+    assert parsed.path.rstrip("/") == "/downloads/macos"
 
 
 @pytest.fixture(autouse=True)
@@ -125,7 +143,7 @@ class TestAlreadyDecided:
         assert state.status == loc.DENIED
         assert "denied" in state.message
         assert "code-signed Python" in state.message
-        assert "python.org" in state.message
+        assert_download_page(state.message)
         assert "uv" in state.message and "Homebrew" in state.message
         assert "pyenv" in state.message
         assert "Enable Python" in state.message
@@ -152,6 +170,14 @@ class TestAlreadyDecided:
         assert (
             "System Settings > Privacy & Security > Location Services" in state.message
         )
+        assert manager.events == []
+
+    def test_prior_grant_with_services_off_is_turned_off(self):
+        manager = Manager(loc.CL_AUTHORIZED_WHEN_IN_USE)
+        state = ask(manager, enabled=False)
+        assert state.status == loc.DISABLED
+        assert state.granted is False
+        assert "turned off" in state.message
         assert manager.events == []
 
     def test_unknown_code_is_unavailable(self):
@@ -210,6 +236,68 @@ class TestNotDetermined:
         assert manager.events[-2:] == ["stop", "delegate"]
         assert manager.delegate is None
 
+    def test_manager_and_delegate_stay_alive_for_the_wait(self):
+        alive = {}
+
+        class WeakDelegateManager(Manager):
+            def __init__(self, status):
+                self.status = status
+                self.enabled = True
+                self.events = []
+                self._delegate_ref = None
+
+            def setDelegate_(self, delegate):
+                self.events.append("delegate")
+                if delegate is None:
+                    self._delegate_ref = None
+                else:
+                    self._delegate_ref = weakref.ref(delegate)
+
+            @property
+            def delegate(self):
+                ref = getattr(self, "_delegate_ref", None)
+                return None if ref is None else ref()
+
+        def attach(manager):
+            delegate = type("LocationDelegate", (), {})()
+            manager.setDelegate_(delegate)
+            alive["manager"] = weakref.ref(manager)
+            alive["delegate"] = weakref.ref(delegate)
+            return delegate
+
+        def pump(seconds):
+            assert alive["manager"]() is not None
+            assert alive["delegate"]() is not None
+            alive["manager"]().status = loc.CL_AUTHORIZED_ALWAYS
+
+        clock = Clock()
+
+        class CLLocationManager:
+            @classmethod
+            def alloc(cls):
+                return cls
+
+            @classmethod
+            def init(cls):
+                return WeakDelegateManager(loc.CL_NOT_DETERMINED)
+
+            @staticmethod
+            def locationServicesEnabled():
+                return True
+
+        state = loc.query_location_authorization(
+            SimpleNamespace(CLLocationManager=CLLocationManager),
+            registered_check=lambda: True,
+            wait_s=15,
+            pump=pump,
+            sleep=lambda seconds: (_ for _ in ()).throw(AssertionError("slept")),
+            monotonic=clock,
+            attach=attach,
+        )
+        assert state.granted is True
+        assert alive["delegate"]() is None
+        assert alive["manager"]() is None
+
     def test_user_denies_during_the_wait(self):
         manager = Manager(loc.CL_NOT_DETERMINED)
         clock = Clock()
@@ -235,7 +323,7 @@ class TestNotDetermined:
         assert state.status == loc.NOT_DETERMINED
         assert "not determined" in state.message
         assert "code-signed Python" in state.message
-        assert "https://www.python.org/downloads/macos/" in state.message
+        assert_download_page(state.message)
         assert "Enable Python" in state.message
         assert "uv" in state.message
         assert sum(pumps) == pytest.approx(1.0)
@@ -259,7 +347,7 @@ class TestNotDetermined:
         )
         assert state.status == loc.NOT_REGISTERED
         assert "not code-signed" in state.message
-        assert "https://www.python.org/downloads/macos/" in state.message
+        assert_download_page(state.message)
         assert "uv" in state.message
         assert "Homebrew" in state.message and "pyenv" in state.message
         assert "Enable Python" in state.message

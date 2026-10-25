@@ -380,14 +380,15 @@ def query_location_authorization(
         attach = attach_location_delegate
 
     manager = corelocation.CLLocationManager.alloc().init()
+    delegate = None
     asked = False
     try:
         status = _read_status(manager)
         enabled = _services_enabled(corelocation)
-        if status in _GRANTED:
-            return _from_code(status, registered=True)
         if enabled is False:
             return _disabled()
+        if status in _GRANTED:
+            return _from_code(status, registered=True)
         if status != CL_NOT_DETERMINED:
             return _from_code(status, registered=True)
         try:
@@ -396,7 +397,9 @@ def query_location_authorization(
             log.debug("code signature check failed", exc_info=True)
             registered = True
         asked = True
-        attach(manager)
+        delegate = attach(manager)
+        if delegate is None:
+            log.debug("location delegate was not attached")
         _ask(manager)
         budget = min(wait_s, UNSIGNED_WAIT_S) if not registered else wait_s
         status = _wait_for_decision(
@@ -412,6 +415,7 @@ def query_location_authorization(
     finally:
         if asked:
             _finish(manager)
+        delegate = None
 
 
 def prepare_location_services() -> LocationAuthorization:
