@@ -39,7 +39,7 @@ macOS keys the Location Services grant to the code signature of the process aski
 Known limitations on macOS:
 
 - On macOS, CoreWLAN has no public Capability Information field, so capability bits decode as 0 and `lswifi` can't tell open from WEP when there is no RSN or WPA element; those networks show `NONE?`. Windows reads the Privacy bit and is unaffected.
-- PHY type, supported rate set, link quality, and TSF are not exposed, so those columns are blank or `--`, and AP uptime is unavailable. Bus info is unsupported.
+- The PHY column comes from the information elements (`be`/`ax`/`ac`/`n`/`g`/`b`/`a`). Supported rate set, link quality, and TSF are not exposed, so those columns are blank or `--`, and AP uptime is unavailable. Bus info is unsupported.
 - Channel width comes from the information elements when they are available. CoreWLAN's own width tops out at 160 MHz and is only used when the elements are hidden.
 - CoreWLAN does not say whether the elements came from a beacon or a probe response.
 - `beaconInterval` is reported in TU (100 for a typical AP), despite the API docs saying milliseconds.
@@ -64,7 +64,7 @@ Known limitations on Linux:
 - Whether 6 GHz networks show up depends on the adapter, its driver and firmware, and the regulatory domain (`iw reg get`). When the adapter lists a 6 GHz band, `lswifi` asks the kernel to also probe 6 GHz APs found in Reduced Neighbor Reports.
 - The scan cache is shared with NetworkManager, iwd, and wpa_supplicant, so results include what they saw. A scan from `lswifi` does not use NetworkManager's scan MAC randomization setting. Scanning while connected can briefly pause traffic.
 - Some drivers report signal only on a driver-specific 0-100 scale. Those networks show an unknown RSSI and are not filtered by `-t`.
-- nl80211 has no PHY type or link quality field. The PHY column comes from the information elements, so it shows `ax`/`be` and is blank for older 802.11n/ac networks.
+- nl80211 has no PHY type or link quality field. The PHY column comes from the information elements (`be`/`ax`/`ac`/`n`/`g`/`b`/`a`).
 - Bus info comes from sysfs, and Transmit Power is shown only when the driver reports it.
 - `--supported` is not available on Linux.
 - Some drivers keep reporting the last channel while an interface is down; `lswifi` ignores it when the interface is down.
