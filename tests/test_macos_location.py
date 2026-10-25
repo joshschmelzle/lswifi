@@ -1,7 +1,4 @@
-"""Location Services decisions for the macOS backend.
-
-The ObjC objects are fakes. Nothing here imports CoreLocation or Foundation.
-"""
+"""Location Services decisions for the macOS backend."""
 
 import subprocess
 import sys
@@ -68,7 +65,6 @@ def no_delegate(manager):
 
 
 def download_url(message: str):
-    """The download URL embedded in a Location Services warning."""
     start = message.index("https://")
     end = message.find(")", start)
     if end == -1:
@@ -642,7 +638,6 @@ class TestPrepare:
         assert loc.wait_budget() == loc.WAIT_HEADLESS_S
 
     def test_default_wait_pumps_the_run_loop_hook(self, monkeypatch):
-        """prepare() waits by calling run_loop_slice, not time.sleep."""
         manager = Manager(loc.CL_NOT_DETERMINED)
         pumps = []
         clock = Clock()

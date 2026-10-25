@@ -13,11 +13,6 @@ lswifi.backends.macos_location
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Location Services for the macOS backend.
-
-CoreWLAN hides SSID, BSSID, and information elements until this process has a
-Location Services grant. CoreLocation only presents the prompt if this thread's
-run loop is running; sleeping leaves the status not determined. CoreLocation
-is imported lazily so this module imports on any OS.
 """
 
 import logging
@@ -31,7 +26,6 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-# CLAuthorizationStatus. 3 and 4 are both a grant on macOS.
 CL_NOT_DETERMINED = 0
 CL_RESTRICTED = 1
 CL_DENIED = 2
@@ -47,10 +41,8 @@ NOT_REGISTERED = "not_registered"
 DISABLED = "disabled"
 UNAVAILABLE = "unavailable"
 
-# Long enough for a person to answer the prompt. Shorter when nobody is there.
 WAIT_INTERACTIVE_S = 15.0
 WAIT_HEADLESS_S = 1.0
-# An ad-hoc interpreter never gets the prompt; don't burn the long wait on it.
 UNSIGNED_WAIT_S = 0.5
 POLL_S = 0.25
 
@@ -117,8 +109,6 @@ _delegate_class: Any = None
 
 @dataclass(frozen=True)
 class LocationAuthorization:
-    """CoreLocation's decision for this process"""
-
     status: str
     granted: bool
     message: str
@@ -131,24 +121,20 @@ _cached: LocationAuthorization | None = None
 
 
 def location_label(state: LocationAuthorization) -> str:
-    """Short text for --supported and --get-interfaces"""
     return _LABELS.get(state.status, state.status)
 
 
 def current_location_authorization() -> LocationAuthorization | None:
-    """The decision already made in this process, if any"""
     return _cached
 
 
 def load_corelocation():
-    """Import CoreLocation. Raises ImportError when the binding is absent."""
     import CoreLocation  # type: ignore[import-not-found,import-untyped]
 
     return CoreLocation
 
 
 def location_delegate_class():
-    """CLLocationManagerDelegate. Built on first use so import stays lazy."""
     global _delegate_class
     if _delegate_class is not None:
         return _delegate_class
@@ -172,7 +158,6 @@ def location_delegate_class():
 
 
 def attach_location_delegate(manager):
-    """Hand CoreLocation a delegate, or None if that binding is missing"""
     try:
         delegate = location_delegate_class().alloc().init()
     except Exception:
@@ -189,10 +174,6 @@ def attach_location_delegate(manager):
 
 
 def run_loop_slice(seconds: float) -> None:
-    """Run this thread's run loop so CoreLocation can present its prompt.
-
-    Sleeping leaves authorization not determined and never shows the prompt.
-    """
     if seconds <= 0:
         return
     from Foundation import NSDate, NSRunLoop  # type: ignore[import-not-found,import-untyped]
@@ -203,7 +184,6 @@ def run_loop_slice(seconds: float) -> None:
 
 
 def signature_is_registered(text: str) -> bool:
-    """True when codesign reports a stable signing identity, not an ad-hoc one"""
     if "Signature=adhoc" in text or "(adhoc)" in text:
         return False
     if "not signed at all" in text:
@@ -211,12 +191,10 @@ def signature_is_registered(text: str) -> bool:
     return any(line.strip().startswith("Authority=") for line in text.splitlines())
 
 
-def interpreter_has_location_identity(executable: str | None = None) -> bool:
-    """Whether this interpreter is signed so Location Services can list it.
+UNREADABLE_CODESIGN_IS_SIGNED = True
 
-    Unknown (codesign missing or timed out) is treated as signed, so a
-    python.org build is not told it is ad-hoc just because the check failed.
-    """
+
+def interpreter_has_location_identity(executable: str | None = None) -> bool:
     path = os.path.realpath(executable or sys.executable)
     try:
         completed = subprocess.run(
@@ -227,12 +205,11 @@ def interpreter_has_location_identity(executable: str | None = None) -> bool:
             timeout=3,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return True
+        return UNREADABLE_CODESIGN_IS_SIGNED
     return signature_is_registered(f"{completed.stdout}\n{completed.stderr}")
 
 
 def wait_budget(interactive: bool | None = None) -> float:
-    """Seconds to wait for the prompt. Shorter when stdin is not a terminal."""
     if interactive is None:
         try:
             interactive = sys.stdin.isatty()
@@ -329,9 +306,8 @@ def _wait_for_decision(
     deadline = monotonic() + wait_s
     status = _read_status(manager)
     spins = 0
-    # A run loop that returns immediately must not spin forever.
-    limit = int(wait_s / POLL_S) + 2
-    while status == CL_NOT_DETERMINED and monotonic() < deadline and spins < limit:
+    spin_cap = int(wait_s / POLL_S) + 2
+    while status == CL_NOT_DETERMINED and monotonic() < deadline and spins < spin_cap:
         before = monotonic()
         slice_s = min(POLL_S, deadline - before)
         if slice_s <= 0:
@@ -360,12 +336,6 @@ def query_location_authorization(
     monotonic: Callable[[], float] | None = None,
     attach: Callable[[Any], Any] | None = None,
 ) -> LocationAuthorization:
-    """Read CoreLocation, and ask for access when the choice is not determined.
-
-    The ask runs `pump` (the thread run loop) until the status changes or
-    `wait_s` elapses. Callers on a worker thread should go through the cached
-    result of prepare_location_services, which is filled on the main thread.
-    """
     if registered_check is None:
         registered_check = interpreter_has_location_identity
     if wait_s is None:
@@ -419,7 +389,6 @@ def query_location_authorization(
 
 
 def prepare_location_services() -> LocationAuthorization:
-    """Resolve Location Services once per process."""
     global _cached
     if _cached is not None:
         return _cached

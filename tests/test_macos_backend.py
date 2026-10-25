@@ -832,7 +832,7 @@ class TestLocationIntegration:
         backend = MacOSBackend(fake_corewlan(FakeInterface(bssid="aa:bb:cc:dd:ee:ff")))
         iface = backend.list_interfaces()[0]
         supported = backend.interface_info(parse(["--supported"]), iface)
-        assert "Location Services: denied" in supported
+        assert "Location Services" not in supported
         assert "unsupported on macOS" in supported
         text = backend.interface_info(parse(["--get-interfaces"]), iface)
         assert "Location Services: denied" in text

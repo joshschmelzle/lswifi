@@ -4,7 +4,7 @@ Release History
 UNRELEASED
 ----------
 
-- On macOS, check Location Services before a scan. When the status is not determined, ask for access and run the run loop for a bounded wait so the system prompt can appear (#133). Sleeping does not. The warning names the state (denied, restricted, not determined, turned off, or a Python that is not code-signed). It says lswifi needs a code-signed Python, such as the python.org installer, that unsigned builds (uv, Homebrew, pyenv) cannot be granted, and to enable Python in Location Services. `--supported` and `--get-interfaces`, including JSON (`location_authorization`), report the state. Warnings stay on stderr.
+- On macOS, check Location Services before a scan. When the status is not determined, ask for access and run the run loop for a bounded wait so the system prompt can appear (#133). The warning names the state. `--get-interfaces` prints it, and `--get-interfaces --json` includes `location_authorization`. Warnings stay on stderr.
 
 RELEASED
 --------

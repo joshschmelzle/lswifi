@@ -17,7 +17,7 @@ Note: The Python Scripts directory must be added to the PATH environment variabl
 
 ![alt](https://raw.githubusercontent.com/joshschmelzle/lswifi/main/docs/pip_install.gif "animation showing install of lswifi")
 
-macOS (preview): same install, `python3 -m pip install lswifi`; the CoreWLAN and CoreLocation bindings come with it. macOS hides SSIDs, BSSIDs, and information elements unless a code-signed Python has a Location Services grant. `lswifi` asks for that grant and, when the choice is not determined, runs the run loop so the system prompt can appear. lswifi needs a code-signed Python (for example, the [python.org installer](https://www.python.org/downloads/macos/), 3.11 or newer). Unsigned interpreters such as uv, Homebrew, and pyenv builds cannot be granted. Enable Python in System Settings > Privacy & Security > Location Services. The warning is on stderr.
+macOS (preview): same install, `python3 -m pip install lswifi`; the CoreWLAN and CoreLocation bindings come with it. macOS hides SSIDs, BSSIDs, and information elements unless Python has a Location Services grant. lswifi needs a code-signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/); uv, Homebrew, and pyenv builds can't be granted. Enable Python in System Settings > Privacy & Security > Location Services. Without a grant, one warning on stderr names the state. `--get-interfaces` prints `Location Services:` and the state.
 
 Linux (preview): same install, `python3 -m pip install lswifi`; no extra packages. Scanning uses nl80211, so run `sudo lswifi` to trigger a fresh scan (`CAP_NET_ADMIN`); without it, `lswifi` shows the kernel's cached results. `--supported` is not available on Linux.
 

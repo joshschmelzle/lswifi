@@ -18,11 +18,9 @@ CoreWLAN is imported lazily by MacOSBackend so this module, and the mapping
 functions in it, import on any OS.
 
 macOS 14+ only returns SSID, BSSID, country code and the IE blob when the
-calling process holds a Location Services grant. lswifi asks CoreLocation for
-that grant and runs this thread's run loop until the user answers or the wait
-expires. Without a grant, scan results still carry RSSI, channel and beacon
-interval, so rows are kept and the user is told once which authorization state
-blocked the rest. sudo does not change this.
+calling process holds a Location Services grant. Without it, scan results
+still carry RSSI, channel and beacon interval, so rows are kept and the user
+is told once why the other columns are blank. sudo does not change this.
 """
 
 import json
@@ -118,7 +116,6 @@ def warn_location_once(message: str | None = None) -> None:
 
 
 def note_location():
-    """Check Location Services and warn once when the grant is missing"""
     found = macos_location.prepare_location_services()
     if not found.granted:
         warn_location_once(found.message)
@@ -126,7 +123,6 @@ def note_location():
 
 
 def location_needed(args) -> bool:
-    """Commands that show SSIDs or BSSIDs, not a bare interface list"""
     if args is None:
         return False
     skipped = (
@@ -511,8 +507,6 @@ class MacOSBackend:
         return self._records(networks or [], cw_iface)
 
     def open_session(self, args, iface: InterfaceInfo) -> MacOSScanSession:
-        # app.py scans on a worker thread. Ask here, on the caller thread,
-        # so the authorization prompt has a run loop to appear on.
         if location_needed(args):
             note_location()
         return MacOSScanSession(self, iface, args)
@@ -538,7 +532,6 @@ class MacOSBackend:
             return (
                 f"    --supported: {UNSUPPORTED}\n"
                 "    AP uptime isn't available on macOS\n"
-                f"    Location Services: {macos_location.location_label(location)}\n"
             )
         bssid = (cw_iface.bssid() or "").lower()
         ssid = _nsdata_bytes(cw_iface.ssidData()).decode("utf-8", errors="replace")
