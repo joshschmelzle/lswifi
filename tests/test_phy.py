@@ -198,6 +198,10 @@ def _vht_5():
     )
 
 
+def _ht_24_with_vht_ies():
+    return _ht_24() + _tlv(191, _VHT_CAP) + _tlv(192, bytes.fromhex("000000fcff"))
+
+
 def _ofdm_5():
     return b"".join(
         (
@@ -240,6 +244,9 @@ class TestPhyFromIes:
             pytest.param(_erp_element_only(), 2412, None, "ERP", "g", id="erp-element"),
             pytest.param(_dsss(), 2412, None, "HR-DSSS", "b", id="dsss"),
             pytest.param(_vht_5(), 5180, None, "VHT", "ac", id="vht-5"),
+            pytest.param(
+                _ht_24_with_vht_ies(), 2412, None, "HT", "n", id="vht-ies-on-24"
+            ),
             pytest.param(_ofdm_5(), 5180, None, "OFDM", "a", id="ofdm-5"),
             pytest.param(_he_and_ht(), 2412, None, "HE", "ax", id="he-not-downgraded"),
             pytest.param(

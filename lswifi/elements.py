@@ -590,7 +590,7 @@ class WirelessNetworkBss:
             name = "EHT"
         elif 35 in ext_ids:  # HE Capabilities
             name = "HE"
-        elif 191 in eids or 192 in eids:  # VHT Capabilities, VHT Operation
+        elif self.is_5ghz and (191 in eids or 192 in eids):  # VHT on 5 GHz only
             name = "VHT"
         elif 45 in eids or 61 in eids:  # HT Capabilities, HT Operation
             name = "HT"
