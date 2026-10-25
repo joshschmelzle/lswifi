@@ -852,7 +852,6 @@ class TestLocationIntegration:
         assert list(out.strip())[0] == "{"
         assert payload["location_authorization"] == "denied"
         assert "System Settings" not in out
-        assert "sudo does not help" not in out
         assert [r.getMessage() for r in caplog.records] == [
             macos_location.DENIED_MESSAGE
         ]

@@ -134,7 +134,6 @@ class TestAlreadyDecided:
         )
         assert "terminal" not in state.message
         assert "app that runs" not in state.message
-        assert "sudo does not help" in state.message
         assert manager.events == []
 
     def test_restricted_points_at_management(self):
@@ -143,7 +142,6 @@ class TestAlreadyDecided:
         assert state.status == loc.RESTRICTED
         assert "restricted" in state.message
         assert "device management" in state.message
-        assert "sudo does not help" in state.message
         assert manager.events == []
 
     def test_services_off_is_not_called_denied(self):
@@ -266,7 +264,6 @@ class TestNotDetermined:
         assert "Homebrew" in state.message and "pyenv" in state.message
         assert "Enable Python" in state.message
         assert "cannot be granted" in state.message
-        assert "sudo does not help" in state.message
         assert "request" in manager.events
         assert sum(pumps) == pytest.approx(loc.UNSIGNED_WAIT_S)
         assert sum(pumps) < loc.WAIT_HEADLESS_S
@@ -529,7 +526,6 @@ class TestPrepare:
         again = loc.prepare_location_services()
         assert state.status == loc.UNAVAILABLE
         assert "tcc" in state.message
-        assert "sudo does not help" in state.message
         assert again is state
         assert calls == [1]
 

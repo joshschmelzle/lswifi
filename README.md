@@ -38,7 +38,7 @@ macOS hides SSIDs, BSSIDs, and information elements unless the process has a Loc
 - **turned off**: Location Services is off system-wide. Turn it on, then enable Python.
 - **unavailable**: CoreLocation could not be loaded. Reinstall `lswifi`.
 
-`--supported` and `--get-interfaces` print the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`). The warning stays on stderr, so `--json` is still one JSON document. `sudo` does not help.
+`--supported` and `--get-interfaces` print the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`). The warning stays on stderr, so `--json` is still one JSON document.
 
 macOS keys the Location Services grant to the code signature of the process asking for it. Apps declare why they want location with `NSLocationUsageDescription` in their `Info.plist`; a command-line Python has no bundle or usage string, but a Developer ID-signed python.org interpreter (and venvs created from it) can still be granted, so no helper `.app` is needed. Ad-hoc signed interpreters stay not determined and never get the prompt.
 

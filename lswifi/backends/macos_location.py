@@ -58,7 +58,6 @@ _SETTINGS = "System Settings > Privacy & Security > Location Services"
 _HIDE = (
     "macOS hides SSID, BSSID, and information elements (security, width, amendments)"
 )
-_SUDO = "sudo does not help."
 _PYTHON_ORG = "https://www.python.org/downloads/macos/"
 SIGNED_PYTHON_HELP = (
     "lswifi needs a code-signed Python (for example, the python.org "
@@ -70,29 +69,29 @@ SIGNED_PYTHON_HELP = (
 
 DENIED_MESSAGE = (
     f"{_HIDE} because Location Services is denied for this Python; "
-    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP} {_SUDO}"
+    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP}"
 )
 RESTRICTED_MESSAGE = (
     f"{_HIDE} because Location Services is restricted for this process; "
     "showing RSSI and channel only. Parental controls or device management "
-    f"have to allow it. {_SUDO}"
+    "have to allow it."
 )
 NOT_DETERMINED_MESSAGE = (
     f"{_HIDE} because Location Services is not determined for this "
     "Python; showing RSSI and channel only. lswifi asked for access. "
-    f"{SIGNED_PYTHON_HELP} {_SUDO}"
+    f"{SIGNED_PYTHON_HELP}"
 )
 NOT_REGISTERED_MESSAGE = (
     f"{_HIDE} because this Python is not code-signed; "
-    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP} {_SUDO}"
+    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP}"
 )
 DISABLED_MESSAGE = (
     f"{_HIDE} because Location Services is turned off; showing RSSI and "
-    f"channel only. Turn it on in {_SETTINGS}, then enable Python. {_SUDO}"
+    f"channel only. Turn it on in {_SETTINGS}, then enable Python."
 )
 GENERIC_MESSAGE = (
     f"{_HIDE} until this Python has a Location Services grant; "
-    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP} {_SUDO}"
+    f"showing RSSI and channel only. {SIGNED_PYTHON_HELP}"
 )
 CORELOCATION_MISSING = (
     f"{_HIDE} because CoreLocation is not available to this Python, so "
@@ -288,14 +287,14 @@ def _finish(manager) -> None:
 def _unreadable(error: BaseException) -> str:
     return (
         f"{_HIDE} because Location Services status could not be read "
-        f"({error}); showing RSSI and channel only. {_SUDO}"
+        f"({error}); showing RSSI and channel only."
     )
 
 
 def _unknown(status: int) -> str:
     return (
         f"{_HIDE} because Location Services returned an unrecognized "
-        f"authorization status ({status}); showing RSSI and channel only. {_SUDO}"
+        f"authorization status ({status}); showing RSSI and channel only."
     )
 
 
