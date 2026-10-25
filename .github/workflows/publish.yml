@@ -4,6 +4,12 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to verify and publish, for example v0.3.2
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,10 +27,10 @@ jobs:
         with:
           python-version: "3.13"
       - name: Check the tag matches the package version
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || ((github.event_name == 'push' || github.event_name == 'workflow_call') && inputs.tag != '')
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
         run: |
           # Windows CPython turns print()'s trailing \n into \r\n. Bash command
           # substitution deletes the LF and leaves the CR, so VERSION never
@@ -46,7 +52,7 @@ jobs:
 
   pypi:
     needs: build
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || ((github.event_name == 'push' || github.event_name == 'workflow_call') && inputs.tag != '')
     runs-on: ubuntu-latest
     environment:
       name: pypi

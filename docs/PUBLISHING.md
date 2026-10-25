@@ -70,45 +70,15 @@ python setup.py deploy
 
 You will need to setup API keys in .pypirc placed in the user directory. See [PyPA docs on .pypirc file](https://packaging.python.org/en/latest/specifications/pypirc/).
 
-Versioning and Git Tagging
---------------------------
+Versioning and releasing
+------------------------
 
-Suggest to use semantic versioning like so:
+Use semantic versions, tagged `v<major>.<minor>.<patch>` (for example `v0.3.2`).
 
-```bash
-v<major>.<minor>.<patch>
-v1.0.10
-```
+- *major* is a breaking change
+- *minor* stays compatible with previous versions
+- *patch* is a bug fix
 
-Where:
+Merge the release to `main` with `__version__` bumped in `lswifi/__version__.py` and a section for that version in `HISTORY.md`. The release workflow tags that commit `v<version>` and opens a GitHub release whose notes are that `HISTORY.md` section. If the version did not change, or the tag already exists, it does nothing.
 
-- *major* is version number where there are breaking modifications (new version not compatible with previous)
-- *minor* is version number compatible with previous versions
-- *patch* is an increment for bug fix / hot fix / patch fix on your software
-
-To create a Git tag (on the latest commit (aka HEAD) of current branch) with a message use the following:
-
-```bash
-git tag -a <tag_name> -m "message"
-```
-
-So if you want a tag on your `main` branch with a message `"new hotfix release for v0.1.42"`:
-
-Confirm branch with `git status | findstr branch` on Windows or `git status | grep branch` *nix.
-
-```bash
-git tag -a v0.1.42 -m "new hotfix release for v0.1.42"
-```
-
-Verify your Git tag was successfully created:
-
-```bash
-git tag
-git tag -n
-```
-
-Push your tags:
-
-```bash
-git push --tags
-```
+That workflow then runs the publish workflow. The publish workflow checks the tag against `__version__` and uploads to PyPI only after the protected `pypi` environment is approved. Publishing a GitHub release by hand runs the same publish workflow.
