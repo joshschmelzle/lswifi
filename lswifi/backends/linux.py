@@ -363,11 +363,16 @@ def parse_sta_info(payload: bytes) -> dict[str, Any]:
         ("tx_failed", nl.STA_INFO_TX_FAILED),
         ("connected_time_s", nl.STA_INFO_CONNECTED_TIME),
         ("beacon_loss", nl.STA_INFO_BEACON_LOSS),
+    ):
+        value = _uint(attrs, kind)
+        if value is not None:
+            sta[key] = value
+    for key, kind in (
         ("rx_duration_us", nl.STA_INFO_RX_DURATION),
         ("tx_duration_us", nl.STA_INFO_TX_DURATION),
     ):
         value = _uint(attrs, kind)
-        if value is not None:
+        if value:
             sta[key] = value
     rx_bytes = _uint(attrs, nl.STA_INFO_RX_BYTES64)
     if rx_bytes is None:
@@ -424,6 +429,9 @@ def parse_mlo_links(
         mac = nl.mac_str(inner.get(nl.ATTR_MAC))
         if mac:
             link[mac_field] = mac
+        ap = nl.mac_str(inner.get(nl.ATTR_BSSID))
+        if ap:
+            link["bssid"] = ap
         if nl.ATTR_WIPHY_FREQ in inner:
             link["frequency_mhz"] = nl.get_uint(inner, nl.ATTR_WIPHY_FREQ)
         width = nl.get_uint(inner, nl.ATTR_CHANNEL_WIDTH)
@@ -544,6 +552,86 @@ def merge_station_dump(messages) -> tuple[str | None, dict[str, Any] | None, lis
     return bssid, aggregate, links
 
 
+def associated_mlo_links(messages) -> tuple[str | None, list[dict[str, Any]]]:
+    mld = None
+    found: list[dict[str, Any]] = []
+    for message in messages:
+        raw = message.attrs.get(nl.ATTR_BSS)
+        if not raw:
+            continue
+        attrs = nl.parse_attrs(raw)
+        if nl.get_uint(attrs, nl.BSS_STATUS) != nl.BSS_STATUS_ASSOCIATED:
+            continue
+        addr = nl.mac_str(attrs.get(nl.BSS_MLD_ADDR))
+        if addr and mld is None:
+            mld = addr
+        link_id = nl.get_uint(attrs, nl.BSS_MLO_LINK_ID)
+        if link_id is None:
+            continue
+        item: dict[str, Any] = {"id": link_id}
+        bssid = nl.mac_str(attrs.get(nl.BSS_BSSID))
+        if bssid:
+            item["bssid"] = bssid
+        freq = nl.get_uint(attrs, nl.BSS_FREQUENCY)
+        if freq:
+            item["frequency_mhz"] = freq
+        found.append(item)
+    return mld, found
+
+
+def _local_addrs(links: list[dict[str, Any]]) -> dict[int, str]:
+    found = {}
+    for link in links:
+        ident = link.get("id")
+        addr = link.get("addr")
+        if ident is not None and addr:
+            found[ident] = addr
+    return found
+
+
+def _unlocal_bssid(link: dict[str, Any], local: dict[int, str]) -> dict[str, Any]:
+    item = dict(link)
+    ident = item.get("id")
+    addr = local.get(ident) if isinstance(ident, int) else None
+    if addr and item.get("bssid") == addr:
+        item.pop("bssid", None)
+        item.setdefault("addr", addr)
+    return item
+
+
+def _association(links: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not links:
+        return None
+    for item in links:
+        if item.get("id") == 0:
+            return item
+    return links[0]
+
+
+def _fill_from_link(
+    links: list[dict[str, Any]],
+    freq: int | None,
+    width: int | None,
+    center1: int | None,
+    center2: int | None,
+    tx_power: int | None,
+) -> tuple[int | None, int | None, int | None, int | None, int | None]:
+    chosen = _association(links)
+    if not chosen:
+        return freq, width, center1, center2, tx_power
+    if freq is None:
+        freq = chosen.get("frequency_mhz")
+    if width is None:
+        width = chosen.get("width_mhz")
+    if center1 is None:
+        center1 = chosen.get("center_freq1_mhz")
+    if center2 is None:
+        center2 = chosen.get("center_freq2_mhz")
+    if tx_power is None:
+        tx_power = chosen.get("tx_power_mbm")
+    return freq, width, center1, center2, tx_power
+
+
 def _drop_placeholder_mld_signal(station: dict[str, Any] | None, links: list) -> None:
     if not station or station.get("signal") != 0 or not links:
         return
@@ -560,13 +648,11 @@ def station_to_link(attrs: dict[int, bytes]) -> tuple[str, int | None, float | N
     return nl.mac_str(attrs.get(nl.ATTR_MAC)), info.get("signal"), tx.get("mbps")
 
 
-def _channel_runs(numbers: list[int]) -> list[list[int]]:
-    ordered = sorted(set(numbers))
+def _step_runs(ordered: list[int], step: int) -> list[list[int]]:
     if not ordered:
         return []
     if len(ordered) == 1:
         return [[ordered[0], ordered[0]]]
-    step = min(b - a for a, b in zip(ordered, ordered[1:], strict=False) if b > a)
     runs: list[list[int]] = []
     start = previous = ordered[0]
     for number in ordered[1:]:
@@ -577,6 +663,28 @@ def _channel_runs(numbers: list[int]) -> list[list[int]]:
         start = previous = number
     runs.append([start, previous])
     return runs
+
+
+def _raster_runs(ordered: list[int]) -> list[list[int]]:
+    groups: dict[int, list[int]] = {0: [], 1: [], 2: [], 3: []}
+    for number in ordered:
+        groups[number % 4].append(number)
+    runs: list[list[int]] = []
+    for residue in (0, 1, 2, 3):
+        runs.extend(_step_runs(groups[residue], 4))
+    return runs
+
+
+def _channel_runs(numbers: list[int], band: int | None = None) -> list[list[int]]:
+    ordered = sorted(set(numbers))
+    if not ordered:
+        return []
+    if band in (nl.BAND_5GHZ, nl.BAND_6GHZ):
+        return _raster_runs(ordered)
+    if len(ordered) == 1:
+        return [[ordered[0], ordered[0]]]
+    step = min(b - a for a, b in zip(ordered, ordered[1:], strict=False) if b > a)
+    return _step_runs(ordered, step)
 
 
 def _range_text(ranges: list[list[int]]) -> str:
@@ -702,11 +810,11 @@ def summarize_bands(bands: dict[int, bytes]) -> tuple[list[dict], list[str]]:
             {
                 "id": band_id,
                 "band": _BAND_LABELS.get(band_id, str(band_id)),
-                "ranges": _channel_runs(numbers),
+                "ranges": _channel_runs(numbers, band_id),
                 "widths_mhz": widths,
-                "dfs": _channel_runs(radar) if radar else None,
+                "dfs": _channel_runs(radar, band_id) if radar else None,
                 "dfs_all": set(radar) == set(numbers) if radar else False,
-                "no_ir": _channel_runs(no_ir) if no_ir else None,
+                "no_ir": _channel_runs(no_ir, band_id) if no_ir else None,
                 "no_ir_all": set(no_ir) == set(numbers) if no_ir else False,
             }
         )
@@ -995,26 +1103,30 @@ class LinuxBackend:
                 return fresh
         return native
 
+    def _bss_messages(self, native: LinuxInterface):
+        try:
+            with self.netlink() as sock:
+                return sock.request(
+                    nl.CMD_GET_SCAN,
+                    nl.attr_u32(nl.ATTR_IFINDEX, native.ifindex),
+                    dump=True,
+                )
+        except OSError as error:
+            log.debug("GET_SCAN on %s failed: %s", native.name, error)
+            return []
+
     def link(self, native: LinuxInterface) -> LinkInfo:
         """Current SSID, BSSID, channel, RSSI and Tx rate"""
         native = self.refresh(native)
-        freq = native.frequency_mhz
-        width = native.width_mhz
-        center1 = native.center_freq1
-        center2 = native.center_freq2
-        tx_power = native.tx_power_mbm
         iface_links = [dict(item) for item in native.links]
-        if freq is None and len(iface_links) == 1:
-            only = iface_links[0]
-            freq = only.get("frequency_mhz")
-            if width is None:
-                width = only.get("width_mhz")
-            if center1 is None:
-                center1 = only.get("center_freq1_mhz")
-            if center2 is None:
-                center2 = only.get("center_freq2_mhz")
-            if tx_power is None:
-                tx_power = only.get("tx_power_mbm")
+        freq, width, center1, center2, tx_power = _fill_from_link(
+            iface_links,
+            native.frequency_mhz,
+            native.width_mhz,
+            native.center_freq1,
+            native.center_freq2,
+            native.tx_power_mbm,
+        )
         radio = {"iftype": native.iftype, "tx_power_mbm": tx_power}
         if self.sysfs.is_up(native.name) is False:
             # some drivers (brcmfmac) keep reporting the last channel while down
@@ -1039,7 +1151,20 @@ class LinuxBackend:
             log.debug("GET_STATION on %s failed: %s", native.name, error)
             stations = []
         bssid, station, station_links = merge_station_dump(stations)
-        links = _merge_links(iface_links + station_links)
+        mld, bss_links = associated_mlo_links(self._bss_messages(native))
+        if bssid is None:
+            bssid = mld
+        local = _local_addrs(iface_links)
+        station_links = [_unlocal_bssid(item, local) for item in station_links]
+        links = _merge_links(iface_links + station_links + bss_links)
+        freq, width, center1, center2, tx_power = _fill_from_link(
+            links, freq, width, center1, center2, tx_power
+        )
+        info.frequency_mhz = freq
+        info.width_mhz = width
+        info.extra["center_freq1"] = center1
+        info.extra["center_freq2"] = center2
+        info.extra["tx_power_mbm"] = tx_power
         _drop_placeholder_mld_signal(station, links)
         info.bssid = bssid
         if station:
@@ -1420,7 +1545,8 @@ class LinuxBackend:
             lines.append(f"    Mode: {info['interface_mode']}")
         if link.connected:
             lines.append(f"    SSID: {link.ssid_text}")
-            lines.append(f"    BSSID: {link.bssid}")
+            label = "AP MLD" if links else "BSSID"
+            lines.append(f"    {label}: {link.bssid}")
             for item in links or []:
                 lines.append(f"    {format_link(item)}")
         if link.frequency_mhz is not None:

@@ -21,6 +21,7 @@ RELEASED
 - `--get-interfaces` on Linux shows nl80211 link stats and supported channels, including transmit and receive rates, signal, counters, channel busy, and PHY generations.
 - Linux MLO associations list each link in `--get-interfaces` and `--watchevents`: id, BSSID or link address, frequency, channel, band, width, center, and transmit power when the kernel sent them. `--watchevents` takes frequency, channel, and width from the association link and omits the kernel's 0 dBm MLD signal.
 - A link added or removed, or a channel switch that names a link, is a per-link `--watchevents` event rather than a roam or a channel change of the whole connection.
+- `--get-interfaces --json <file>` writes that file. `--json` with no path still prints the interface JSON to stdout.
 
 0.3.0 (2026-10-23)
 ------------------

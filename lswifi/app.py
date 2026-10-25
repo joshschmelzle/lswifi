@@ -208,6 +208,13 @@ class lswifi:
                 sys.exit(0)
 
             scanning = True
+            explicit_json = None
+            if getattr(args, "json", None):
+                from lswifi.appsetup import BOOT_TIME
+
+                if args.json != f"lswifi_{BOOT_TIME}.json":
+                    explicit_json = args.json
+            json_documents = []
 
             # for _index, interface in interfaces.items():
             #     if (
@@ -226,7 +233,21 @@ class lswifi:
                     or args.supported
                 ):
                     scanning = False
-                    print(backend.interface_info(args, iface_infos[_index]))
+                    text = backend.interface_info(args, iface_infos[_index])
+                    print(text)
+                    if explicit_json and (
+                        args.get_interface_info
+                        or args.get_current_ap
+                        or args.get_current_channel
+                    ):
+                        with contextlib.suppress(json.JSONDecodeError):
+                            json_documents.append(json.loads(text))
+
+            if explicit_json and json_documents:
+                body = json_documents[0] if len(json_documents) == 1 else json_documents
+                log.info(f"exporting interface info as JSON to {explicit_json}")
+                with open(explicit_json, "w") as file:
+                    json.dump(body, file, indent=args.json_indent)
 
             # TODO move other non-scanning functions here
 

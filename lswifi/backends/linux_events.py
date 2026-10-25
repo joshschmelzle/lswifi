@@ -152,6 +152,15 @@ def links_from_attrs(attrs: dict[int, bytes]) -> list[dict[str, Any]]:
     return found
 
 
+def _association_id(links: list[dict[str, Any]]) -> Any:
+    for item in links:
+        if item.get("id") == 0:
+            return 0
+    if links:
+        return links[0].get("id")
+    return None
+
+
 def _overlay_link(
     links: list[dict[str, Any]], link_id: int, freq: int | None, width: int | None
 ) -> list[dict[str, Any]]:
@@ -229,7 +238,10 @@ class LinkFormatter:
             record["band"] = snap["band"]
         parts = [f"({self.mac})"]
         if link.bssid:
-            parts.append(f"bssid: ({link.bssid})")
+            if link.connected and snap["links"]:
+                parts.append(f"ap_mld: ({link.bssid})")
+            else:
+                parts.append(f"bssid: ({link.bssid})")
         if link.connected:
             if snap["freq"] is not None:
                 parts.append(f"freq: ({snap['freq']})")
@@ -247,7 +259,6 @@ class LinkFormatter:
         fields: dict[str, Any] = {"links": [dict(item) for item in links]}
         extra = ""
         if link.bssid:
-            extra += f", mld: ({link.bssid})"
             fields["mld"] = link.bssid
         rendered = describe_links(links)
         if rendered:
@@ -364,6 +375,11 @@ class LinkFormatter:
         new_item = next(item for item in updated if item.get("id") == link_id)
         if not started:
             link.extra["links"] = updated
+            if _association_id(updated) == link_id:
+                if freq is not None:
+                    link.frequency_mhz = freq
+                if width is not None:
+                    link.width_mhz = width
         self.last = link
         event = "link_channel_switch_started" if started else "link_channel_change"
         extra = f", link: ({describe_link(new_item)})"
