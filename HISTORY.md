@@ -17,6 +17,10 @@ RELEASED
 - `-export` with `--channel-width 20` no longer includes 320 MHz networks. A width of `80+80` does not crash the filter.
 - A short Extended Capabilities or vendor-specific element no longer fails that BSS. One BSS that still cannot be parsed is skipped instead of dropping the scan.
 - `--json` rate lists are `[]` when an AP advertises no rates.
+- `--get-interfaces` on macOS shows more of the connected interface from CoreWLAN: PHY mode, security, MCS, spatial streams, transmit power, interface mode, power, an ARP-resolved gateway, the IPv4 address, and supported channels. Fields the platform cannot supply are omitted. JSON keeps those keys as null.
+- `--get-interfaces` on Linux shows nl80211 link stats and supported channels, including transmit and receive rates, signal, counters, channel busy, and PHY generations.
+- Linux MLO associations list each link in `--get-interfaces` and `--watchevents`: id, BSSID or link address, frequency, channel, band, width, center, and transmit power when the kernel sent them. `--watchevents` takes frequency, channel, and width from the association link and omits the kernel's 0 dBm MLD signal.
+- A link added or removed, or a channel switch that names a link, is a per-link `--watchevents` event rather than a roam or a channel change of the whole connection.
 
 0.3.0 (2026-10-23)
 ------------------
