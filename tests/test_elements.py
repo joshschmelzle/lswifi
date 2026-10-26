@@ -324,3 +324,300 @@ class TestExtensionElements:
         assert "151" in row["ies_extension"]
         assert 255 in row["ies"]
         assert 3 in row["ies"]
+
+    def test_wifi7_fixture_eht_capabilities_and_multi_link(self):
+        unifi = lswifi.elements.WirelessNetworkBss(BssRecord(**UNIFI))
+        eht = _ie_text(unifi, "Extension: (108) EHT Capabilities")
+        assert "EHT MAC Capabilities: 07 00" in eht
+        assert "EPCS Priority Access: 1" in eht
+        assert "OM Control: 1" in eht
+        assert "EHT TRS: 0" in eht
+        assert "TXOP Return Support: 0" in eht
+        assert "Max MPDU Length: 3895" in eht
+        assert "Max A-MPDU Length Exponent Extension: 0" in eht
+        assert "320 MHz In 6 GHz: 0" in eht
+        assert "242-tone RU In BW Wider Than 20 MHz: 0" in eht
+        assert "NDP With 4x EHT-LTF And 3.2 us GI: 0" in eht
+        assert "SU Beamformer: 1" in eht
+        assert "SU Beamformee: 1" in eht
+        assert "Beamformee SS <= 80 MHz: 8 SS" in eht
+        assert "Beamformee SS 160 MHz: 8 SS" in eht
+        assert "Beamformee SS 320 MHz: reserved" in eht
+        assert "Sounding Dimensions <= 80 MHz: 4 SS" in eht
+        assert "Sounding Dimensions 160 MHz: 4 SS" in eht
+        assert "Partial Bandwidth UL MU-MIMO: 0" in eht
+        assert "Partial Bandwidth DL MU-MIMO: 0" in eht
+        assert "EHT MU PPDU With 4x EHT-LTF And 0.8 us GI: 1" in eht
+        assert "PPE Thresholds Present: 0" in eht
+        assert "EHT-MCS 15 80 MHz: 0" in eht
+        assert "EHT-MCS 15 160 MHz: 0" in eht
+        assert "EHT-MCS 15 320 MHz: 0" in eht
+        assert "EHT DUP In 6 GHz (MCS 14): 1" in eht
+        assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 44 44 44" in eht
+        assert "Supported EHT-MCS And NSS Set (160 MHz): 44 44 44" in eht
+        assert "Supported EHT-MCS And NSS Set (320 MHz):" not in eht
+        assert "MCS 0-9: Rx 4 SS, Tx 4 SS" in eht
+        assert "MCS 10-11: Rx 4 SS, Tx 4 SS" in eht
+        assert "MCS 12-13: Rx 4 SS, Tx 4 SS" in eht
+        assert "PPE Thresholds:" not in eht.replace("PPE Thresholds Present: 0", "")
+        assert "Max NSS: 4, 320 MHz: no, MCS 14: yes, MCS 15: no" in eht
+        assert "Extension: (108) EHT Capabilities" in str(unifi)
+
+        ml = _ie_text(unifi, "Extension: (107) Multi-Link")
+        assert "Multi-Link Control: 0x01b0" in ml
+        assert "Type: Basic" in ml
+        assert "Presence: 0x01b0" in ml
+        assert "Common Info Length: 13" in ml
+        assert "MLD MAC Address: 94:2a:6f:42:e4:77" in ml
+        assert "Link ID: 0" in ml
+        assert "BSS Parameters Change Count: 117" in ml
+        assert "EML Capabilities: 0x4001" in ml
+        assert "EMLSR Support: 1" in ml
+        assert "EMLMR Support: 0" in ml
+        assert "MLD Capabilities And Operations: 0x0021" in ml
+        assert "Max Simultaneous Links: 1" in ml
+        assert "Per-STA Profiles:" not in ml
+
+        aruba = lswifi.elements.WirelessNetworkBss(BssRecord(**ARUBA))
+        eht = _ie_text(aruba, "Extension: (108) EHT Capabilities")
+        assert "OM Control: 1" in eht
+        assert "Max MPDU Length: 11454" in eht
+        assert "Max A-MPDU Length Exponent Extension: 1" in eht
+        assert "EHT TRS: 0" in eht
+        assert "TXOP Return Support: 0" in eht
+        assert "242-tone RU In BW Wider Than 20 MHz: 1" in eht
+        assert "NDP With 4x EHT-LTF And 3.2 us GI: 1" in eht
+        assert "SU Beamformer: 1" in eht
+        assert "SU Beamformee: 0" in eht
+        assert "Sounding Dimensions <= 80 MHz: 4 SS" in eht
+        assert "Sounding Dimensions 160 MHz: reserved" in eht
+        assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 44 44 44" in eht
+        assert "Supported EHT-MCS And NSS Set (160 MHz):" not in eht
+        assert "MCS 0-9: Rx 4 SS, Tx 4 SS" in eht
+        assert "Max NSS: 4, 320 MHz: no, MCS 14: no, MCS 15: no" in eht
+        ml = _ie_text(aruba, "Extension: (107) Multi-Link")
+        assert "MLD MAC Address: 98:8f:00:9c:c4:60" in ml
+        assert "Link ID: 2" in ml
+        assert "EML Capabilities: 0x4001" in ml
+        assert "EMLSR Support: 1" in ml
+        assert "MLD Capabilities And Operations: 0x0062" in ml
+        assert "Max Simultaneous Links: 2" in ml
+        assert "TID-To-Link Mapping Negotiation: 3 (different link sets)" in ml
+
+    def test_eht_mcs_nss_size_matches_kernel(self):
+        groups = lswifi.elements.WirelessNetworkBss._eht_mcs_nss_groups
+
+        def size(he_phy0, eht_phy0, from_ap):
+            return sum(len(labels) for _name, labels in groups(he_phy0, eht_phy0, from_ap))
+
+        assert size(0x02, 0x02, True) == 3
+        assert groups(0x02, 0x02, True)[0][0] == "<= 80 MHz"
+        assert size(0x04, 0x00, True) == 3
+        assert size(0x08, 0x00, True) == 3
+        assert [name for name, _labels in groups(0x0C, 0x00, True)] == [
+            "<= 80 MHz",
+            "160 MHz",
+        ]
+        assert size(0x0C, 0x02, True) == 9
+        assert size(0x00, 0x02, True) == 3
+        assert size(0x10, 0x00, True) == 3
+        assert size(0x00, 0x00, True) == 3
+        assert size(0x00, 0x00, False) == 4
+        only20 = groups(0x00, 0x00, False)[0]
+        assert only20[0] == "20 MHz only"
+        assert only20[1] == ("MCS 0-7", "MCS 8-9", "MCS 10-11", "MCS 12-13")
+
+        lines, nss = lswifi.elements.WirelessNetworkBss._format_supported_eht_mcs(
+            bytes.fromhex("44332211"), 0, 0, False, False
+        )
+        assert lines[0] == "Supported EHT-MCS And NSS Set (20 MHz only): 44 33 22 11"
+        assert "MCS 0-7: Rx 4 SS, Tx 4 SS" in lines[1]
+        assert "MCS 8-9: Rx 3 SS, Tx 3 SS" in lines[2]
+        assert "MCS 10-11: Rx 2 SS, Tx 2 SS" in lines[3]
+        assert "MCS 12-13: Rx 1 SS, Tx 1 SS" in lines[4]
+        assert nss == 4
+
+    def test_eht_capabilities_width_forms_and_ppe(self):
+        def he(phy0):
+            return _ext(bytes([35, 0, 0, 0, 0, 0, 0, phy0]))
+
+        def eht(phy0, phy5, tail):
+            phy = bytearray(9)
+            phy[0] = phy0
+            phy[5] = phy5
+            return _ext(bytes([108, 0x00, 0x00]) + bytes(phy) + tail)
+
+        early = _bss_with_ies(
+            b"early", he(0x02) + eht(0x02, 0x00, bytes.fromhex("444444444444"))
+        )
+        text = _ie_text(early, "Extension: (108) EHT Capabilities")
+        assert "320 MHz In 6 GHz: 1" in text
+        assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 44 44 44" in text
+        assert "Supported EHT-MCS And NSS Set (320 MHz):" not in text
+        assert "trailing (raw 44 44 44)" in text
+        assert "Max NSS: 4, 320 MHz: yes, MCS 14: no, MCS 15: no" in text
+
+        wide = _bss_with_ies(
+            b"wide",
+            he(0x0C) + eht(0x02, 0x00, bytes.fromhex("111111222222333333")),
+        )
+        text = _ie_text(wide, "Extension: (108) EHT Capabilities")
+        assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 11 11 11" in text
+        assert "Supported EHT-MCS And NSS Set (160 MHz): 22 22 22" in text
+        assert "Supported EHT-MCS And NSS Set (320 MHz): 33 33 33" in text
+        assert "MCS 0-9: Rx 3 SS, Tx 3 SS" in text
+        assert "Max NSS: 3, 320 MHz: yes, MCS 14: no, MCS 15: no" in text
+
+        twenty = _bss_with_ies(b"ap20", he(0x00) + eht(0x00, 0x00, bytes.fromhex("112200")))
+        text = _ie_text(twenty, "Extension: (108) EHT Capabilities")
+        assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 11 22 00" in text
+        assert "MCS 0-9: Rx 1 SS, Tx 1 SS" in text
+        assert "MCS 10-11: Rx 2 SS, Tx 2 SS" in text
+        assert "MCS 12-13: not supported" in text
+        assert "20 MHz only" not in text
+        assert "MCS 0-7:" not in text
+
+        ppe = _bss_with_ies(b"ppe", he(0x04) + eht(0x00, 0x08, bytes.fromhex("444444abcd")))
+        text = _ie_text(ppe, "Extension: (108) EHT Capabilities")
+        assert "PPE Thresholds Present: 1" in text
+        assert "PPE Thresholds: AB CD" in text
+        assert "MCS 0-9: Rx 4 SS, Tx 4 SS" in text
+        assert "trailing" not in text
+
+        missing_he = _bss_with_ies(b"nohe", eht(0x00, 0x00, bytes.fromhex("444444")))
+        text = _ie_text(missing_he, "Extension: (108) EHT Capabilities")
+        assert "Supported EHT-MCS And NSS Set: 44 44 44" in text
+        assert "MCS 0-9:" not in text
+        assert "MCS 0-7:" not in text
+        assert "Max NSS: unknown, 320 MHz: no, MCS 14: no, MCS 15: no" in text
+
+        eht_first = _bss_with_ies(
+            b"order", eht(0x00, 0x00, bytes.fromhex("444444")) + he(0x04)
+        )
+        text = _ie_text(eht_first, "Extension: (108) EHT Capabilities")
+        assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 44 44 44" in text
+        assert "Max NSS: 4, 320 MHz: no, MCS 14: no, MCS 15: no" in text
+
+        short_mcs = _bss_with_ies(b"shortmcs", he(0x04) + eht(0x00, 0x00, bytes.fromhex("44")))
+        text = _ie_text(short_mcs, "Extension: (108) EHT Capabilities")
+        assert "truncated (raw 44)" in text
+        assert "MCS 0-9:" not in text
+        assert "Max NSS: unknown" in text
+
+    def test_multi_link_optional_fields_and_other_types(self):
+        basic = bytes.fromhex(
+            "6b"
+            "f007"  # type Basic, presence through extended MLD caps
+            "12"
+            "112233445566"
+            "03"
+            "09"
+            "ac10"
+            "0140"
+            "2100"
+            "07"
+            "8100"
+            "aabb"
+        )
+        # control is little-endian on the wire: f0 07 is 0x07f0
+        assert basic[1:3] == bytes.fromhex("f007")
+        text = _ie_text(_bss_with_ies(b"full", _ext(basic)), "Extension: (107) Multi-Link")
+        assert "Type: Basic" in text
+        assert "Presence: 0x07f0" in text
+        assert "MLD MAC Address: 11:22:33:44:55:66" in text
+        assert "Link ID: 3" in text
+        assert "BSS Parameters Change Count: 9" in text
+        assert "Medium Synchronization Delay: 0x10ac" in text
+        assert "Duration: 172 (5504 us)" in text
+        assert "OFDM ED Threshold: 0 (-72 dBm)" in text
+        assert "Max Number Of TXOPs: 1" in text
+        assert "EML Capabilities: 0x4001" in text
+        assert "MLD Capabilities And Operations: 0x0021" in text
+        assert "Max Simultaneous Links: 1" in text
+        assert "AP MLD ID: 7" in text
+        assert "Extended MLD Capabilities And Operations: 0x0081" in text
+        assert "Operation Parameter Update: 1" in text
+        assert "BTM MLD Recommendation For Multiple APs: 1" in text
+        assert "Per-STA Profiles: AA BB" in text
+        assert "STA Control" not in text
+
+        emlmr = bytes.fromhex("6b8000091122334455669200")
+        text = _ie_text(_bss_with_ies(b"emlmr", _ext(emlmr)), "Extension: (107) Multi-Link")
+        assert "EML Capabilities: 0x0092" in text
+        assert "EMLSR Support: 0" in text
+        assert "EMLMR Support: 1" in text
+        assert "EML Padding Delay: 32 us" in text
+        assert "EMLMR Transition Delay: 32 us" in text
+        assert "EMLSR Transition Delay:" not in text
+
+        short_common = bytes.fromhex("6b10000711223344556605")
+        text = _ie_text(
+            _bss_with_ies(b"shortci", _ext(short_common)),
+            "Extension: (107) Multi-Link",
+        )
+        assert "MLD MAC Address: 11:22:33:44:55:66" in text
+        assert "Link ID:" not in text
+        assert "truncated" in text
+        assert "Per-STA Profiles: 05" in text
+
+        for body, type_name in (
+            ("6b0100dead", "Probe Request"),
+            ("6b0200dead", "Reconfiguration"),
+            ("6b0300dead", "TDLS"),
+            ("6b0400dead", "Priority Access"),
+            ("6b0700aa", "Unknown (7)"),
+        ):
+            text = _ie_text(
+                _bss_with_ies(b"oth", _ext(bytes.fromhex(body))),
+                "Extension: (107) Multi-Link",
+            )
+            assert f"Type: {type_name}" in text
+            assert "MLD MAC Address:" not in text
+            assert "raw " in text
+
+    @pytest.mark.parametrize(
+        "ies",
+        [
+            bytes([255, 1, 107]),
+            bytes([255, 1, 108]),
+            bytes([255, 2, 107, 0xB0]),
+            bytes([255, 4, 107, 0xB0, 0x01, 0x0D]),
+            bytes([255, 6, 107, 0x10, 0x00, 0xFF, 0x11, 0x22]),
+            bytes([255, 2, 108, 0x07]),
+            bytes([255, 5, 108, 0x07, 0x00, 0xE0, 0x1F]),
+            bytes([255, 3, 108, 0x82, 0x01]),
+        ],
+    )
+    def test_truncated_multilink_and_eht_do_not_raise(self, ies):
+        bss = _bss_with_ies(b"bad", ies + bytes([3, 1, 6]))
+        text = str(bss)
+        assert "Traceback" not in text
+        assert 3 in [ie.eid for ie in bss.information_elements]
+        assert "truncated" in text
+
+    def test_wifi7_fixture_json_stays_one_document(self, tmp_path, capsys):
+        records = [
+            lswifi.elements.WirelessNetworkBss(BssRecord(**ARUBA)),
+            lswifi.elements.WirelessNetworkBss(BssRecord(**UNIFI)),
+        ]
+        path = tmp_path / "out.json"
+        args = parse(["--json", str(path)])
+        scanner = app.lswifi()
+        out, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
+            Session(records), False, "", str(path), args
+        )
+        scanner.print_bss_list(
+            out, length, "00:11:22:33:44:55", bssids, False, names, json_out, new, args
+        )
+        printed = json.loads(capsys.readouterr().out)
+        assert printed == json_out
+        document = json.loads(path.read_text())
+        assert list(document) == ["lswifi", "scan_data"]
+        assert document["scan_data"] == json_out
+        assert len(document["scan_data"]) == 2
+        for row in document["scan_data"]:
+            assert set(row) == JSON_KEYS
+            assert isinstance(row["ies_extension"], list)
+            assert all(isinstance(item, str) for item in row["ies_extension"])
+            assert "107" in row["ies_extension"]
+            assert "108" in row["ies_extension"]
