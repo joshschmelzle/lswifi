@@ -3239,9 +3239,12 @@ class WirelessNetworkBss:
             broadcast_twt_support = get_bit(body[he_mac_cap_oct3], 4)
             if broadcast_twt_support:
                 out += ", Broadcast TWT Support"
-            bqr_support = get_bit(body[he_mac_cap_oct5], 3)
+            bqr_support = get_bit(body[he_mac_cap_oct5], 2)
             if bqr_support:
                 out += ", BQR Support"
+            psr_responder = get_bit(body[he_mac_cap_oct5], 3)
+            if psr_responder:
+                out += ", PSR Responder"
             punctured_sounding_support = get_bit(body[he_mac_cap_oct6], 6)
             if punctured_sounding_support:
                 out += ", Punctured Sounding Support"
@@ -3331,8 +3334,8 @@ class WirelessNetworkBss:
                 if max_mcs < 3:
                     eighty_mhz_ss += 1
 
-            he_mcs_oct3 = 20
-            he_mcs_oct4 = 21
+            he_mcs_oct3 = 22
+            he_mcs_oct4 = 23
             one_sixty_mhz_ss = 0
 
             if onesixty_in_5g_and_6g:
@@ -3362,10 +3365,9 @@ class WirelessNetworkBss:
                     one_sixty_mhz_ss += 1
 
             if self is not None:
-                if eighty_mhz_ss > 0:
-                    self.spatial_streams.value = eighty_mhz_ss
-                if one_sixty_mhz_ss > 0:
-                    self.spatial_streams.value = one_sixty_mhz_ss
+                streams = max(eighty_mhz_ss, one_sixty_mhz_ss)
+                if streams > 0:
+                    self.spatial_streams.value = streams
                 if forty_and_eighty_in_5g_and_6g:
                     # cannot use this bit to determine channel
                     # D8 std says indicates support for 40 and 80 not one or the other
@@ -3393,8 +3395,13 @@ class WirelessNetworkBss:
                 [octet4bit5, octet4bit4, octet4bit3, octet4bit2, octet4bit1, octet4bit0]
             )
             bss_color = binary_string_to_int(octet4bits)
-            if bss_color != 0:
-                out = f"BSS Color: {bss_color}"
+            partial_bss_color = int(get_bit(body[4], 6))
+            bss_color_disabled = int(get_bit(body[4], 7))
+            out = (
+                f"BSS Color: {bss_color}, "
+                f"Partial BSS Color: {partial_bss_color}, "
+                f"BSS Color Disabled: {bss_color_disabled}"
+            )
 
             # 6 GHz Operation Information is 0 or 5 octets
 
@@ -3458,8 +3465,22 @@ class WirelessNetworkBss:
 
                 out += f", Width: {six_ghz_width} MHz"
 
-                # minimum rate in units of 1 MB/s that non-AP STA is allowed to use
-                minimum_rate = six_ghz_ops_ie_position + 4
+                duplicate_beacon = int(get_bit(body[six_control_field], 2))
+                regulatory_info = (body[six_control_field] & 0x78) >> 3
+                regulatory_names = {
+                    0: "Indoor AP",
+                    1: "Standard Power AP",
+                    2: "Very Low Power AP",
+                    3: "Indoor Enabled AP",
+                    7: "AP Role Not Relevant",
+                    8: "Indoor Standard Power AP",
+                }
+                regulatory_name = regulatory_names.get(regulatory_info, "Reserved")
+                out += f", Duplicate Beacon: {duplicate_beacon}"
+                out += f", Regulatory Info: {regulatory_name}"
+
+                # minimum rate in units of 1 Mbps that a non-AP STA is allowed to use
+                minimum_rate = body[six_ghz_ops_ie_position + 4]
                 out += f", Min STA Rate: {minimum_rate} Mbps"
 
             if self is not None:
@@ -3573,82 +3594,84 @@ class WirelessNetworkBss:
         802.11-2020 Tx Power Envelope (9.4.2.161)
         """
         body = list(memoryview(edata))
+        if not body:
+            return "truncated"
 
-        is_40 = False
-        is_80 = False
-        is_160_or_80p80 = False
-
-        # local max tx power count
-        local_max_tx_power_count_bi_string = bools_to_binary_string(
-            [
-                get_bit(body[0], 2),
-                get_bit(body[0], 1),
-                get_bit(body[0], 0),
-            ]
+        info = body[0]
+        count = info & 0x07
+        interpret = (info & 0x38) >> 3
+        category = (info & 0xC0) >> 6
+        interpretations = (
+            "Local EIRP",
+            "Local EIRP PSD",
+            "Regulatory Client EIRP",
+            "Regulatory Client EIRP PSD",
+            "Additional regulatory client EIRP",
+            "Additional regulatory client EIRP PSD",
+            "Reserved",
+            "Reserved",
         )
-        local_max_tx_power_count = int(local_max_tx_power_count_bi_string, 2)
+        categories = ("Default", "Subordinate", "Reserved", "Reserved")
+        interpretation = interpretations[interpret]
+        category_name = categories[category]
+        powers = body[1:]
 
-        # local max tx power unit interpretation
-        local_max_tx_power_unit_interpretation_bi_string = bools_to_binary_string(
-            [
-                get_bit(body[0], 5),
-                get_bit(body[0], 4),
-                get_bit(body[0], 3),
-            ]
-        )
+        def signed_half_db(byte):
+            signed = byte - 256 if byte > 127 else byte
+            return signed / 2
 
-        local_max_tx_power_unit_interpretation = int(
-            local_max_tx_power_unit_interpretation_bi_string, 2
-        )
+        def eirp_text(byte):
+            return f"{signed_half_db(byte):.1f} dBm"
 
-        if local_max_tx_power_count == 4:
-            is_160_or_80p80 = True
+        def psd_text(byte):
+            signed = byte - 256 if byte > 127 else byte
+            if signed == 127:
+                return "No maximum PSD is specified for channel"
+            if signed == -128:
+                return "Channel cannot be used for transmission"
+            return f"{signed / 2:.1f} dBm/MHz"
 
-        if local_max_tx_power_count == 3:
-            is_80 = True
+        lines = [
+            (
+                f"Max Tx Pwr Count: {count}, "
+                f"Unit Interpretation: {interpretation}, "
+                f"Category: {category_name}"
+            )
+        ]
 
-        if local_max_tx_power_count == 2:
-            is_40 = True
-
-        tx_power_160_or_80p80_pos = 4
-        tx_power_for_80_mhz_pos = 3
-        tx_power_for_40_mhz_pos = 2
-        tx_power_for_20_mhz_pos = 1
-
-        def byte_to_signed(byte):
-            if byte > 127:
-                return (256 - byte) * (-1) / 2
+        if interpret in (0, 2, 4):
+            labels = ("20 MHz", "40 MHz", "80 MHz", "160 MHz")
+            value_count = count + 1
+            for index, label in enumerate(labels):
+                if index >= value_count or index >= len(powers):
+                    break
+                lines.append(f"  {label}: {eirp_text(powers[index])}")
+            if len(powers) > value_count:
+                lines.append(f"  320 MHz: {eirp_text(powers[value_count])}")
+        elif interpret in (1, 3, 5):
+            value_count = 1 if count == 0 else 1 << (count - 1)
+            shown = min(value_count, len(powers))
+            if count == 0 and shown:
+                lines.append(f"  Max Tx Power Spectral Density: {psd_text(powers[0])}")
             else:
-                return byte / 2
+                for index in range(shown):
+                    lines.append(
+                        f"  20 MHz Channel #{index}: {psd_text(powers[index])}"
+                    )
+            if len(powers) > value_count:
+                extension = powers[value_count]
+                extension_count = extension & 0x0F
+                lines.append(f"  Extension Count: {extension_count}")
+                for index in range(extension_count):
+                    power_index = value_count + 1 + index
+                    if power_index >= len(powers):
+                        break
+                    channel = value_count + index
+                    lines.append(
+                        f"  20 MHz Channel #{channel}: {psd_text(powers[power_index])}"
+                    )
 
-        if is_160_or_80p80:
-            return (
-                f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
-                f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm\n"
-                f"  Local Max. Tx Pwr For 40 MHz: {byte_to_signed(body[tx_power_for_40_mhz_pos])} dBm\n"
-                f"  Local Max. Tx Pwr For 80 MHz: {byte_to_signed(body[tx_power_for_80_mhz_pos])} dBm\n"
-                f"  Local Max. Tx Pwr For 160/80+80 MHz: {byte_to_signed(body[tx_power_160_or_80p80_pos])} dBm"
-            )
-
-        if is_80:
-            return (
-                f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
-                f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm\n"
-                f"  Local Max. Tx Pwr For 40 MHz: {byte_to_signed(body[tx_power_for_40_mhz_pos])} dBm\n"
-                f"  Local Max. Tx Pwr For 80 MHz: {byte_to_signed(body[tx_power_for_80_mhz_pos])} dBm"
-            )
-
-        if is_40:
-            return (
-                f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
-                f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm\n"
-                f"  Local Max. Tx Pwr For 40 MHz: {byte_to_signed(body[tx_power_for_40_mhz_pos])} dBm"
-            )
-
-        return (
-            f"Max Tx Pwr Count: {local_max_tx_power_count}, Unit Interpretation: {local_max_tx_power_unit_interpretation}\n"
-            f"  Local Max. Tx Pwr For 20 MHz: {byte_to_signed(body[tx_power_for_20_mhz_pos])} dBm"
-        )
+        return "\n".join(lines)
 
     def __parse_overlapping_bss_scan_parameters_element(edata):
         """

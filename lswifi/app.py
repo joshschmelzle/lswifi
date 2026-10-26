@@ -903,7 +903,7 @@ class lswifi:
                             "connected": bss.bssid.connected,
                             "country_code": str(bss.country_code).strip(),
                             "ies": sorted(bss.ie_numbers.elements),
-                            "ies_extension": sorted(bss.exie_numbers.elements),
+                            "ies_extension": sorted(bss.exie_numbers.elements, key=int),
                             "modes": sorted(bss.modes.elements),
                             "pmf": str(bss.pmf).strip(),
                             "phy_type": str(bss.phy_type).strip(),
@@ -935,7 +935,10 @@ class lswifi:
                         "country_code": str(bss.country_code).strip(),
                         "ies": "/".join(map(str, sorted(bss.ie_numbers.elements))),
                         "ies_extension": "/".join(
-                            map(str, sorted(bss.exie_numbers.elements))
+                            map(
+                                str,
+                                sorted(bss.exie_numbers.elements, key=int),
+                            )
                         ),
                         "modes": "/".join(sorted(bss.modes.elements)),
                         "pmf": str(bss.pmf).strip(),

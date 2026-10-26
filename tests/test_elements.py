@@ -1,5 +1,6 @@
 # -*- encoding: utf-8
 
+import csv
 import json
 import sys
 
@@ -642,6 +643,304 @@ class TestExtensionElements:
             assert "108" in row["ies_extension"]
 
 
+def _tpe(info, powers):
+    payload = bytes([info, *powers])
+    return bytes([195, len(payload)]) + payload
+
+
+def _nss_map(streams):
+    value = 0
+    for index in range(8):
+        if index >= streams:
+            value |= 0b11 << (2 * index)
+    return value.to_bytes(2, "little")
+
+
+def _he_capabilities(mac4=0, phy0=0, rx80=2, tx80=0, rx160=0):
+    mac = bytes(4) + bytes([mac4, 0])
+    phy = bytes([phy0]) + bytes(10)
+    body = bytes([35]) + mac + phy + _nss_map(rx80) + _nss_map(tx80) + _nss_map(rx160)
+    body += bytes(2)
+    return _ext(body)
+
+
+def _he_operation(
+    *,
+    color=0,
+    primary=37,
+    control=0,
+    ccfs0=39,
+    ccfs1=0,
+    minimum_rate=6,
+    params2=0,
+    vht=b"",
+    cohosted=b"",
+):
+    params3 = 0x02
+    body = bytes([36, 0x00, params2, params3, color, 0x00, 0x00])
+    body += vht + cohosted
+    body += bytes([primary, control, ccfs0, ccfs1, minimum_rate])
+    return _ext(body)
+
+
+class TestTransmitPowerEnvelope:
+    @pytest.mark.parametrize(
+        "count, powers, expected",
+        [
+            (0, [40], ["20 MHz: 20.0 dBm"]),
+            (1, [40, 255], ["20 MHz: 20.0 dBm", "40 MHz: -0.5 dBm"]),
+            (
+                3,
+                [40, 46, 34, 28],
+                [
+                    "20 MHz: 20.0 dBm",
+                    "40 MHz: 23.0 dBm",
+                    "80 MHz: 17.0 dBm",
+                    "160 MHz: 14.0 dBm",
+                ],
+            ),
+        ],
+    )
+    def test_eirp_count_is_one_more_than_n(self, count, powers, expected):
+        bss = _bss_with_ies(b"tpe", _tpe(count, powers))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert (
+            "Max Tx Pwr Count: "
+            f"{count}, Unit Interpretation: Local EIRP, Category: Default"
+        ) in text
+        for line in expected:
+            assert f"  {line}" in text
+        assert text.count("MHz:") == len(expected)
+
+    def test_regulatory_client_eirp_and_subordinate_category(self):
+        info = 3 | (2 << 3) | (1 << 6)
+        bss = _bss_with_ies(b"tpe", _tpe(info, [40, 46, 34, 28, 36]))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "Unit Interpretation: Regulatory Client EIRP" in text
+        assert "Category: Subordinate" in text
+        assert "160 MHz: 14.0 dBm" in text
+        assert "320 MHz: 18.0 dBm" in text
+        assert "63.5" not in text
+
+    def test_reserved_category_is_labeled(self):
+        bss = _bss_with_ies(b"tpe", _tpe(0xC0, [40]))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "Unit Interpretation: Local EIRP, Category: Reserved" in text
+        assert "20 MHz: 20.0 dBm" in text
+
+    def test_psd_count_zero_is_one_bss_value(self):
+        bss = _bss_with_ies(b"tpe", _tpe(1 << 3, [20]))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "Unit Interpretation: Local EIRP PSD, Category: Default" in text
+        assert "Max Tx Power Spectral Density: 10.0 dBm/MHz" in text
+        assert "20 MHz Channel" not in text
+        assert "dBm\n" not in text
+
+    @pytest.mark.parametrize(
+        "count, channels",
+        [(1, 1), (2, 2), (3, 4)],
+    )
+    def test_psd_value_count(self, count, channels):
+        info = count | (3 << 3)
+        powers = [10] * channels
+        bss = _bss_with_ies(b"tpe", _tpe(info, powers))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "Unit Interpretation: Regulatory Client EIRP PSD" in text
+        for index in range(channels):
+            assert f"20 MHz Channel #{index}: 5.0 dBm/MHz" in text
+        assert f"20 MHz Channel #{channels}:" not in text
+        assert "Extension Count" not in text
+
+    def test_psd_no_limit_and_unusable_channel(self):
+        bss = _bss_with_ies(b"tpe", _tpe(1 << 3, [127]))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "No maximum PSD is specified for channel" in text
+        assert "63.5" not in text
+
+        bss = _bss_with_ies(b"tpe", _tpe((1 << 3) | 2, [10, 0x80]))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "20 MHz Channel #0: 5.0 dBm/MHz" in text
+        assert "20 MHz Channel #1: Channel cannot be used for transmission" in text
+        assert "-64.0" not in text
+
+    def test_psd_extension_count(self):
+        info = 3 | (1 << 3) | (1 << 6)
+        powers = [10, 254, 30, 40, 0xF2, 127, 0x80]
+        bss = _bss_with_ies(b"tpe", _tpe(info, powers))
+        text = _ie_text(bss, "Tx Power Envelope")
+        assert "Unit Interpretation: Local EIRP PSD, Category: Subordinate" in text
+        assert "20 MHz Channel #0: 5.0 dBm/MHz" in text
+        assert "20 MHz Channel #1: -1.0 dBm/MHz" in text
+        assert "20 MHz Channel #2: 15.0 dBm/MHz" in text
+        assert "20 MHz Channel #3: 20.0 dBm/MHz" in text
+        assert "Extension Count: 2" in text
+        assert "20 MHz Channel #4: No maximum PSD is specified for channel" in text
+        assert "20 MHz Channel #5: Channel cannot be used for transmission" in text
+        assert "63.5" not in text
+        assert "-64.0" not in text
+
+
+class TestHeOperation6GHz:
+    def test_color_zero_min_rate_and_regulatory_info(self):
+        control = 0x01 | 0x04 | (1 << 3)
+        bss = _bss_with_ies(
+            b"heop",
+            _he_operation(color=0, control=control, minimum_rate=6),
+        )
+        text = _ie_text(bss, "Extension: (36) HE Operation")
+        assert text.startswith(
+            "BSS Color: 0, Partial BSS Color: 0, BSS Color Disabled: 0, "
+        )
+        assert (
+            ", 6G Channel: 37, Freq.: 6135, CCFS 0: 39, CCFS 1: 0, Width: 40 MHz"
+            in text
+        )
+        assert "Duplicate Beacon: 1" in text
+        assert "Regulatory Info: Standard Power AP" in text
+        assert "Min STA Rate: 6 Mbps" in text
+        assert "11 Mbps" not in text
+        assert bss.channel_width.value == "40"
+        assert bss.channel_number.value == 37
+
+    @pytest.mark.parametrize(
+        "regulatory, name",
+        [
+            (0, "Indoor AP"),
+            (1, "Standard Power AP"),
+            (2, "Very Low Power AP"),
+            (3, "Indoor Enabled AP"),
+            (4, "Reserved"),
+            (7, "AP Role Not Relevant"),
+            (8, "Indoor Standard Power AP"),
+            (9, "Reserved"),
+        ],
+    )
+    def test_regulatory_info_names(self, regulatory, name):
+        control = (regulatory << 3) | 0x02
+        bss = _bss_with_ies(
+            b"heop", _he_operation(color=0xC5, control=control, minimum_rate=12)
+        )
+        text = _ie_text(bss, "Extension: (36) HE Operation")
+        assert "BSS Color: 5, Partial BSS Color: 1, BSS Color Disabled: 1" in text
+        assert "Duplicate Beacon: 0" in text
+        assert f"Regulatory Info: {name}" in text
+        assert "Width: 80 MHz" in text
+        assert "Min STA Rate: 12 Mbps" in text
+
+    def test_min_rate_follows_optional_fields(self):
+        bss = _bss_with_ies(
+            b"heop",
+            _he_operation(
+                color=1,
+                params2=0xC0,
+                vht=bytes([0xAA, 0xBB, 0xCC]),
+                cohosted=bytes([0x03]),
+                control=0x02,
+                ccfs0=39,
+                ccfs1=0,
+                minimum_rate=24,
+            ),
+        )
+        text = _ie_text(bss, "Extension: (36) HE Operation")
+        assert "6G Channel: 37" in text
+        assert "CCFS 0: 39, CCFS 1: 0, Width: 80 MHz" in text
+        assert "Min STA Rate: 24 Mbps" in text
+        assert "15 Mbps" not in text
+
+    @pytest.mark.parametrize(
+        "ccfs1, width",
+        [(42, "160"), (70, "80+80")],
+    )
+    def test_channel_width_logic_unchanged(self, ccfs1, width):
+        bss = _bss_with_ies(
+            b"heop",
+            _he_operation(control=0x03, ccfs0=50, ccfs1=ccfs1, minimum_rate=6),
+        )
+        text = _ie_text(bss, "Extension: (36) HE Operation")
+        assert f"CCFS 0: 50, CCFS 1: {ccfs1}, Width: {width} MHz" in text
+        assert bss.channel_width.value == width
+        assert "Min STA Rate: 6 Mbps" in text
+
+
+class TestHeCapabilitiesNss:
+    def test_bqr_and_psr_bits(self):
+        bqr = _bss_with_ies(b"he", _he_capabilities(mac4=0x04))
+        text = _ie_text(bqr, "Extension: (35) HE Capabilities")
+        assert "BQR Support" in text
+        assert "PSR Responder" not in text
+
+        psr = _bss_with_ies(b"he", _he_capabilities(mac4=0x08))
+        text = _ie_text(psr, "Extension: (35) HE Capabilities")
+        assert "PSR Responder" in text
+        assert "BQR Support" not in text
+
+        both = _bss_with_ies(b"he", _he_capabilities(mac4=0x0C))
+        text = _ie_text(both, "Extension: (35) HE Capabilities")
+        assert "BQR Support" in text
+        assert "PSR Responder" in text
+
+    def test_rx_160_map_and_spatial_streams_use_the_max(self):
+        higher_80 = _bss_with_ies(
+            b"he",
+            _he_capabilities(phy0=0x0C, rx80=4, tx80=1, rx160=2),
+        )
+        assert higher_80.spatial_streams.value == 4
+
+        higher_160 = _bss_with_ies(
+            b"he",
+            _he_capabilities(phy0=0x0C, rx80=2, tx80=8, rx160=4),
+        )
+        assert higher_160.spatial_streams.value == 4
+        text = _ie_text(higher_160, "Extension: (35) HE Capabilities")
+        assert "truncated" not in text
+
+        no_160 = _bss_with_ies(
+            b"he",
+            _he_capabilities(phy0=0x04, rx80=2, tx80=8, rx160=8),
+        )
+        assert no_160.spatial_streams.value == 2
+
+    def test_json_extension_order_and_spatial_streams(self, tmp_path, capsys):
+        ies = (
+            _ext(bytes([151, 0xAA]))
+            + _ext(bytes([106, 0x00]))
+            + _he_capabilities(phy0=0x0C, rx80=2, tx80=8, rx160=4)
+            + _tpe(3, [40, 46, 34, 28])
+        )
+        bss = _bss_with_ies(b"mix", ies)
+        assert list(bss.exie_numbers) == ["151", "106", "35"]
+        json_path = tmp_path / "out.json"
+        csv_path = tmp_path / "out.csv"
+        args = parse(["--json", str(json_path), "--csv", str(csv_path)])
+        scanner = app.lswifi()
+        out, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
+            Session([bss]), False, str(csv_path), str(json_path), args
+        )
+        scanner.print_bss_list(
+            out,
+            length,
+            "00:11:22:33:44:55",
+            bssids,
+            False,
+            names,
+            json_out,
+            new,
+            args,
+        )
+        printed = json.loads(capsys.readouterr().out)
+        assert printed == json_out
+        document = json.loads(json_path.read_text())
+        assert list(document) == ["lswifi", "scan_data"]
+        assert document["scan_data"] == json_out
+        row = document["scan_data"][0]
+        assert set(row) == JSON_KEYS
+        assert row["ies_extension"] == ["35", "106", "151"]
+        assert all(isinstance(item, str) for item in row["ies_extension"])
+        assert row["spatial_streams"] == "4"
+        with csv_path.open(newline="") as handle:
+            csv_row = next(csv.DictReader(handle))
+        assert csv_row["ies_extension"] == "35/106/151"
+        assert csv_row["spatial_streams"] == "4"
 def _rnr_decoded(bss):
     lines = []
     capture = False
