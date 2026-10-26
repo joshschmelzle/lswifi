@@ -375,7 +375,7 @@ class TestExtensionElements:
         assert "EMLSR Support: 1" in ml
         assert "EMLMR Support: 0" in ml
         assert "MLD Capabilities And Operations: 0x0021" in ml
-        assert "Max Simultaneous Links: 1" in ml
+        assert "Max Simultaneous Links: 2 (raw 1)" in ml
         assert "Per-STA Profiles:" not in ml
 
         aruba = lswifi.elements.WirelessNetworkBss(BssRecord(**ARUBA))
@@ -401,7 +401,7 @@ class TestExtensionElements:
         assert "EML Capabilities: 0x4001" in ml
         assert "EMLSR Support: 1" in ml
         assert "MLD Capabilities And Operations: 0x0062" in ml
-        assert "Max Simultaneous Links: 2" in ml
+        assert "Max Simultaneous Links: 3 (raw 2)" in ml
         assert "TID-To-Link Mapping Negotiation: 3 (different link sets)" in ml
 
     def test_eht_mcs_nss_size_matches_kernel(self):
@@ -533,10 +533,17 @@ class TestExtensionElements:
         assert "Max Number Of TXOPs: 1" in text
         assert "EML Capabilities: 0x4001" in text
         assert "MLD Capabilities And Operations: 0x0021" in text
-        assert "Max Simultaneous Links: 1" in text
+        assert "Max Simultaneous Links: 2 (raw 1)" in text
         assert "AP MLD ID: 7" in text
         assert "Extended MLD Capabilities And Operations: 0x0081" in text
         assert "Operation Parameter Update: 1" in text
+        assert "Recommended Max Simultaneous Links: 1 (raw 0)" in text
+        unspecified = "\n".join(
+            lswifi.elements.WirelessNetworkBss._format_extended_mld_capabilities(0x001E)
+        )
+        assert (
+            "Recommended Max Simultaneous Links: not specified (raw 15)" in unspecified
+        )
         assert "BTM MLD Recommendation For Multiple APs: 1" in text
         assert "Per-STA Profiles: AA BB" in text
         assert "STA Control" not in text

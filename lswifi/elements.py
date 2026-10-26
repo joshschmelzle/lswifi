@@ -1217,9 +1217,10 @@ class WirelessNetworkBss:
             2: "reserved",
             3: "different link sets",
         }[tid]
+        max_links = value & 0x000F
         return [
             f"MLD Capabilities And Operations: 0x{value:04x}",
-            f"  Max Simultaneous Links: {value & 0x000F}",
+            f"  Max Simultaneous Links: {max_links + 1} (raw {max_links})",
             f"  SRS Support: {(value & 0x0010) >> 4}",
             f"  TID-To-Link Mapping Negotiation: {tid} ({tid_name})",
             f"  Frequency Separation: {(value & 0x0F80) >> 7}",
@@ -1230,10 +1231,14 @@ class WirelessNetworkBss:
 
     @staticmethod
     def _format_extended_mld_capabilities(value):
+        recommended = (value & 0x001E) >> 1
+        recommended_text = (
+            "not specified" if recommended == 15 else str(recommended + 1)
+        )
         return [
             f"Extended MLD Capabilities And Operations: 0x{value:04x}",
             f"  Operation Parameter Update: {value & 0x0001}",
-            f"  Recommended Max Simultaneous Links: {(value & 0x001E) >> 1}",
+            f"  Recommended Max Simultaneous Links: {recommended_text} (raw {recommended})",
             f"  NSTR Link Pair Update: {(value & 0x0020) >> 5}",
             f"  EMLSR Enabled On One Link: {(value & 0x0040) >> 6}",
             f"  BTM MLD Recommendation For Multiple APs: {(value & 0x0080) >> 7}",
