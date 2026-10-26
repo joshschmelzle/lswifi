@@ -29,12 +29,12 @@ macOS (preview)
 $ python3 -m pip install lswifi
 ```
 
-macOS hides SSIDs, BSSIDs, and information elements unless Python has a Location Services grant. `lswifi` checks before a scan and, when the choice is not determined, asks and runs the run loop so the prompt can appear. RSSI and channel still show. The warning is on stderr, so `--json` is still one document. `--get-interfaces` prints `Location Services:` and the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`).
+macOS hides SSIDs, BSSIDs, and information elements unless Python has a Location Services grant. `lswifi` checks before a scan and, when the choice is not determined, asks and runs the run loop so the prompt can appear. If no prompt appears, add the Python interpreter lswifi runs under in System Settings > Privacy & Security > Location Services with the + button, turn it on, and run lswifi again. The warning prints that interpreter's path. RSSI and channel still show. The warning is on stderr, so `--json` is still one document. `--get-interfaces` prints `Location Services:` and the state. `--get-interfaces --json` includes `location_authorization` (`authorized`, `denied`, `restricted`, `not_determined`, `not_registered`, `disabled`, or `unavailable`).
 
 lswifi needs a code-signed Python, such as the [python.org installer](https://www.python.org/downloads/macos/); uv, Homebrew, and pyenv builds can't be granted. Enable Python in System Settings > Privacy & Security > Location Services. Without a grant, one warning names the state:
 
 - **denied**: Python is turned off in Location Services.
-- **not determined**: no choice yet; lswifi asks.
+- **not determined**: no choice yet; lswifi asks. If no prompt appears, add the interpreter named in the warning with the + button and turn it on.
 - **not code-signed**: this Python can't be granted.
 - **turned off**: Location Services is off system-wide.
 - **restricted**: blocked by parental controls or device management.

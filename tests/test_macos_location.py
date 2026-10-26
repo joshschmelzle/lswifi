@@ -1,5 +1,6 @@
 """Location Services decisions for the macOS backend."""
 
+import os
 import subprocess
 import sys
 import weakref
@@ -318,6 +319,14 @@ class TestNotDetermined:
         state = ask(manager, wait=1.0, pump=pump, clock=clock)
         assert state.status == loc.NOT_DETERMINED
         assert "not determined" in state.message
+        assert "Click Allow in the macOS prompt and run lswifi again." in state.message
+        assert "If no prompt appears" in state.message
+        assert "use the + button and pick" in state.message
+        assert os.path.realpath(sys.executable) in state.message
+        assert "turn it on, and run lswifi again." in state.message
+        assert (
+            "System Settings > Privacy & Security > Location Services" in state.message
+        )
         assert "code-signed Python" in state.message
         assert_download_page(state.message)
         assert "Enable Python" in state.message
