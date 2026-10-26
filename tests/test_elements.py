@@ -408,7 +408,9 @@ class TestExtensionElements:
         groups = lswifi.elements.WirelessNetworkBss._eht_mcs_nss_groups
 
         def size(he_phy0, eht_phy0, from_ap):
-            return sum(len(labels) for _name, labels in groups(he_phy0, eht_phy0, from_ap))
+            return sum(
+                len(labels) for _name, labels in groups(he_phy0, eht_phy0, from_ap)
+            )
 
         assert size(0x02, 0x02, True) == 3
         assert groups(0x02, 0x02, True)[0][0] == "<= 80 MHz"
@@ -468,7 +470,9 @@ class TestExtensionElements:
         assert "MCS 0-9: Rx 3 SS, Tx 3 SS" in text
         assert "Max NSS: 3, 320 MHz: yes, MCS 14: no, MCS 15: no" in text
 
-        twenty = _bss_with_ies(b"ap20", he(0x00) + eht(0x00, 0x00, bytes.fromhex("112200")))
+        twenty = _bss_with_ies(
+            b"ap20", he(0x00) + eht(0x00, 0x00, bytes.fromhex("112200"))
+        )
         text = _ie_text(twenty, "Extension: (108) EHT Capabilities")
         assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 11 22 00" in text
         assert "MCS 0-9: Rx 1 SS, Tx 1 SS" in text
@@ -477,7 +481,9 @@ class TestExtensionElements:
         assert "20 MHz only" not in text
         assert "MCS 0-7:" not in text
 
-        ppe = _bss_with_ies(b"ppe", he(0x04) + eht(0x00, 0x08, bytes.fromhex("444444abcd")))
+        ppe = _bss_with_ies(
+            b"ppe", he(0x04) + eht(0x00, 0x08, bytes.fromhex("444444abcd"))
+        )
         text = _ie_text(ppe, "Extension: (108) EHT Capabilities")
         assert "PPE Thresholds Present: 1" in text
         assert "PPE Thresholds: AB CD" in text
@@ -498,7 +504,9 @@ class TestExtensionElements:
         assert "Supported EHT-MCS And NSS Set (<= 80 MHz): 44 44 44" in text
         assert "Max NSS: 4, 320 MHz: no, MCS 14: no, MCS 15: no" in text
 
-        short_mcs = _bss_with_ies(b"shortmcs", he(0x04) + eht(0x00, 0x00, bytes.fromhex("44")))
+        short_mcs = _bss_with_ies(
+            b"shortmcs", he(0x04) + eht(0x00, 0x00, bytes.fromhex("44"))
+        )
         text = _ie_text(short_mcs, "Extension: (108) EHT Capabilities")
         assert "truncated (raw 44)" in text
         assert "MCS 0-9:" not in text
@@ -521,7 +529,9 @@ class TestExtensionElements:
         )
         # control is little-endian on the wire: f0 07 is 0x07f0
         assert basic[1:3] == bytes.fromhex("f007")
-        text = _ie_text(_bss_with_ies(b"full", _ext(basic)), "Extension: (107) Multi-Link")
+        text = _ie_text(
+            _bss_with_ies(b"full", _ext(basic)), "Extension: (107) Multi-Link"
+        )
         assert "Type: Basic" in text
         assert "Presence: 0x07f0" in text
         assert "MLD MAC Address: 11:22:33:44:55:66" in text
@@ -549,7 +559,9 @@ class TestExtensionElements:
         assert "STA Control" not in text
 
         emlmr = bytes.fromhex("6b8000091122334455669200")
-        text = _ie_text(_bss_with_ies(b"emlmr", _ext(emlmr)), "Extension: (107) Multi-Link")
+        text = _ie_text(
+            _bss_with_ies(b"emlmr", _ext(emlmr)), "Extension: (107) Multi-Link"
+        )
         assert "EML Capabilities: 0x0092" in text
         assert "EMLSR Support: 0" in text
         assert "EMLMR Support: 1" in text
@@ -628,3 +640,208 @@ class TestExtensionElements:
             assert all(isinstance(item, str) for item in row["ies_extension"])
             assert "107" in row["ies_extension"]
             assert "108" in row["ies_extension"]
+
+
+def _rnr_decoded(bss):
+    lines = []
+    capture = False
+    for ie in bss.information_elements:
+        if ie.eid == 201:
+            capture = True
+        elif capture and ie.eid != "":
+            break
+        if capture:
+            lines.append(ie.decoded)
+    return "\n".join(lines)
+
+
+def _neighbor_ap(
+    field_type, filtered, reserved, count, length, op_class, channel, fields
+):
+    header = (
+        (field_type & 0x03)
+        | (0x04 if filtered else 0)
+        | (0x08 if reserved else 0)
+        | ((count & 0x0F) << 4)
+    )
+    body = bytes([header, length, op_class, channel])
+    for field in fields:
+        body += field
+    return bytes([201, len(body)]) + body
+
+
+def _rnr_column(row, header):
+    return [item.value for item in row if str(item.header) == header]
+
+
+RNR_JSON_KEYS = {
+    "20_mhz",
+    "all_updates",
+    "ap_mld",
+    "bss_params",
+    "bssid",
+    "co-located",
+    "disabled",
+    "discovery",
+    "link",
+    "multiple",
+    "neighbor",
+    "neighbor_bssid",
+    "rssi",
+    "same",
+    "short_ssid",
+    "ssid",
+    "tbtt",
+    "transmitted",
+    "upr",
+}
+
+
+class TestReducedNeighborReport:
+    def test_wifi7_fixtures_decode_every_neighbor(self, capsys):
+        aruba = lswifi.elements.WirelessNetworkBss(BssRecord(**ARUBA))
+        text = _rnr_decoded(aruba)
+        assert "Channel number: 101" in text
+        assert "Channel number: 100" in text
+        assert "TBTT Info Field Type: 0" in text
+        assert "Filtered Neighbor AP: 0" in text
+        assert "Reserved: 0" in text
+        assert "TBTT Info Count: 0" in text
+        assert "TBTT Info Length: 16" in text
+        assert "Link ID: 1" in text
+        assert "BSS Parameters Change Count: 4" in text
+        assert "20 MHz PSD: -0.5 dBm/MHz" in text
+        channels = {_rnr_column(row, "NEIGHBOR")[0] for row in aruba.rnrs}
+        assert channels == {"101@160", "100@80"}
+        second = next(
+            row for row in aruba.rnrs if "100@80" in _rnr_column(row, "NEIGHBOR")
+        )
+        assert _rnr_column(second, "LINK") == [1]
+        assert _rnr_column(second, "BSS PARAMS") == [4]
+
+        unifi = lswifi.elements.WirelessNetworkBss(BssRecord(**UNIFI))
+        unifi_text = _rnr_decoded(unifi)
+        assert unifi_text.count("Operating Class:") == 1
+        assert "TBTT Info Count: 1" in unifi_text
+        assert "TBTT 0:" in unifi_text
+        assert "TBTT 1:" in unifi_text
+        assert "BSSID: 94:2a:6f:42:e4:7b" in unifi_text
+        assert "BSSID: 9a:2a:6f:42:e4:7b" in unifi_text
+        assert "20 MHz PSD: 17.0 dBm/MHz" in unifi_text
+        assert len(unifi.rnrs) == 2
+
+        args = parse(["--rnr"])
+        records = [aruba, unifi]
+        scanner = app.lswifi()
+        _out, rnr_results, _length, _bssids, _names, _json_out, _new = (
+            scanner.parse_bss_list(Session(records), False, "", "", args)
+        )
+        assert len(rnr_results) == 4
+        scanner.print_rnr_list(rnr_results, "00:11:22:33:44:55", args)
+        printed = capsys.readouterr().out
+        assert "101@160" in printed
+        assert "100@80" in printed
+        assert "85@160" in printed
+
+    def test_reserved_tbtt_length_is_dumped_raw(self):
+        ie = _neighbor_ap(
+            0,
+            True,
+            True,
+            0,
+            3,
+            81,
+            6,
+            [bytes.fromhex("102022")],
+        )
+        bss = _bss_with_ies(b"rnr", ie)
+        text = _rnr_decoded(bss)
+        assert "Filtered Neighbor AP: 1" in text
+        assert "Reserved: 1" in text
+        assert "TBTT Info Length: 3" in text
+        assert "TBTT 0: 10 20 22" in text
+        assert "20 MHz PSD" not in text
+        assert "17.0" not in text
+        assert bss.rnrs == []
+
+        body = bytes([0x00, 0, 81, 1, 0x00, 1, 81, 6, 0x0A])
+        ie = bytes([201, len(body)]) + body
+        text = _rnr_decoded(_bss_with_ies(b"rnr", ie))
+        assert "Channel number: 1" in text
+        assert "Channel number: 6" in text
+        assert "TBTT Offset: 10" in text
+
+        field = bytes.fromhex("0a0200000000011122334400220000007f")
+        assert len(field) == 17
+        ie = _neighbor_ap(0, False, False, 0, 17, 128, 36, [field])
+        text = _rnr_decoded(_bss_with_ies(b"rnr", ie))
+        assert "20 MHz PSD: 17.0 dBm/MHz" in text
+        assert "no limit" not in text
+        assert "7F" not in text
+
+    def test_nonzero_tbtt_field_type_is_raw(self):
+        ie = _neighbor_ap(
+            1,
+            False,
+            False,
+            0,
+            7,
+            81,
+            1,
+            [bytes.fromhex("05112233445566")],
+        )
+        bss = _bss_with_ies(b"rnr", ie)
+        text = _rnr_decoded(bss)
+        assert "TBTT Info Field Type: 1" in text
+        assert "TBTT 0: 05 11 22 33 44 55 66" in text
+        assert "BSSID:" not in text
+        assert bss.rnrs == []
+
+    def test_psd_sentinels_stay_numeric_in_rnr_json(self, tmp_path, capsys):
+        ie = _neighbor_ap(
+            0,
+            False,
+            False,
+            2,
+            9,
+            131,
+            5,
+            [
+                bytes.fromhex("0a020000000001007f"),
+                bytes.fromhex("0a0200000000020080"),
+                bytes.fromhex("0a0200000000030022"),
+            ],
+        )
+        bss = _bss_with_ies(b"psd", ie)
+        lines = [
+            line.strip()
+            for line in _rnr_decoded(bss).splitlines()
+            if "20 MHz PSD" in line
+        ]
+        assert lines == [
+            "20 MHz PSD: no limit",
+            "20 MHz PSD: cannot be used",
+            "20 MHz PSD: 17.0 dBm/MHz",
+        ]
+        assert [_rnr_column(row, "20 MHz") for row in bss.rnrs] == [
+            [63.5],
+            [-64.0],
+            [17.0],
+        ]
+
+        path = tmp_path / "rnr.json"
+        args = parse(["--rnr", "--json", str(path)])
+        scanner = app.lswifi()
+        _out, rnr_results, _length, _bssids, _names, _json_out, _new = (
+            scanner.parse_bss_list(Session([bss]), False, "", str(path), args)
+        )
+        scanner.print_rnr_list(rnr_results, "00:11:22:33:44:55", args)
+        rows = json.loads(capsys.readouterr().out)
+        assert [set(row) for row in rows] == [
+            RNR_JSON_KEYS,
+            RNR_JSON_KEYS,
+            RNR_JSON_KEYS,
+        ]
+        assert [row["20_mhz"] for row in rows] == ["63.5", "-64.0", "17.0"]
+        assert all(isinstance(row["20_mhz"], str) for row in rows)
+        assert all(row["20_mhz"] not in {"no limit", "cannot be used"} for row in rows)
