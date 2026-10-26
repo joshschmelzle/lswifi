@@ -3446,22 +3446,16 @@ class WirelessNetworkBss:
                 out += f", CCFS 1: {six_channel_center_freq_seg_1}"
 
                 if channel_width_value == 3:
-                    if (
-                        abs(
+                    six_ghz_width = "80"
+                    if six_channel_center_freq_seg_1:
+                        gap = abs(
                             six_channel_center_freq_seg_1
                             - six_channel_center_freq_seg_0
                         )
-                        > 16
-                    ):
-                        six_ghz_width = "80+80"
-                    if (
-                        abs(
-                            six_channel_center_freq_seg_1
-                            - six_channel_center_freq_seg_0
-                        )
-                        == 8
-                    ):
-                        six_ghz_width = "160"
+                        if gap == 8:
+                            six_ghz_width = "160"
+                        else:
+                            six_ghz_width = "80+80"
 
                 out += f", Width: {six_ghz_width} MHz"
 
@@ -3553,6 +3547,64 @@ class WirelessNetworkBss:
         out += f"{edata[4]:0b}\n"
         return out
 
+    def _information_element(self, element_id):
+        data = bytes(getattr(self, "iesbytes", b"") or b"")
+        index = 0
+        while index + 2 <= len(data):
+            eid = data[index]
+            length = data[index + 1]
+            end = index + 2 + length
+            if end > len(data):
+                break
+            if eid == element_id:
+                return data[index + 2 : end]
+            index = end
+        return None
+
+    def _vht_secondary_center(self, ccfs1):
+        ccfs2 = 0
+        ht_op = self._information_element(61)
+        if ht_op is not None and len(ht_op) >= 4:
+            operation_mode = ht_op[2] | (ht_op[3] << 8)
+            ccfs2 = (operation_mode & 0x1FE0) >> 5
+
+        support_160 = True
+        support_80_80 = True
+        vht_cap = self._information_element(191)
+        if vht_cap is not None and len(vht_cap) >= 4:
+            info = int.from_bytes(vht_cap[:4], "little")
+            supp_chwidth = (info >> 2) & 0x3
+            ext_nss_bw = (info >> 30) & 0x3
+            key = (supp_chwidth << 4) | ext_nss_bw
+            if key == 0x01:
+                ccfs1 = ccfs2
+                support_80_80 = False
+            elif key in (0x02, 0x03):
+                ccfs1 = ccfs2
+            elif key in (0x11, 0x12) and not ccfs1:
+                ccfs1 = ccfs2
+            elif key not in (0x10, 0x11, 0x12, 0x13, 0x20, 0x23):
+                ccfs1 = 0
+                support_160 = False
+                support_80_80 = False
+        return ccfs1, support_160, support_80_80
+
+    def _vht_operating_width(self, chan_width, ccfs0, ccfs1):
+        if chan_width == 2:
+            return "160"
+        if chan_width == 3:
+            return "80+80"
+        if chan_width != 1:
+            return None
+        center, support_160, support_80_80 = self._vht_secondary_center(ccfs1)
+        if center:
+            gap = abs(center - ccfs0)
+            if gap == 8 and support_160:
+                return "160"
+            if gap > 8 and support_80_80:
+                return "80+80"
+        return "80"
+
     def __parse_vht_operation_element(self, edata):
         """
         bits 2 and 3 of the VHT Operation Info are for the Supported Channel Width Set.
@@ -3570,23 +3622,26 @@ class WirelessNetworkBss:
         out += f"Center Freq. 0: {channel_center_frequency_segment_zero}, "
         channel_center_frequency_segment_one = body[2]
         out += f"Center Freq. 1: {channel_center_frequency_segment_one}"
-        if vht_channel_width:
-            if self is not None:
-                self.channel_width.value = "80"
-                for k, v in _80MHZ_CHANNEL_LIST.items():
-                    if self.channel_number.value in v:
-                        self.channel_list = " ".join(_80MHZ_CHANNEL_LIST[k])
-                # self.channel.number = self.channel.number.split(",")[0] + ",+2"
-                self.vht_channel_width = True
-                self.channel_marking = ""
-            if channel_center_frequency_segment_one > 0:
-                if self is not None:
-                    self.channel_width.value = "160"
-                    self.channel_marking = ""
-                    for k, v in _160MHZ_CHANNEL_LIST.items():
-                        if self.channel_number.value in v:
-                            self.channel_list = " ".join(_160MHZ_CHANNEL_LIST[k])
+        if self is None or not vht_channel_width:
+            return out
+        if is_two_four_band(self.channel_frequency.value):
+            return out
 
+        width = self._vht_operating_width(
+            body[0],
+            channel_center_frequency_segment_zero,
+            channel_center_frequency_segment_one,
+        )
+        if width is None:
+            return out
+        self.channel_width.value = width
+        self.vht_channel_width = True
+        self.channel_marking = ""
+        segments = _160MHZ_CHANNEL_LIST if width == "160" else _80MHZ_CHANNEL_LIST
+        for channels in segments.values():
+            if self.channel_number.value in channels:
+                self.channel_list = " ".join(channels)
+                break
         return out
 
     def __parse_tx_power_envelope(edata):
