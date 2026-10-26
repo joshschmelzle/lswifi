@@ -1917,50 +1917,63 @@ class WirelessNetworkBss:
             self.has_rnr = True
 
         body = list(memoryview(element_data))
+        reserved_lengths = {0, 3, 4, 10, 14, 15}
+        offset = 0
+        blocks = []
 
-        tbtt_info_field_type = body[0] & 0x03  # bits 0-1
-        filtered_neighbor_ap = bool(body[0] & 0x04)  # bit 2
-        reserved_bit3 = bool(body[0] & 0x08)  # bit 3
-        tbtt_information_count = (body[0] >> 4) & 0x0F  # bits 4-7
-        tbtt_information_length = body[1]  # bits 8-15
+        while offset + 4 <= len(body):
+            header = body[offset]
+            tbtt_info_field_type = header & 0x03
+            filtered_neighbor_ap = (header & 0x04) >> 2
+            reserved = (header & 0x08) >> 3
+            tbtt_information_count = (header >> 4) & 0x0F
+            tbtt_information_length = body[offset + 1]
+            operating_class = body[offset + 2]
+            channel_number = body[offset + 3]
+            offset += 4
 
-        operating_class = body[2]
-        channel_number = body[3]
-
-        base_out = (
-            f"Operating Class: {operating_class}, Channel number: {channel_number}"
-        )
-
-        buffer_offset = 4
-        tbtt_count = 0
-
-        if tbtt_info_field_type == 0:
-            for _ in range(tbtt_information_count + 1):  # count is 0-based
-                if buffer_offset >= len(body):
+            lines = [
+                f"TBTT Info Field Type: {tbtt_info_field_type}",
+                f"Filtered Neighbor AP: {filtered_neighbor_ap}",
+                f"Reserved: {reserved}",
+                f"TBTT Info Count: {tbtt_information_count}",
+                f"TBTT Info Length: {tbtt_information_length}",
+                (
+                    f"Operating Class: {operating_class}, "
+                    f"Channel number: {channel_number}"
+                ),
+            ]
+            raw_tbtt = (
+                tbtt_info_field_type != 0 or tbtt_information_length in reserved_lengths
+            )
+            truncated = False
+            for tbtt_count in range(tbtt_information_count + 1):
+                end = offset + tbtt_information_length
+                if tbtt_information_length and end > len(body):
+                    truncated = True
                     break
-
-                tbtt_info_start = buffer_offset
-                tbtt_info_end = min(
-                    tbtt_info_start + tbtt_information_length, len(body)
-                )
-
-                if tbtt_info_end <= tbtt_info_start:
-                    break
-
-                tbtt_info = body[tbtt_info_start:tbtt_info_end]
+                chunk = body[offset:end]
+                offset = end
+                if raw_tbtt:
+                    shown = format_bytes_as_hex(bytes(chunk))
+                    if shown:
+                        lines.append(f"TBTT {tbtt_count}: {shown}")
+                    else:
+                        lines.append(f"TBTT {tbtt_count}:")
+                    continue
                 # self is None when called from decode_bytefile_ies
                 parsed_info = WirelessNetworkBss._parse_tbtt_info_field(
-                    self, tbtt_info, tbtt_count, operating_class, channel_number
+                    self, chunk, tbtt_count, operating_class, channel_number
                 )
                 if parsed_info:
-                    base_out += parsed_info
+                    lines.append(parsed_info.removeprefix("\n"))
                 else:
-                    base_out += ", problem"
+                    lines[-1] += ", problem"
+            blocks.append("\n".join(lines))
+            if truncated:
+                break
 
-                buffer_offset = tbtt_info_end
-                tbtt_count += 1
-
-        return base_out
+        return "\n".join(blocks)
 
     def _parse_tbtt_info_field(
         self, tbtt_info, tbtt_count, operating_class, channel_number
@@ -2043,9 +2056,14 @@ class WirelessNetworkBss:
         if offset < len(tbtt_info):
             psd_raw = tbtt_info[offset]
             offset += 1
-            # Power is expressed in terms of 0.5dBm from -64 to 63 (8-bit 2's complement)
-            twentymhzpsd = twos(psd_raw, 1) * 0.5
-            base_out += f"\n  20 MHz PSD: {twentymhzpsd}"
+            psd_signed = twos(psd_raw, 1)
+            twentymhzpsd = psd_signed * 0.5
+            if psd_signed == 127:
+                base_out += "\n  20 MHz PSD: no limit"
+            elif psd_signed == -128:
+                base_out += "\n  20 MHz PSD: cannot be used"
+            else:
+                base_out += f"\n  20 MHz PSD: {twentymhzpsd} dBm/MHz"
 
         # MLD Parameters (3 octets, if present - Wi-Fi 7)
         if offset + 3 <= len(tbtt_info):
