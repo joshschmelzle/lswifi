@@ -72,6 +72,10 @@ NOT_DETERMINED_MESSAGE = (
     f"{_HIDE} because Location Services is not determined for this "
     "Python; showing RSSI and channel only. lswifi asked for access. "
     "Click Allow in the macOS prompt and run lswifi again. "
+    "If no prompt appears, add Python in "
+    f"{_SETTINGS} (use the + button and pick "
+    f"{os.path.realpath(sys.executable)}), turn it on, and run lswifi "
+    "again. "
     f"{SIGNED_PYTHON_HELP}"
 )
 NOT_REGISTERED_MESSAGE = (
