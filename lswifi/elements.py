@@ -637,6 +637,16 @@ class WirelessNetworkBss:
                 element_length = bytes_to_int(byte)
                 self.log.debug(f"IE {element_id}: length={element_length}")
                 is_length_byte = False
+                if element_length == 0:
+                    self._append_information_elements(
+                        element_id, element_length, b"", information_elements
+                    )
+                    index = 0
+                    is_index_byte = True
+                    is_length_byte = True
+                    element_data = b""
+                    element_id = 0
+                    element_length = 0
                 continue
             if index < element_length:
                 index += 1
@@ -686,6 +696,26 @@ class WirelessNetworkBss:
             if is_length_byte:
                 elength = byte
                 is_length_byte = False
+                if elength == 0:
+                    parsed_ie = WirelessNetworkBss._parse_information_element(
+                        None, eid, elength, b""
+                    )
+                    information_elements.append(
+                        InformationElement(
+                            parsed_ie.eid,
+                            parsed_ie.name,
+                            "0 bytes",
+                            parsed_ie.decoded,
+                            parsed_ie.body,
+                            parsed_ie.pbody,
+                        )
+                    )
+                    count = 0
+                    is_index_byte = True
+                    is_length_byte = True
+                    edata = b""
+                    eid = 0
+                    elength = 0
                 continue
             if count < elength:
                 count = count + 1
@@ -765,6 +795,120 @@ class WirelessNetworkBss:
         except KeyError:
             name = "Undecoded"
         return name
+
+    @staticmethod
+    def _extension_ie_name(ext_name):
+        if isinstance(ext_name, int):
+            return f"Extension {ext_name}"
+        if not ext_name:
+            return WirelessNetworkBss.get_eid_name(255)
+        return WirelessNetworkBss.get_eid_name(255) + f": {ext_name}"
+
+    @staticmethod
+    def _format_basic_eht_mcs_nss(mcs):
+        # IEEE 802.11be: low nibble is Rx NSS, high nibble is Tx NSS. 0 is not supported.
+        ranges = ("MCS 0-7", "MCS 8-9", "MCS 10-11", "MCS 12-13")
+        lines = [f"Basic EHT-MCS And NSS Set: {format_bytes_as_hex(mcs)}"]
+        for label, octet in zip(ranges, mcs, strict=True):
+            rx = octet & 0x0F
+            tx = (octet & 0xF0) >> 4
+            if rx == 0 and tx == 0:
+                lines.append(f"  {label}: not supported")
+            else:
+                rx_text = f"{rx} SS" if rx else "not supported"
+                tx_text = f"{tx} SS" if tx else "not supported"
+                lines.append(f"  {label}: Rx {rx_text}, Tx {tx_text}")
+        return "\n".join(lines)
+
+    def __parse_eht_operation(self, element_data):
+        """EHT Operation (ext 106), sized like ieee80211_eht_oper_size_ok().
+
+        The kernel helper applies to the octets after the Element ID Extension:
+        1 parameter octet + 4 basic MCS/NSS octets, plus 3 operation-info octets
+        when Operation Information Present (0x01) is set, plus a 2-octet
+        Disabled Subchannel Bitmap when that bit (0x02) is also set.
+        """
+        if self is not None:
+            self.phy_type.promote("EHT")
+            if "be" not in self.modes:
+                self.modes.append("be")
+
+        data = bytes(element_data[1:])
+        if not data:
+            raw = format_bytes_as_hex(element_data)
+            if raw:
+                return f"truncated (raw {raw})"
+            return "truncated extension element"
+
+        params = data[0]
+        info_present = bool(params & 0x01)
+        bitmap_present = bool(params & 0x02)
+        lines = [
+            f"EHT Operation Parameters: 0x{params:02x}",
+            f"  Operation Information Present: {params & 0x01}",
+            f"  Disabled Subchannel Bitmap Present: {(params & 0x02) >> 1}",
+            f"  Default PE Duration: {(params & 0x04) >> 2}",
+            f"  Group Addressed BU Indication Limit: {(params & 0x08) >> 3}",
+            f"  Group Addressed BU Indication Exponent: {(params & 0x30) >> 4}",
+        ]
+        if params & 0x40:
+            lines.append("  MCS 15 Disable: 1 (MCS 15 disabled)")
+        else:
+            lines.append("  MCS 15 Disable: 0")
+
+        def truncated(rest):
+            raw = format_bytes_as_hex(rest)
+            if raw:
+                return f"truncated (raw {raw})"
+            return "truncated"
+
+        if len(data) < 5:
+            lines.append(truncated(data[1:]))
+            return "\n".join(lines)
+
+        lines.append(WirelessNetworkBss._format_basic_eht_mcs_nss(data[1:5]))
+        offset = 5
+        if info_present:
+            if len(data) < offset + 3:
+                lines.append(truncated(data[offset:]))
+                return "\n".join(lines)
+            control = data[offset]
+            ccfs0 = data[offset + 1]
+            ccfs1 = data[offset + 2]
+            offset += 3
+            eht_cbw_value = control & 0x7
+            eht_cbw = "20"
+            if eht_cbw_value == 1:
+                eht_cbw = "40"
+            if eht_cbw_value == 2:
+                eht_cbw = "80"
+            if eht_cbw_value == 3:
+                eht_cbw = "160"
+            if eht_cbw_value == 4:
+                eht_cbw = "320"
+            lines.append(
+                f"Channel Width: {eht_cbw} MHz, CCFS 0: {ccfs0}, CCFS 1: {ccfs1}"
+            )
+            if self is not None:
+                self.channel_width.value = eht_cbw
+            if bitmap_present:
+                if len(data) < offset + 2:
+                    lines.append(truncated(data[offset:]))
+                    return "\n".join(lines)
+                bitmap = int.from_bytes(data[offset : offset + 2], "little")
+                punctured = [str(bit) for bit in range(16) if bitmap & (1 << bit)]
+                if punctured:
+                    which = ", ".join(punctured)
+                    lines.append(
+                        f"Disabled Subchannel Bitmap: 0x{bitmap:04x} "
+                        f"(punctured 20 MHz subchannels: {which})"
+                    )
+                else:
+                    lines.append(
+                        f"Disabled Subchannel Bitmap: 0x{bitmap:04x} "
+                        f"(no 20 MHz subchannels punctured)"
+                    )
+        return "\n".join(lines)
 
     @staticmethod
     def _parse_information_element(self, element_id, element_length, element_data):
@@ -1210,12 +1354,21 @@ class WirelessNetworkBss:
 
         # 802.11-2016 Element ID Extension field (255)
         if element_id == 255:
-            ext_name, decoded = WirelessNetworkBss.__parse_extension_tag_element(
-                self, element_data
-            )
+            try:
+                ext_name, decoded = WirelessNetworkBss.__parse_extension_tag_element(
+                    self, element_data
+                )
+            except IndexError:
+                raw = format_bytes_as_hex(element_data)
+                if element_data:
+                    ext_name = EXTENSION_IE_DICT.get(element_data[0], element_data[0])
+                    decoded = f"truncated (raw {raw})"
+                else:
+                    ext_name = None
+                    decoded = "truncated extension element"
             return InformationElement(
                 element_id,
-                WirelessNetworkBss.get_eid_name(element_id) + f": {ext_name}",
+                WirelessNetworkBss._extension_ie_name(ext_name),
                 element_length,
                 decoded,
                 element_data,
@@ -2557,22 +2710,30 @@ class WirelessNetworkBss:
 
         the presence of the Element ID Extension field is determined by the Element ID field.
         """
+        if not element_data:
+            return None, "truncated extension element"
+
         eid_ext = element_data[0]
-
         body = list(memoryview(element_data))
-
         out = ""
-        ext_tag_name = ""
-
         ext_tag_name = EXTENSION_IE_DICT.get(eid_ext, None)
+
+        if self is not None:
+            self.exie_numbers.append(str(eid_ext))
+
+        if ext_tag_name is None:
+            raw = format_bytes_as_hex(element_data)
+            decoded = (
+                "Parser not implemented. Contact developer if you want this supported."
+            )
+            if raw:
+                decoded = f"{decoded} {raw}"
+            return eid_ext, decoded
 
         six_ghz_width = ""
         six_ghz_channel = ""
         six_ghz_frequency = ""
         bss_color = ""
-
-        if self is not None:
-            self.exie_numbers.append(str(eid_ext))
 
         # based on Aruba AP515 802.11ax pcap.
         if eid_ext == 35:  # HE Capabilities
@@ -2838,62 +2999,7 @@ class WirelessNetworkBss:
             pass
 
         if eid_ext == 106:  # Wi-Fi 7/BE/EHT Operation
-            eht_operation_parameters_position = 1
-            eht_operation_information_present = False
-
-            eht_operation_information_present = get_bit(
-                body[eht_operation_parameters_position], 0
-            )
-
-            # D5.0 9-404a
-            # Channel Width subfield encoding is as follows (B0-B2):
-            # Set to 0 for 20 MHz EHT BSS bandwidth.
-            # Set to 1 for 40 MHz EHT BSS bandwidth.
-            # Set to 2 for 80 MHz EHT BSS bandwidth.
-            # Set to 3 for 160 MHz EHT BSS bandwidth.
-            # Set to 4 for 320 MHz EHT BSS bandwidth.
-            # Values in the ranges 5 to 7 are reserved.
-
-            if eht_operation_information_present:
-                eht_control_field_position = eht_operation_parameters_position + 5
-                eht_channel_width_bit0 = get_bit(body[eht_control_field_position], 0)
-                eht_channel_width_bit1 = get_bit(body[eht_control_field_position], 1)
-                eht_channel_width_bit2 = get_bit(body[eht_control_field_position], 2)
-
-                eht_channel_width_bits = bools_to_binary_string(
-                    [
-                        eht_channel_width_bit2,
-                        eht_channel_width_bit1,
-                        eht_channel_width_bit0,
-                    ]
-                )
-                eht_cbw_value = binary_string_to_int(eht_channel_width_bits)
-                eht_cbw = "20"
-                if eht_cbw_value == 1:
-                    eht_cbw = "40"
-                if eht_cbw_value == 2:
-                    eht_cbw = "80"
-                if eht_cbw_value == 3:
-                    eht_cbw = "160"
-                if eht_cbw_value == 4:
-                    eht_cbw = "320"
-
-                out += f"Channel Width: {eht_cbw} MHz"
-
-                # channel center frequency segment 0
-                eht_ccfs0 = body[eht_control_field_position + 1]
-                out += f", CCFS 0: {eht_ccfs0}"
-
-                # channel center frequency segment 1
-                eht_ccfs1 = body[eht_control_field_position + 2]
-                out += f", CCFS 1: {eht_ccfs1}"
-
-            if self is not None:
-                self.phy_type.promote("EHT")
-                if "be" not in self.modes:
-                    self.modes.append("be")
-                if eht_operation_information_present:
-                    self.channel_width.value = eht_cbw
+            out = WirelessNetworkBss.__parse_eht_operation(self, element_data)
 
         if eid_ext == 107:  # BE Multi-Link
             pass
