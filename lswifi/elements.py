@@ -911,6 +911,470 @@ class WirelessNetworkBss:
         return "\n".join(lines)
 
     @staticmethod
+    def _truncated_text(rest):
+        raw = format_bytes_as_hex(rest)
+        if raw:
+            return f"truncated (raw {raw})"
+        return "truncated"
+
+    @staticmethod
+    def _eht_nss_line(label, octet):
+        # IEEE 802.11be: low nibble is Rx NSS, high nibble is Tx NSS. 0 is not supported.
+        rx = octet & 0x0F
+        tx = (octet & 0xF0) >> 4
+        if rx == 0 and tx == 0:
+            return f"  {label}: not supported"
+        rx_text = f"{rx} SS" if rx else "not supported"
+        tx_text = f"{tx} SS" if tx else "not supported"
+        return f"  {label}: Rx {rx_text}, Tx {tx_text}"
+
+    @staticmethod
+    def _eht_mcs_nss_groups(he_phy0, eht_phy0, from_ap):
+        """Bandwidth groups of the Supported EHT-MCS And NSS Set.
+
+        Same selection as ieee80211_eht_mcs_nss_size(). he_phy0 is HE PHY
+        Capabilities Information octet 0: 0x02 (40 MHz in 2.4 GHz) selects
+        only the 3-octet <= 80 MHz map; 0x04 and 0x08 add the <= 80 MHz and
+        160 MHz maps. eht_phy0 bit 0x02 (320 MHz in 6 GHz) adds the 320 MHz
+        map. With none of those bits set, an AP uses the 3-octet map and a
+        non-AP STA uses the 4-octet 20 MHz-only map.
+        """
+        le80 = ("<= 80 MHz", ("MCS 0-9", "MCS 10-11", "MCS 12-13"))
+        bw160 = ("160 MHz", ("MCS 0-9", "MCS 10-11", "MCS 12-13"))
+        bw320 = ("320 MHz", ("MCS 0-9", "MCS 10-11", "MCS 12-13"))
+        only20 = ("20 MHz only", ("MCS 0-7", "MCS 8-9", "MCS 10-11", "MCS 12-13"))
+        if he_phy0 & 0x02:
+            return (le80,)
+        groups = []
+        if he_phy0 & 0x04:
+            groups.append(le80)
+        if he_phy0 & 0x08:
+            groups.append(bw160)
+        if eht_phy0 & 0x02:
+            groups.append(bw320)
+        if groups:
+            return tuple(groups)
+        if from_ap:
+            return (le80,)
+        return (only20,)
+
+    @staticmethod
+    def _format_supported_eht_mcs(mcs, he_phy0, eht_phy0, ppe_present, from_ap):
+        """Return decoded MCS/NSS lines and the max NSS, or None if unsized."""
+        if he_phy0 is None:
+            raw = format_bytes_as_hex(mcs)
+            lines = [f"Supported EHT-MCS And NSS Set: {raw}"] if raw else []
+            return lines, None
+        lines = []
+        offset = 0
+        short = False
+        parsed = bytearray()
+        for name, labels in WirelessNetworkBss._eht_mcs_nss_groups(
+            he_phy0, eht_phy0, from_ap
+        ):
+            need = len(labels)
+            if offset + need > len(mcs):
+                lines.append(WirelessNetworkBss._truncated_text(mcs[offset:]))
+                short = True
+                break
+            chunk = mcs[offset : offset + need]
+            offset += need
+            parsed.extend(chunk)
+            lines.append(
+                f"Supported EHT-MCS And NSS Set ({name}): {format_bytes_as_hex(chunk)}"
+            )
+            for label, octet in zip(labels, chunk, strict=True):
+                lines.append(WirelessNetworkBss._eht_nss_line(label, octet))
+        max_nss = None
+        if parsed:
+            max_nss = 0
+            for octet in parsed:
+                max_nss = max(max_nss, octet & 0x0F, (octet & 0xF0) >> 4)
+        if not short:
+            tail = mcs[offset:]
+            if ppe_present:
+                if tail:
+                    lines.append(f"PPE Thresholds: {format_bytes_as_hex(tail)}")
+                else:
+                    lines.append("PPE Thresholds: truncated")
+            elif tail:
+                lines.append(f"trailing (raw {format_bytes_as_hex(tail)})")
+        return lines, max_nss
+
+    def _he_phy_cap0(self):
+        """HE PHY Capabilities Information octet 0 from this BSS, if present."""
+        ies = getattr(self, "iesbytes", None) if self is not None else None
+        if not ies:
+            return None
+        data = bytes(ies)
+        index = 0
+        end = len(data)
+        while index + 2 <= end:
+            eid = data[index]
+            length = data[index + 1]
+            body = index + 2
+            nxt = body + length
+            if nxt > end:
+                return None
+            # Extension id, 6 MAC octets, then PHY octet 0.
+            if eid == 255 and length >= 8 and data[body] == 35:
+                return data[body + 7]
+            index = nxt
+        return None
+
+    @staticmethod
+    def _eht_stream_text(encoded, active):
+        if not active:
+            return "reserved"
+        return f"{encoded + 1} SS"
+
+    def __parse_eht_capabilities(self, element_data):
+        """EHT Capabilities (ext 108).
+
+        Fixed fields are 2 EHT MAC octets and 9 EHT PHY octets (IEEE 802.11be).
+        The Supported EHT-MCS And NSS Set that follows is sized with
+        ieee80211_eht_mcs_nss_size() from the HE Capabilities PHY octet 0 and
+        the 320 MHz in 6 GHz bit. Scan results are AP elements, so the no-width
+        fallback is the 3-octet map. Without an HE Capabilities element the
+        remaining octets are shown raw. PPE thresholds, when present, are raw.
+        """
+        if self is not None:
+            self.phy_type.promote("EHT")
+            if "be" not in self.modes:
+                self.modes.append("be")
+
+        data = bytes(element_data[1:])
+        if len(data) < 2:
+            return WirelessNetworkBss._truncated_text(data)
+
+        mac0 = data[0]
+        mac1 = data[1]
+        mpdu = {0: "3895", 1: "7991", 2: "11454"}.get((mac0 & 0xC0) >> 6, "reserved")
+        lines = [
+            f"EHT MAC Capabilities: {format_bytes_as_hex(data[:2])}",
+            f"  EPCS Priority Access: {int(bool(mac0 & 0x01))}",
+            f"  OM Control: {int(bool(mac0 & 0x02))}",
+            f"  Triggered TXOP Sharing Mode 1: {int(bool(mac0 & 0x04))}",
+            f"  Triggered TXOP Sharing Mode 2: {int(bool(mac0 & 0x08))}",
+            f"  Restricted TWT: {int(bool(mac0 & 0x10))}",
+            f"  SCS Traffic Description: {int(bool(mac0 & 0x20))}",
+            f"  Max MPDU Length: {mpdu}",
+            f"  Max A-MPDU Length Exponent Extension: {mac1 & 0x01}",
+            f"  EHT TRS: {int(bool(mac1 & 0x02))}",
+            f"  TXOP Return Support: {int(bool(mac1 & 0x04))}",
+            f"  Two BQRs: {int(bool(mac1 & 0x08))}",
+            f"  EHT Link Adaptation: {(mac1 & 0x30) >> 4}",
+            f"  Unsolicited EPCS Priority Access: {int(bool(mac1 & 0x40))}",
+        ]
+        if len(data) < 11:
+            lines.append(WirelessNetworkBss._truncated_text(data[2:]))
+            return "\n".join(lines)
+
+        phy = data[2:11]
+        lines.append(f"EHT PHY Capabilities: {format_bytes_as_hex(phy)}")
+        phy0 = phy[0]
+        su_beamformer = bool(phy0 & 0x20)
+        su_beamformee = bool(phy0 & 0x40)
+        supports_320 = bool(phy0 & 0x02)
+        lines.extend(
+            [
+                f"  320 MHz In 6 GHz: {int(supports_320)}",
+                f"  242-tone RU In BW Wider Than 20 MHz: {int(bool(phy0 & 0x04))}",
+                f"  NDP With 4x EHT-LTF And 3.2 us GI: {int(bool(phy0 & 0x08))}",
+                f"  Partial Bandwidth UL MU-MIMO: {int(bool(phy0 & 0x10))}",
+                f"  SU Beamformer: {int(su_beamformer)}",
+                f"  SU Beamformee: {int(su_beamformee)}",
+            ]
+        )
+        he_phy0 = WirelessNetworkBss._he_phy_cap0(self)
+        # 160 MHz beamformee/sounding fields are reserved on a 2.4 GHz STA
+        # (HE PHY cap0 0x02) and unless HE PHY cap0 0x08 is set. None means
+        # the HE element was not available to decide.
+        if he_phy0 is None:
+            supports_160 = None
+        else:
+            supports_160 = not bool(he_phy0 & 0x02) and bool(he_phy0 & 0x08)
+        ss80 = ((phy[0] & 0x80) >> 7) | ((phy[1] & 0x03) << 1)
+        ss160 = (phy[1] & 0x1C) >> 2
+        ss320 = (phy[1] & 0xE0) >> 5
+        dim80 = phy[2] & 0x07
+        dim160 = (phy[2] & 0x38) >> 3
+        dim320 = ((phy[2] & 0xC0) >> 6) | ((phy[3] & 0x01) << 2)
+        lines.extend(
+            [
+                "  Beamformee SS <= 80 MHz: "
+                + WirelessNetworkBss._eht_stream_text(ss80, su_beamformee),
+                "  Beamformee SS 160 MHz: "
+                + WirelessNetworkBss._eht_stream_text(
+                    ss160, su_beamformee and supports_160 is not False
+                ),
+                "  Beamformee SS 320 MHz: "
+                + WirelessNetworkBss._eht_stream_text(
+                    ss320, su_beamformee and supports_320
+                ),
+                "  Sounding Dimensions <= 80 MHz: "
+                + WirelessNetworkBss._eht_stream_text(dim80, su_beamformer),
+                "  Sounding Dimensions 160 MHz: "
+                + WirelessNetworkBss._eht_stream_text(
+                    dim160, su_beamformer and supports_160 is not False
+                ),
+                "  Sounding Dimensions 320 MHz: "
+                + WirelessNetworkBss._eht_stream_text(
+                    dim320, su_beamformer and supports_320
+                ),
+                f"  Partial Bandwidth DL MU-MIMO: {int(bool(phy[4] & 0x01))}",
+                "  EHT MU PPDU With 4x EHT-LTF And 0.8 us GI: "
+                f"{int(bool(phy[4] & 0x08))}",
+                f"  PPE Thresholds Present: {int(bool(phy[5] & 0x08))}",
+                f"  EHT-MCS 15 52+26 and 106+26-tone MRU: {int(bool(phy[6] & 0x08))}",
+                f"  EHT-MCS 15 80 MHz: {int(bool(phy[6] & 0x10))}",
+                f"  EHT-MCS 15 160 MHz: {int(bool(phy[6] & 0x20))}",
+                f"  EHT-MCS 15 320 MHz: {int(bool(phy[6] & 0x40))}",
+                f"  EHT DUP In 6 GHz (MCS 14): {int(bool(phy[6] & 0x80))}",
+            ]
+        )
+
+        mcs_lines, max_nss = WirelessNetworkBss._format_supported_eht_mcs(
+            data[11:], he_phy0, phy0, bool(phy[5] & 0x08), True
+        )
+        lines.extend(mcs_lines)
+
+        mcs14 = "yes" if phy[6] & 0x80 else "no"
+        mcs15 = "yes" if phy[6] & 0x78 else "no"
+        nss_text = "unknown" if max_nss is None else str(max_nss)
+        lines.append(
+            f"Max NSS: {nss_text}, 320 MHz: {'yes' if supports_320 else 'no'}, "
+            f"MCS 14: {mcs14}, MCS 15: {mcs15}"
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_eml_capabilities(value):
+        """EML Capabilities (2 octets), IEEE 802.11be Tables 9-417i through 9-417m."""
+        emlsr = bool(value & 0x0001)
+        emlmr = bool(value & 0x0080)
+        padding = {
+            0: "0 us",
+            1: "32 us",
+            2: "64 us",
+            3: "128 us",
+            4: "256 us",
+        }.get((value & 0x000E) >> 1, "reserved")
+        delay = (value & 0x0070) >> 4
+        emlsr_delay = {
+            0: "0 us",
+            1: "16 us",
+            2: "32 us",
+            3: "64 us",
+            4: "128 us",
+            5: "256 us",
+        }.get(delay, "reserved")
+        emlmr_delay = {
+            0: "0 us",
+            1: "32 us",
+            2: "64 us",
+            3: "128 us",
+            4: "256 us",
+        }.get(delay, "reserved")
+        timeout = {
+            0: "0",
+            1: "128 us",
+            2: "256 us",
+            3: "512 us",
+            4: "1 TU",
+            5: "2 TU",
+            6: "4 TU",
+            7: "8 TU",
+            8: "16 TU",
+            9: "32 TU",
+            10: "64 TU",
+        }.get((value & 0x7800) >> 11, "reserved")
+        lines = [
+            f"EML Capabilities: 0x{value:04x}",
+            f"  EMLSR Support: {int(emlsr)}",
+            f"  EML Padding Delay: {padding}",
+        ]
+        if emlsr:
+            lines.append(f"  EMLSR Transition Delay: {emlsr_delay}")
+        if emlmr:
+            lines.append(f"  EMLMR Transition Delay: {emlmr_delay}")
+        if not emlsr and not emlmr:
+            lines.append(f"  EML Transition Delay: {delay}")
+        lines.extend(
+            [
+                f"  EMLMR Support: {int(emlmr)}",
+                f"  Transition Timeout: {timeout}",
+            ]
+        )
+        return lines
+
+    @staticmethod
+    def _format_mld_capabilities(value):
+        tid = (value & 0x0060) >> 5
+        tid_name = {
+            0: "not supported",
+            1: "same link set",
+            2: "reserved",
+            3: "different link sets",
+        }[tid]
+        max_links = value & 0x000F
+        return [
+            f"MLD Capabilities And Operations: 0x{value:04x}",
+            f"  Max Simultaneous Links: {max_links + 1} (raw {max_links})",
+            f"  SRS Support: {(value & 0x0010) >> 4}",
+            f"  TID-To-Link Mapping Negotiation: {tid} ({tid_name})",
+            f"  Frequency Separation: {(value & 0x0F80) >> 7}",
+            f"  AAR Support: {(value & 0x1000) >> 12}",
+            f"  Link Reconfiguration Support: {(value & 0x2000) >> 13}",
+            f"  Aligned TWT Support: {(value & 0x4000) >> 14}",
+        ]
+
+    @staticmethod
+    def _format_extended_mld_capabilities(value):
+        recommended = (value & 0x001E) >> 1
+        recommended_text = (
+            "not specified" if recommended == 15 else str(recommended + 1)
+        )
+        return [
+            f"Extended MLD Capabilities And Operations: 0x{value:04x}",
+            f"  Operation Parameter Update: {value & 0x0001}",
+            f"  Recommended Max Simultaneous Links: {recommended_text} (raw {recommended})",
+            f"  NSTR Link Pair Update: {(value & 0x0020) >> 5}",
+            f"  EMLSR Enabled On One Link: {(value & 0x0040) >> 6}",
+            f"  BTM MLD Recommendation For Multiple APs: {(value & 0x0080) >> 7}",
+        ]
+
+    def __parse_multi_link(self, element_data):
+        """Multi-Link (ext 107).
+
+        Octets after the Element ID Extension are the 2-octet Multi-Link
+        Control (type in bits 0-2, presence bitmap in bits 4-15). Type Basic
+        (0) common info follows ieee80211_mle_get_mld_capa_op() order:
+        length, MLD MAC address, then each present optional field. Other
+        types and per-STA profiles are left as raw hex.
+        """
+        data = bytes(element_data[1:])
+        if len(data) < 2:
+            return WirelessNetworkBss._truncated_text(data)
+
+        control = int.from_bytes(data[:2], "little")
+        ml_type = control & 0x0007
+        type_name = {
+            0: "Basic",
+            1: "Probe Request",
+            2: "Reconfiguration",
+            3: "TDLS",
+            4: "Priority Access",
+        }.get(ml_type, f"Unknown ({ml_type})")
+        lines = [
+            f"Multi-Link Control: 0x{control:04x}",
+            f"  Type: {type_name}",
+            f"  Presence: 0x{control & 0xFFF0:04x}",
+        ]
+        if ml_type != 0:
+            raw = format_bytes_as_hex(data[2:])
+            if raw:
+                lines.append(f"  raw {raw}")
+            return "\n".join(lines)
+
+        rest = data[2:]
+        if not rest:
+            lines.append("truncated")
+            return "\n".join(lines)
+
+        declared = rest[0]
+        lines.append(f"Common Info Length: {declared}")
+        available = rest[:declared] if declared <= len(rest) else rest
+        if len(available) < 7:
+            lines.append(WirelessNetworkBss._truncated_text(available[1:]))
+            if declared == 0:
+                tail = rest[1:]
+            elif declared <= len(rest):
+                tail = rest[declared:]
+            else:
+                tail = b""
+            if tail:
+                lines.append(f"Per-STA Profiles: {format_bytes_as_hex(tail)}")
+            return "\n".join(lines)
+
+        lines.append(
+            "MLD MAC Address: " + convert_mac_address_to_string(list(available[1:7]))
+        )
+        offset = 7
+        incomplete = False
+        fields = (
+            (0x0010, 1, "link"),
+            (0x0020, 1, "bss"),
+            (0x0040, 2, "med"),
+            (0x0080, 2, "eml"),
+            (0x0100, 2, "mld"),
+            (0x0200, 1, "mld_id"),
+            (0x0400, 2, "ext"),
+            (0x0800, 1, "enh"),
+            (0x1000, 1, "age"),
+        )
+        for mask, size, kind in fields:
+            if control & mask == 0:
+                continue
+            if offset + size > len(available):
+                lines.append(WirelessNetworkBss._truncated_text(available[offset:]))
+                incomplete = True
+                break
+            chunk = available[offset : offset + size]
+            offset += size
+            if kind == "link":
+                lines.append(f"Link ID: {chunk[0] & 0x0F}")
+            elif kind == "bss":
+                lines.append(f"BSS Parameters Change Count: {chunk[0]}")
+            elif kind == "med":
+                med = int.from_bytes(chunk, "little")
+                duration = med & 0x00FF
+                ed = (med & 0x0F00) >> 8
+                lines.extend(
+                    [
+                        f"Medium Synchronization Delay: 0x{med:04x}",
+                        f"  Duration: {duration} ({duration * 32} us)",
+                        f"  OFDM ED Threshold: {ed} ({-72 + ed} dBm)",
+                        f"  Max Number Of TXOPs: {(med & 0xF000) >> 12}",
+                    ]
+                )
+            elif kind == "eml":
+                lines.extend(
+                    WirelessNetworkBss._format_eml_capabilities(
+                        int.from_bytes(chunk, "little")
+                    )
+                )
+            elif kind == "mld":
+                lines.extend(
+                    WirelessNetworkBss._format_mld_capabilities(
+                        int.from_bytes(chunk, "little")
+                    )
+                )
+            elif kind == "mld_id":
+                lines.append(f"AP MLD ID: {chunk[0]}")
+            elif kind == "ext":
+                lines.extend(
+                    WirelessNetworkBss._format_extended_mld_capabilities(
+                        int.from_bytes(chunk, "little")
+                    )
+                )
+            elif kind == "enh":
+                lines.append(f"Enhanced Critical Update: 0x{chunk[0]:02x}")
+            elif kind == "age":
+                lines.append(f"Age Of BSS Load: {chunk[0]}")
+        if not incomplete and offset < len(available):
+            lines.append(
+                "Additional Common Info: " + format_bytes_as_hex(available[offset:])
+            )
+        if declared > len(rest) and not incomplete:
+            lines.append("truncated")
+        elif declared <= len(rest):
+            tail = rest[declared:]
+            if tail:
+                lines.append(f"Per-STA Profiles: {format_bytes_as_hex(tail)}")
+        return "\n".join(lines)
+
+    @staticmethod
     def _parse_information_element(self, element_id, element_length, element_data):
         if self is not None:
             self.ie_numbers.append(element_id)
@@ -3002,10 +3466,10 @@ class WirelessNetworkBss:
             out = WirelessNetworkBss.__parse_eht_operation(self, element_data)
 
         if eid_ext == 107:  # BE Multi-Link
-            pass
+            out = WirelessNetworkBss.__parse_multi_link(self, element_data)
 
         if eid_ext == 108:  # BE EHT Capabilities
-            pass
+            out = WirelessNetworkBss.__parse_eht_capabilities(self, element_data)
 
         if eid_ext == 110:  # BE Multi-Link Traffic Indication
             pass
