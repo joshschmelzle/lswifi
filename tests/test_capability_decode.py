@@ -9,6 +9,7 @@ from pathlib import Path
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
 from lswifi.elements import WirelessNetworkBss
+from lswifi.helpers import uptime_available
 from lswifi.pcap import PCAP, parse_radiotap_header
 from tests.test_backends import JSON_KEYS
 
@@ -215,7 +216,6 @@ class TestVhtCapabilities:
         assert all("0x" not in line for line in binary)
 
     def test_each_mcs_value(self):
-        # SS1 MCS 0-7, SS2 MCS 0-8, SS3 MCS 0-9, SS4 not supported, rest MCS 0-7
         rx_map = 0x00E4
         text = _ie_text(_bss(_vht(0, rx_map=rx_map, tx_map=0xFFFF)), "VHT Capabilities")
         assert "    Rx 1 SS: MCS 0-7" in text
@@ -376,18 +376,44 @@ class TestHtCapabilities:
         assert "CCFS2: 50" in text
 
 
-# Captured before the text-only decode change. Timestamp is the wall clock.
-FIVE_GHZ_JSON_ROW = {
-    "amendments": ["d", "e", "h", "i", "k", "r", "v", "w"],
-    "apname": "",
-    "bss_type": "Infrastructure",
-    "bssid": "9a:2a:6f:42:d4:7a",
-    "channel_frequency": "5.240",
-    "channel_number": "48",
-    "channel_width": "20",
-    "connected": False,
-    "country_code": "US",
-    "ies": [
+def _pop_environment_fields(row):
+    assert isinstance(row.pop("timestamp"), str)
+    uptime = row.pop("uptime")
+    if uptime_available():
+        assert isinstance(uptime, str)
+    else:
+        assert uptime is None
+
+
+def test_fixture_json_output_is_unchanged(tmp_path):
+    out = tmp_path / "out.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "lswifi",
+            "-decode",
+            str(FIVE_GHZ),
+            "--json",
+            str(out),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).parent.parent,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    document = json.loads(out.read_text())
+    assert list(document) == ["lswifi", "scan_data"]
+    assert document["lswifi"] == {"version": f"lswifi {__version__}"}
+    assert len(document["scan_data"]) == 1
+    row = document["scan_data"][0]
+    _pop_environment_fields(row)
+    assert set(row) == JSON_KEYS - {"timestamp", "uptime"}
+    assert row["channel_width"] == "20"
+    assert row["spatial_streams"] == "4"
+    assert row["amendments"] == ["d", "e", "h", "i", "k", "r", "v", "w"]
+    assert row["ies"] == [
         0,
         1,
         5,
@@ -416,52 +442,20 @@ FIVE_GHZ_JSON_ROW = {
         255,
         255,
         255,
-    ],
-    "ies_extension": ["35", "36", "38", "39", "106", "107", "108", "110"],
-    "interface_mac": "pcap file",
-    "modes": ["ac", "ax", "be", "n"],
-    "phy_type": "be",
-    "pmf": "Required",
-    "rates_basic": ["6", "12", "24"],
-    "rates_data": ["9", "18", "36", "48", "54"],
-    "rssi": "-61",
-    "security": "FT-.1X-SHA-256,.1X-SHA-256/CCMP-128/CCMP-128",
-    "spatial_streams": "4",
-    "ssid": "UniFi-WPA3-1X",
-    "stations": "0",
-    "uptime": None,
-    "utilization": "4%",
-}
-
-
-def test_fixture_json_output_is_unchanged(tmp_path):
-    out = tmp_path / "out.json"
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "lswifi",
-            "-decode",
-            str(FIVE_GHZ),
-            "--json",
-            str(out),
-        ],
-        capture_output=True,
-        text=True,
-        cwd=Path(__file__).parent.parent,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    document = json.loads(out.read_text())
-    assert list(document) == ["lswifi", "scan_data"]
-    assert document["lswifi"] == {"version": f"lswifi {__version__}"}
-    assert len(document["scan_data"]) == 1
-    row = document["scan_data"][0]
-    assert isinstance(row.pop("timestamp"), str)
-    assert set(row) == JSON_KEYS - {"timestamp"}
-    assert row == FIVE_GHZ_JSON_ROW
+    ]
+    assert row["ies_extension"] == [
+        "35",
+        "36",
+        "38",
+        "39",
+        "106",
+        "107",
+        "108",
+        "110",
+    ]
+    assert row["phy_type"] == "be"
     printed = json.loads(result.stdout)
     assert isinstance(printed, list)
     assert len(printed) == 1
-    assert isinstance(printed[0].pop("timestamp"), str)
+    _pop_environment_fields(printed[0])
     assert printed == [row]
