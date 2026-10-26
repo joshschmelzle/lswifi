@@ -4,6 +4,17 @@ Release History
 RELEASED
 --------
 
+0.3.4 (2026-10-26)
+------------------
+
+- On macOS, when Location Services is not determined, the warning says to click Allow in the prompt and run lswifi again (#138).
+- If that prompt never appears, the warning prints this Python's path and says to add it in System Settings > Privacy & Security > Location Services with the + button, turn it on, and run lswifi again (#139).
+- EHT Operation (extension 106) decodes the parameter bits, the Basic EHT-MCS And NSS Set, and the disabled subchannel bitmap when that bit is set. A short element keeps the fields that fit and shows the rest as raw hex. An empty or truncated extension element no longer drops the rest of the information elements. Unknown extension IDs print as `Extension <id>` with the raw body (#140).
+- EHT Capabilities (extension 108) decodes the MAC and PHY capability bits and the Supported EHT-MCS And NSS Set. Basic Multi-Link (extension 107) decodes the common information and prints simultaneous link counts. A short or inconsistent length stays inside the element (#141).
+- A Reduced Neighbor Report lists every neighbor, including the TBTT Information Header on each one. Reserved TBTT lengths are raw hex. 20 MHz PSD is in dBm/MHz: 127 means no limit and -128 means the channel cannot be used (#142).
+- Transmit Power Envelope count N is N+1 EIRP values for 20, 40, 80, and 160 MHz, and a following octet is 320 MHz. A PSD interpretation is one value for the whole BSS when N is 0, and one value per 20 MHz subchannel otherwise. PSD 127 means no limit and -128 means the channel cannot be used (#143).
+- HE Operation prints the 6 GHz minimum rate, Duplicate Beacon, Regulatory Info, and BSS Color even when the color is 0. HE Capabilities reads BQR and PSR Responder from the correct bits, and `spatial_streams` is the larger of the <=80 MHz and 160 MHz counts. Extension element IDs in `--json` and CSV stay strings and sort numerically (#143).
+
 0.3.3 (2026-10-25)
 ------------------
 
