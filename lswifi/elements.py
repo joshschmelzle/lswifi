@@ -3224,30 +3224,25 @@ class WirelessNetworkBss:
             he_mac_cap_oct5 = 5
             he_mac_cap_oct6 = 6
 
-            htc_he_support = get_bit(body[he_mac_cap_oct1], 0)
-            if htc_he_support:
-                out += "+HTC HE Supported"
-            twt_responder = get_bit(body[he_mac_cap_oct1], 2)
-            if twt_responder:
-                out += ", TWT Responder"
-            trs_support = get_bit(body[he_mac_cap_oct3], 2)
-            if trs_support:
-                out += ", TRS Supported"
-            bsr_support = get_bit(body[he_mac_cap_oct3], 3)
-            if bsr_support:
-                out += ", BSR Supported"
-            broadcast_twt_support = get_bit(body[he_mac_cap_oct3], 4)
-            if broadcast_twt_support:
-                out += ", Broadcast TWT Support"
-            bqr_support = get_bit(body[he_mac_cap_oct5], 2)
-            if bqr_support:
-                out += ", BQR Support"
-            psr_responder = get_bit(body[he_mac_cap_oct5], 3)
-            if psr_responder:
-                out += ", PSR Responder"
-            punctured_sounding_support = get_bit(body[he_mac_cap_oct6], 6)
-            if punctured_sounding_support:
-                out += ", Punctured Sounding Support"
+            caps = []
+            if get_bit(body[he_mac_cap_oct1], 0):
+                caps.append("+HTC HE Supported")
+            if get_bit(body[he_mac_cap_oct1], 1):
+                caps.append("TWT Requester")
+            if get_bit(body[he_mac_cap_oct1], 2):
+                caps.append("TWT Responder")
+            if get_bit(body[he_mac_cap_oct3], 2):
+                caps.append("TRS Supported")
+            if get_bit(body[he_mac_cap_oct3], 3):
+                caps.append("BSR Supported")
+            if get_bit(body[he_mac_cap_oct3], 4):
+                caps.append("Broadcast TWT Support")
+            if get_bit(body[he_mac_cap_oct5], 2):
+                caps.append("BQR Support")
+            if get_bit(body[he_mac_cap_oct5], 3):
+                caps.append("PSR Responder")
+            if get_bit(body[he_mac_cap_oct6], 6):
+                caps.append("Punctured Sounding Support")
 
             he_phy_cap_oct1 = 7
 
@@ -3286,7 +3281,14 @@ class WirelessNetworkBss:
             octet7bit6 = get_bit(body[he_phy_cap_oct1], 6)
             twofourtwo_tone_in_5g_and_6g = octet7bit6
             if twofourtwo_tone_in_5g_and_6g:
-                out += ", 242 tone RU supported"
+                caps.append("242 tone RU supported")
+            if get_bit(body[he_phy_cap_oct1 + 2], 6):
+                caps.append("Full BW UL MU-MIMO")
+            if get_bit(body[he_phy_cap_oct1 + 3], 7):
+                caps.append("SU Beamformer")
+            if get_bit(body[he_phy_cap_oct1 + 4], 1):
+                caps.append("MU Beamformer")
+            out = ", ".join(caps)
 
             he_mcs_oct1 = 18
             he_mcs_oct2 = 19
@@ -3402,6 +3404,8 @@ class WirelessNetworkBss:
                 f"Partial BSS Color: {partial_bss_color}, "
                 f"BSS Color Disabled: {bss_color_disabled}"
             )
+            if get_bit(body[1], 3):
+                out += ", TWT Required"
 
             # 6 GHz Operation Information is 0 or 5 octets
 
@@ -3519,39 +3523,74 @@ class WirelessNetworkBss:
         return ext_tag_name, out
 
     def __parse_vht_capabilities_element(self, edata):
-        """
-        first 4 octets are VHT Capabilities Info.
-        then 8 next octets are the supported VHT-MCS and NSS set.
-        """
-        # parse VHT Capabilities Info
+        """VHT Capabilities Info (4 octets) and the supported VHT-MCS and NSS set."""
 
         if self is not None:
             if self.is_5ghz:
                 if "ac" not in self.modes:
                     self.modes.append("ac")
 
-        out = f"VHT Operation Info: 0x{edata[3]:02x}"
-        out += f"{edata[2]:02x}"
-        out += f"{edata[1]:02x}"
-        out += f"{edata[0]:02x}\n"
-        out += "MCS Set\n"
-        out += f"  Rx MCS Map: 0x{edata[11]:02x}"
-        out += f"{edata[10]:02x}"
-        out += f"{edata[9]:02x}"
-        out += f"{edata[8]:02x}\n"
-        out += f"    0x{edata[11]:0b}"
-        out += f"{edata[10]:0b}"
-        out += f"{edata[9]:0b}"
-        out += f"{edata[8]:0b}\n"
-        out += f"  Tx MCS Map: 0x{edata[7]:02x}"
-        out += f"{edata[6]:02x}"
-        out += f"{edata[5]:02x}"
-        out += f"{edata[4]:02x}\n"
-        out += f"    0x{edata[7]:0b}"
-        out += f"{edata[6]:0b}"
-        out += f"{edata[5]:0b}"
-        out += f"{edata[4]:0b}\n"
-        return out
+        if len(edata) < 12:
+            return WirelessNetworkBss._truncated_text(bytes(edata))
+
+        cap = int.from_bytes(edata[0:4], "little")
+        mpdu = ("3895", "7991", "11454", "reserved")[cap & 0x3]
+        width = (
+            "neither 160 MHz nor 80+80",
+            "160 MHz",
+            "160 MHz and 80+80",
+            "reserved",
+        )[(cap >> 2) & 0x3]
+        rx_stbc = (
+            "not supported",
+            "1 SS",
+            "1-2 SS",
+            "1-3 SS",
+            "1-4 SS",
+            "reserved",
+            "reserved",
+            "reserved",
+        )[(cap >> 8) & 0x7]
+        lines = [
+            f"VHT Capabilities Info: 0x{cap:08x}",
+            f"  Max MPDU Length: {mpdu}",
+            f"  Supported Channel Width Set: {width}",
+            f"  Rx LDPC: {int(bool(cap & 0x10))}",
+            f"  Short GI for 80 MHz: {int(bool(cap & 0x20))}",
+            f"  Short GI for 160 MHz and 80+80 MHz: {int(bool(cap & 0x40))}",
+            f"  Tx STBC: {int(bool(cap & 0x80))}",
+            f"  Rx STBC: {rx_stbc}",
+            f"  SU Beamformer: {int(bool(cap & 0x800))}",
+            f"  SU Beamformee: {int(bool(cap & 0x1000))}",
+            f"  MU Beamformer: {int(bool(cap & 0x80000))}",
+            f"  MU Beamformee: {int(bool(cap & 0x100000))}",
+            f"  Extended NSS BW: {(cap >> 30) & 0x3}",
+            "MCS Set",
+        ]
+        lines.extend(
+            WirelessNetworkBss._vht_mcs_map_lines(
+                "Rx", int.from_bytes(edata[4:6], "little")
+            )
+        )
+        lines.extend(
+            WirelessNetworkBss._vht_mcs_map_lines(
+                "Tx", int.from_bytes(edata[8:10], "little")
+            )
+        )
+        return "\n".join(lines)
+
+    @staticmethod
+    def _vht_mcs_map_lines(direction, mcs_map):
+        names = ("MCS 0-7", "MCS 0-8", "MCS 0-9", "not supported")
+        lines = [
+            f"  {direction} MCS Map: 0x{mcs_map:04x}",
+            f"    0b{mcs_map:016b}",
+        ]
+        for ss in range(8):
+            lines.append(
+                f"    {direction} {ss + 1} SS: {names[(mcs_map >> (2 * ss)) & 0x3]}"
+            )
+        return lines
 
     def __parse_vht_operation_element(self, edata):
         """
@@ -3826,11 +3865,25 @@ class WirelessNetworkBss:
                     )
                     self.channel_list = " ".join(channels)
         # print(f"{self.bssid} {self.ssid} {self.channel_width.value}")
-        return (
+        summary = (
             f"Primary Channel: {primary_channel}, "
             f"HT Channel Width: {sta_channel_width}, "
             f"Secondary Channel Offset: {secondary_channel_offset}"
         )
+        if len(body) >= 4:
+            operation_mode = body[2] | (body[3] << 8)
+            protection = (
+                "No protection mode",
+                "HT non-member protection mode",
+                "20 MHz protection mode",
+                "non-HT mixed mode",
+            )[operation_mode & 0x3]
+            summary += (
+                f", HT Protection: {protection}, "
+                f"Non-greenfield STAs Present: {get_bit(body[2], 2)}, "
+                f"CCFS2: {(operation_mode & 0x1FE0) >> 5}"
+            )
+        return summary
 
     def __parse_time_advertisement(self, element_data):
         """
@@ -3863,6 +3916,16 @@ class WirelessNetworkBss:
         supported_channel_width_set = get_bit(body[0], 1)
 
         ss = str(round((body[3] + body[4] + body[5] + body[6]) / 255))
+        rx_stbc = ("not supported", "1 SS", "1-2 SS", "1-3 SS")[body[1] & 0x03]
+        details = (
+            f"Supported Channel Width Set: {supported_channel_width_set}\n"
+            f"LDPC: {get_bit(body[0], 0)}\n"
+            f"SGI 20: {get_bit(body[0], 5)}\n"
+            f"SGI 40: {get_bit(body[0], 6)}\n"
+            f"Tx STBC: {get_bit(body[0], 7)}\n"
+            f"Rx STBC: {rx_stbc}\n"
+            f"40 MHz Intolerant: {get_bit(body[1], 6)}\n"
+        )
 
         if self is not None:
             # set to 0 if only 20 MHz operation is supported
@@ -3876,15 +3939,8 @@ class WirelessNetworkBss:
             else:
                 self.spatial_streams.value = ss
 
-            return (
-                f"Supported Channel Width Set: {supported_channel_width_set}\n"
-                f"Spatial Streams: {self.spatial_streams}"
-            )
-        else:
-            return (
-                f"Supported Channel Width Set: {supported_channel_width_set}\n"
-                f"Spatial Streams: {ss}"
-            )
+            return details + f"Spatial Streams: {self.spatial_streams}"
+        return details + f"Spatial Streams: {ss}"
 
     def __record_security_suites(self, akm_list, pairwise_list, group_name):
         """Fill auth/encryption/security. A second suite (WPA beside RSN) is merged."""
