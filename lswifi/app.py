@@ -83,6 +83,13 @@ def rate_list(rates):
     return text.split(" ") if text else []
 
 
+def exportraw_dir(path: str) -> str:
+    target = os.path.abspath(path)
+    if target.lower().endswith(".pcapng"):
+        return os.path.dirname(target)
+    return target
+
+
 class lswifi:
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -601,9 +608,7 @@ class lswifi:
 
         if args.exportraw:
             if args.export_path:
-                exportraw_path = os.path.abspath(args.export_path)
-                if exportraw_path.lower().endswith(".pcapng"):
-                    exportraw_path = os.path.dirname(exportraw_path)
+                exportraw_path = exportraw_dir(args.export_path)
             else:
                 exportraw_path = os.path.join(
                     app_data_dir(),

@@ -54,15 +54,14 @@ def main():
         return
 
     args = parser.parse_args()
-    if (
-        args.exportraw
-        and args.export_path
-        and os.path.isfile(args.export_path)
-        and not args.export_path.lower().endswith(".pcapng")
-    ):
-        parser.error(
-            f"-path {args.export_path} is a file; -exportraw needs a directory"
-        )
+    if args.exportraw and args.export_path:
+        target = app.exportraw_dir(args.export_path)
+        if os.path.isfile(target):
+            parser.error(f"-path {args.export_path} is a file; -exportraw needs a directory")
+        try:
+            os.makedirs(target, exist_ok=True)
+        except OSError as error:
+            parser.error(f"-path {args.export_path}: {error.strerror or error}")
     appsetup.setup_logger(args)
     log = logging.getLogger(__name__)
     log.debug(f"args {args}")
