@@ -1693,7 +1693,7 @@ class TestInterfaceDetails:
         assert quiet["active"] is False
         assert idle["stats"]["tx_bytes"] == 900
         assert idle["stats"]["rx_bytes"] == 0
-        assert idle["stats"]["signal"] == 0
+        assert idle["stats"]["signal"] is None
         assert idle["stats"]["tx_rate"] is None
         assert idle["stats"]["signal_avg"] is None
         assert active["stats"]["rx_bytes"] == 5000
@@ -1717,7 +1717,9 @@ class TestInterfaceDetails:
             "tx_rate",
         }
         assert quiet["stats"]["rx_bytes"] == 0
+        assert quiet["stats"]["signal"] is None
         assert quiet["stats"]["tx_rate"] is None
+        assert "signal 0 dBm" not in out
         active_line = line(out, "Link 1 (active):")
         assert "signal -45 dBm" in active_line
         assert "rx 5000 B" in active_line
@@ -1727,6 +1729,68 @@ class TestInterfaceDetails:
         assert "signal avg" not in active_line
         assert "tx 900 B" in line(out, "Link 0:")
         assert "(active)" not in line(out, "Link 0:")
+
+    def test_per_link_signal_zero_is_null(self, kernel, backend, tmp_path):
+        backend.proc_net = str(tmp_path)
+        ap1, ap2 = self._three_link_active_on_one(kernel)
+        kernel.link_stations = [
+            station_message(
+                MLD,
+                [
+                    s8(nl.STA_INFO_SIGNAL, 0),
+                    s8(nl.STA_INFO_SIGNAL_AVG, -46),
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        0,
+                        MLD,
+                        sta=[
+                            s8(nl.STA_INFO_SIGNAL, 0),
+                            s8(nl.STA_INFO_SIGNAL_AVG, 0),
+                            nl.attr_u32(nl.STA_INFO_RX_BYTES, 0),
+                        ],
+                    )
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        1,
+                        ap1,
+                        sta=[s8(nl.STA_INFO_SIGNAL, -45)],
+                    )
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        2,
+                        ap2,
+                        sta=[s8(nl.STA_INFO_SIGNAL, 0)],
+                    )
+                ],
+            ),
+        ]
+        out, iface = self.text(kernel, backend)
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["rssi"] is None
+        assert info["signal_avg"] == -46
+        assert info["links"][0]["stats"]["signal"] is None
+        assert info["links"][0]["stats"]["signal_avg"] == 0
+        assert info["links"][0]["stats"]["rx_bytes"] == 0
+        assert info["links"][1]["stats"]["signal"] == -45
+        assert info["links"][2]["stats"]["signal"] is None
+        assert "signal 0 dBm" not in out
+        assert "signal avg 0 dBm" in line(out, "Link 0:")
+        assert "signal -45 dBm" in line(out, "Link 1 (active):")
+        assert "signal" not in line(out, "Link 2:")
 
     def test_per_link_stats_fall_back_when_the_kernel_rejects_the_flag(
         self, kernel, backend, tmp_path

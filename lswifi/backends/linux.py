@@ -534,7 +534,10 @@ _LINK_STAT_FIELDS = (
 def _link_stats(station: dict[str, Any] | None) -> dict[str, Any] | None:
     if not station:
         return None
-    return {key: station.get(key) for key in _LINK_STAT_FIELDS}
+    stats = {key: station.get(key) for key in _LINK_STAT_FIELDS}
+    if stats.get("signal") == 0:
+        stats["signal"] = None
+    return stats
 
 
 def _format_link_stats(stats: dict[str, Any] | None) -> str:
