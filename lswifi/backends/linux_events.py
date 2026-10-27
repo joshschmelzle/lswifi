@@ -539,7 +539,14 @@ class LinkFormatter:
         return self.line(target, "connect_failed", extra, **fields)
 
     def roamed(self, link: LinkInfo) -> EventLine:
+        now = time.monotonic()
         old, self.last = self.last, link
+        starts = [
+            stamp for stamp in (self._auth_at, self._roam_cmd_at) if stamp is not None
+        ]
+        self._connect_at = now
+        self._roam_origin = max(starts) if starts else None
+        self._disc = None
         extra, fields = self.link_extra(link)
         old_mld = None
         if old.bssid:
@@ -687,24 +694,29 @@ class LinkFormatter:
             affected=described,
         )
 
+    def _scan_link(self) -> LinkInfo:
+        if self.last.connected:
+            return self.last
+        return LinkInfo()
+
     def scan_started(self, frequencies: int | None) -> EventLine:
         extra = ""
         fields: dict[str, Any] = {}
         if frequencies is not None:
             extra = f", scan: ({frequencies} frequencies)"
             fields["scan_frequency_count"] = frequencies
-        return self.line(self.last, "scan_started", extra, **fields)
+        return self.line(self._scan_link(), "scan_started", extra, **fields)
 
     def scan_complete(self, count: int) -> EventLine:
         return self.line(
-            self.last,
+            self._scan_link(),
             "scan_complete",
             f", scan: ({count} BSSIDs found)",
             scan_bssid_count=count,
         )
 
     def scan_aborted(self) -> EventLine:
-        return self.line(self.last, "scan_aborted")
+        return self.line(self._scan_link(), "scan_aborted")
 
 
 class LinuxEventWatcher:

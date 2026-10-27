@@ -2885,6 +2885,57 @@ class TestEvents:
         assert "scan_bssid_count" not in aborted.record
         assert "scan_frequency_count" not in aborted.record
 
+    def test_scan_events_omit_association_when_not_associated(self, kernel, backend):
+        self._two_link(kernel)
+        kernel.bss = [bss_attrs(0x01, 2412)]
+        watcher, _ = self._watch(kernel, backend)
+        (associated,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN))
+        assert "ap_mld: (68:51:34:7c:32:05)" in associated
+        assert "ssid: (wlanpiwlanpi)" in associated
+        assert "links:" in associated
+        assert associated.record["bssid"] == "68:51:34:7c:32:05"
+        assert associated.record["ssid"] == "wlanpiwlanpi"
+        assert [item["id"] for item in associated.record["links"]] == [0, 2]
+
+        watcher.handle(
+            self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1))
+        )
+        hidden = (
+            "bssid",
+            "ssid",
+            "ssid_hex",
+            "links",
+            "ap_mld",
+            "freq_mhz",
+            "rssi",
+            "channel",
+            "width_mhz",
+            "band",
+        )
+
+        def bare(line, event):
+            assert f"event: ({event})" in line
+            assert line.startswith("(02:00:00:00:00:63)")
+            assert "bssid:" not in line
+            assert "ap_mld:" not in line
+            assert "ssid:" not in line
+            assert "freq:" not in line
+            assert "links:" not in line
+            assert "rssi:" not in line
+            for key in hidden:
+                assert key not in line.record
+            assert line.record["interface_mac"] == "02:00:00:00:00:63"
+
+        (started,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN))
+        bare(started, "scan_started")
+        assert "scan_frequency_count" not in started.record
+        (done,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
+        bare(done, "scan_complete")
+        assert done.record["scan_bssid_count"] == 1
+        assert "scan: (1 BSSIDs found)" in done
+        (aborted,) = watcher.handle(self.msg(nl.CMD_SCAN_ABORTED))
+        bare(aborted, "scan_aborted")
+
     def test_scan_dump_failure_does_not_stop_watch(self, kernel, backend, monkeypatch):
         watcher, _ = self.watcher(kernel, backend)
 
@@ -3045,6 +3096,54 @@ class TestEvents:
         assert late.record["roam"] is False
         assert "roam_type" not in late.record
         assert "roam_ms" not in late.record
+
+    def test_port_authorized_after_kernel_roam_times_from_the_roam(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        (joined,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert joined.record["roam"] is False
+        clock["t"] = 1000.25
+        (first,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert first.record["since_connect_ms"] == 250
+        assert "roam_total_ms" not in first.record
+
+        clock["t"] = 5000.0
+        watcher.handle(
+            self.msg(
+                nl.CMD_AUTHENTICATE,
+                nl.pack_attr(nl.ATTR_FRAME, auth_frame(2)),
+            )
+        )
+        clock["t"] = 5000.25
+        self._join(kernel, 0x23)
+        (roamed,) = watcher.handle(
+            self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x23)))
+        )
+        assert roamed.record["event"] == "roamed"
+        assert "roam" not in roamed.record
+        clock["t"] = 5000.5
+        (port,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert port.record["since_connect_ms"] == 250
+        assert port.record["roam_total_ms"] == 250
+        assert "since_connect_ms: (250)" in port
+        assert "roam_total_ms: (250)" in port
+
+        clock["t"] = 8000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 8000.125
+        watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22))))
+        clock["t"] = 8002.0
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert "roam_ms" not in conn.record
 
     def test_failed_attempt_does_not_type_the_next_roam(
         self, kernel, backend, monkeypatch
