@@ -330,11 +330,6 @@ class lswifi:
             sys.exit(-1)
         except asyncio.CancelledError:
             raise
-        except SystemExit as error:
-            if error == 0:
-                log.error(error)
-            else:
-                pass
 
         sys.exit(0)
 
@@ -1243,7 +1238,7 @@ class lswifi:
 
         if not os.path.isfile(args.decode):
             print(f"{args.decode} file does not exist on file system... exiting...")
-            return
+            sys.exit(-1)
 
         try:
             pcap = PCAP(args.decode, mode="r")
@@ -1704,6 +1699,7 @@ class lswifi:
                 print(data)
         else:
             print(f"{args.decoderaw} file does not exist on file system... exiting...")
+            sys.exit(-1)
 
 
 def run(args, **kwargs) -> None:

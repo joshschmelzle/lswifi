@@ -519,8 +519,9 @@ class TestFakeBackend:
 
     def test_run_table(self, capsys):
         backend = FakeBackend(fake_records())
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["-all"]), backend=backend)
+        assert exited.value.code == 0
         out = capsys.readouterr().out
         assert "Wi-Fi 7" in out
         assert "98:8f:00:9a:a4:80(*)" in out
@@ -528,8 +529,9 @@ class TestFakeBackend:
 
     def test_run_list_interfaces(self, capsys):
         backend = FakeBackend([])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["--list-interfaces"]), backend=backend)
+        assert exited.value.code == 0
         out = capsys.readouterr().out
         assert "Connection Name: Wi-Fi" in out
         assert "GUID: 00000000-0000-0000-0000-000000000000" in out
@@ -537,15 +539,33 @@ class TestFakeBackend:
 
     def test_run_interface_info(self, capsys):
         backend = FakeBackend([])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["-ap"]), backend=backend)
+        assert exited.value.code == 0
         assert "INTERFACE: Wi-Fi" in capsys.readouterr().out
 
     def test_run_watchevents_unsupported(self, caplog):
         backend = FakeBackend([])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["--watchevents"]), backend=backend)
+        assert exited.value.code == -1
         assert "--watchevents is unsupported on fake" in caplog.text
+
+    def test_run_without_interfaces_exits_nonzero(self, caplog):
+        backend = FakeBackend([])
+        backend.list_interfaces = lambda: []
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse(["-all"]), backend=backend)
+        assert exited.value.code == -1
+        assert "no wireless interfaces found" in caplog.text
+
+    @pytest.mark.parametrize("flag", ["-decode", "-decoderaw"])
+    def test_decode_missing_file_exits_nonzero(self, tmp_path, flag, capsys):
+        missing = str(tmp_path / "missing.ies")
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse([flag, missing]), backend=None)
+        assert exited.value.code == -1
+        assert "does not exist" in capsys.readouterr().out
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="checks the non-Windows CLI")
