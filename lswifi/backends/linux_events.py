@@ -504,6 +504,8 @@ class LinkFormatter:
                 origin = disc_at
             elif self._recent(self._auth_at, now):
                 origin = self._auth_at
+            elif self._recent(self._roam_cmd_at, now):
+                origin = self._roam_cmd_at
         fields["roam"] = roam
         extra += f", roam: ({'yes' if roam else 'no'})"
         kind = roam_kind(self._auth_alg, self._request_ies(attrs)) if roam else None

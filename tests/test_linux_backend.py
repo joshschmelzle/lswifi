@@ -3143,7 +3143,33 @@ class TestEvents:
             self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
         )
         assert conn.record["roam"] is True
-        assert "roam_ms" not in conn.record
+        assert conn.record["roam_ms"] == 1875
+
+    def test_connect_then_port_authorized_keeps_kernel_roam_origin(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        clock["t"] = 3000.0
+        watcher, _ = self.watcher(kernel, backend)
+        (roamed,) = watcher.handle(
+            self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22)))
+        )
+        assert roamed.record["event"] == "roamed"
+        clock["t"] = 3000.25
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert conn.record["roam_ms"] == 250
+        assert "roam_ms: (250)" in conn
+        assert "roam_type" not in conn.record
+        clock["t"] = 3000.5
+        (port,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert port.record["since_connect_ms"] == 250
+        assert port.record["roam_total_ms"] == 500
+        assert "since_connect_ms: (250)" in port
+        assert "roam_total_ms: (500)" in port
 
     def test_failed_attempt_does_not_type_the_next_roam(
         self, kernel, backend, monkeypatch
