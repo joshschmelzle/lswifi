@@ -34,7 +34,7 @@ pytest==9.0.3
     # via -r tests.in
 requests==2.33.0
     # via genbadge
-scapy==2.6.1
+scapy==2.8.0
     # via -r tests.in
 urllib3==2.8.0
     # via requests
