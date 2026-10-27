@@ -110,9 +110,20 @@ def redacted_network(**kw):
     return FakeNetwork(channel=FakeChannel(149, macos.CW_CHANNEL_BAND_6GHZ, 4), **kw)
 
 
+_DEFAULT_CHANNEL = object()
+
+
 class FakeInterface:
-    def __init__(self, networks=(), cached=(), error=None, bssid=None):
-        self.networks, self.cached, self.error, self._bssid = networks, cached, error, bssid
+    def __init__(
+        self, networks=(), cached=(), error=None, bssid=None, channel=_DEFAULT_CHANNEL
+    ):
+        self.networks, self.cached, self.error, self._bssid = (
+            networks,
+            cached,
+            error,
+            bssid,
+        )
+        self._channel = channel
 
     def interfaceName(self):
         return "en0"
@@ -133,7 +144,9 @@ class FakeInterface:
         return None
 
     def wlanChannel(self):
-        return FakeChannel(44, macos.CW_CHANNEL_BAND_5GHZ, 1)
+        if self._channel is _DEFAULT_CHANNEL:
+            return FakeChannel(44, macos.CW_CHANNEL_BAND_5GHZ, 1)
+        return self._channel
 
     def rssiValue(self):
         return -44
@@ -202,7 +215,9 @@ class TestFrequency:
 
 class TestMapper:
     def test_granted(self):
-        record = network_to_record(granted_network(), connected_bssid="98:8f:00:9a:a4:80")
+        record = network_to_record(
+            granted_network(), connected_bssid="98:8f:00:9a:a4:80"
+        )
         assert record.ssid == b"Wi-Fi 7"
         assert record.bssid == "98:8f:00:9a:a4:80"
         assert record.frequency_mhz == 2412
@@ -242,7 +257,12 @@ class TestMapper:
         """IE-derived columns equal decoding the same bytes directly"""
         mac = WirelessNetworkBss(network_to_record(granted_network()))
         direct = WirelessNetworkBss(
-            BssRecord(ssid=b"Wi-Fi 7", bssid="98:8f:00:9a:a4:80", frequency_mhz=2412, ies=ARUBA_IES)
+            BssRecord(
+                ssid=b"Wi-Fi 7",
+                bssid="98:8f:00:9a:a4:80",
+                frequency_mhz=2412,
+                ies=ARUBA_IES,
+            )
         )
         for attr in ("security", "pmf", "channel_width", "spatial_streams", "phy_type"):
             assert str(getattr(mac, attr)) == str(getattr(direct, attr)), attr
@@ -275,7 +295,9 @@ class TestBackend:
         assert backend.supports_events is True
 
     def test_scan(self):
-        cw = FakeInterface(networks=[granted_network(), redacted_network()], bssid="98:8F:00:9A:A4:80")
+        cw = FakeInterface(
+            networks=[granted_network(), redacted_network()], bssid="98:8F:00:9A:A4:80"
+        )
         backend = MacOSBackend(fake_corewlan(cw))
         records = backend.scan(backend.list_interfaces()[0])
         assert sorted(r.bssid for r in records) == ["", "98:8f:00:9a:a4:80"]
@@ -357,7 +379,9 @@ class TestBackend:
         assert str(bss.security) == "PSK,SAE/CCMP-128/CCMP-128"
         assert "?" not in str(bss.auth) and "?" not in str(bss.encryption)
 
-    @pytest.mark.parametrize("capability, expected", [(0x0011, "WEP"), (0x0001, "NONE")])
+    @pytest.mark.parametrize(
+        "capability, expected", [(0x0011, "WEP"), (0x0001, "NONE")]
+    )
     def test_windows_privacy_bit_unaffected(self, capability, expected):
         """a record with a real capability field keeps NONE vs WEP"""
         ies = bytes([0, 4]) + b"open" + bytes([1, 1, 0x82])
@@ -375,7 +399,11 @@ class TestBackend:
     @pytest.mark.parametrize(
         "argv, expected",
         [
-            (["-channel"], "INTERFACE: en0, MAC: c0:c7:db:00:00:01, CHANNEL: 44"),
+            (
+                ["-channel"],
+                "INTERFACE: en0, MAC: c0:c7:db:00:00:01, CHANNEL: 44, "
+                "BAND: 5 GHz, FREQ: 5220",
+            ),
             (["-ap", "-channel", "-raw"], "aa:bb:cc:dd:ee:ff, 44"),
             (["--supported"], "unsupported on macOS"),
         ],
@@ -386,6 +414,84 @@ class TestBackend:
         assert expected in out
         if "--supported" in argv:
             assert "AP uptime isn't available on macOS" in out
+
+    @pytest.mark.parametrize(
+        "number, band_id, band, freq",
+        [
+            (6, macos.CW_CHANNEL_BAND_2GHZ, "2.4 GHz", 2437),
+            (44, macos.CW_CHANNEL_BAND_5GHZ, "5 GHz", 5220),
+            (69, macos.CW_CHANNEL_BAND_6GHZ, "6 GHz", 6295),
+        ],
+    )
+    def test_channel_includes_band_and_frequency(self, number, band_id, band, freq):
+        cw = FakeInterface(
+            bssid="AA:BB:CC:DD:EE:FF",
+            channel=FakeChannel(number, band_id, 1),
+        )
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        text = (
+            "INTERFACE: en0, MAC: c0:c7:db:00:00:01, "
+            f"CHANNEL: {number}, BAND: {band}, FREQ: {freq}"
+        )
+        assert backend.interface_info(parse(["-channel"]), iface) == text
+        both = (
+            "INTERFACE: en0, MAC: c0:c7:db:00:00:01, "
+            f"BSSID: aa:bb:cc:dd:ee:ff, CHANNEL: {number}, BAND: {band}, FREQ: {freq}"
+        )
+        assert backend.interface_info(parse(["-ap", "-channel"]), iface) == both
+        assert backend.interface_info(parse(["-channel", "-raw"]), iface) == str(number)
+        assert backend.interface_info(parse(["-ap", "-channel", "-raw"]), iface) == (
+            f"aa:bb:cc:dd:ee:ff, {number}"
+        )
+        assert backend.interface_info(parse(["-ap"]), iface) == (
+            "INTERFACE: en0, MAC: c0:c7:db:00:00:01, BSSID: aa:bb:cc:dd:ee:ff"
+        )
+        info = json.loads(backend.interface_info(parse(["-channel", "--json"]), iface))
+        assert list(info) == ["interface", "mac", "channel", "band", "freq_mhz"]
+        assert info["channel"] == number
+        assert isinstance(info["channel"], int)
+        assert info["band"] == band
+        assert info["freq_mhz"] == freq
+        both_info = json.loads(
+            backend.interface_info(parse(["-ap", "-channel", "--json"]), iface)
+        )
+        assert list(both_info) == [
+            "interface",
+            "mac",
+            "bssid",
+            "channel",
+            "band",
+            "freq_mhz",
+        ]
+        ap = json.loads(backend.interface_info(parse(["-ap", "--json"]), iface))
+        assert list(ap) == ["interface", "mac", "bssid"]
+
+    def test_channel_omits_band_when_channel_band_is_unknown(self):
+        cw = FakeInterface(
+            bssid="AA:BB:CC:DD:EE:FF",
+            channel=FakeChannel(1, 0, 1),
+        )
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        assert backend.interface_info(parse(["-channel"]), iface) == (
+            "INTERFACE: en0, MAC: c0:c7:db:00:00:01, CHANNEL: 1"
+        )
+        info = json.loads(backend.interface_info(parse(["-channel", "--json"]), iface))
+        assert list(info) == ["interface", "mac", "channel"]
+        assert info["channel"] == 1
+
+    def test_channel_omits_band_without_a_channel(self):
+        cw = FakeInterface(bssid="AA:BB:CC:DD:EE:FF", channel=None)
+        backend = MacOSBackend(fake_corewlan(cw))
+        iface = backend.list_interfaces()[0]
+        assert backend.interface_info(parse(["-channel"]), iface) == (
+            "INTERFACE: en0, MAC: c0:c7:db:00:00:01, CHANNEL: None"
+        )
+        assert backend.interface_info(parse(["-channel", "-raw"]), iface) == "None"
+        info = json.loads(backend.interface_info(parse(["-channel", "--json"]), iface))
+        assert list(info) == ["interface", "mac", "channel"]
+        assert info["channel"] is None
 
     def test_get_interfaces_hides_unavailable_fields(self):
         cw = FakeInterface(bssid="AA:BB:CC:DD:EE:FF")

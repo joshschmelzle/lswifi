@@ -1599,13 +1599,23 @@ class LinuxBackend:
                 fields["bssid"] = link.bssid or ""
             if args.get_current_channel:
                 fields["channel"] = link.channel
+            band = link.band if args.get_current_channel else None
+            freq_mhz = link.frequency_mhz if band is not None else None
             if args.json:
-                return json.dumps(base | fields, indent=args.json_indent)
+                payload = base | fields
+                if band is not None:
+                    payload["band"] = band
+                if freq_mhz is not None:
+                    payload["freq_mhz"] = freq_mhz
+                return json.dumps(payload, indent=args.json_indent)
             if args.raw:
                 return ", ".join(str(value) for value in fields.values())
-            return ", ".join(
-                f"{key.upper()}: {value}" for key, value in (base | fields).items()
-            )
+            shown = base | fields
+            if band is not None:
+                shown["band"] = band
+            if freq_mhz is not None:
+                shown["freq"] = freq_mhz
+            return ", ".join(f"{key.upper()}: {value}" for key, value in shown.items())
 
         bus_type, bus = self.sysfs.bus_info(native.name)
         bus_text = f"{bus_type} {bus}" if bus_type else None

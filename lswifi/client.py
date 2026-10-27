@@ -507,6 +507,33 @@ class NotificationObject:
         self.callback = callback
 
 
+def _bss_freq_mhz(bss) -> int | None:
+    number = getattr(bss, "channel_number", None)
+    raw = getattr(number, "frequency", None)
+    if isinstance(raw, bool) or not isinstance(raw, int | str):
+        return None
+    try:
+        mhz = int(raw)
+    except ValueError:
+        return None
+    if mhz <= 0:
+        return None
+    return mhz
+
+
+def _band_label(frequency) -> str | None:
+    if frequency is None or frequency == "":
+        return None
+    text = str(frequency)
+    if is_two_four_band(text):
+        return "2.4 GHz"
+    if is_five_band(text):
+        return "5 GHz"
+    if is_six_band(text):
+        return "6 GHz"
+    return None
+
+
 def parse_result(result, data_type, **kwargs):
     data = kwargs.get("data")
     try:
@@ -557,6 +584,8 @@ def get_interface_info(args, iface) -> str:
     if not args.supported:
         # print(interface_info.items())
         bssid = ""
+        band = None
+        freq_mhz = None
         for key, result in interface_info.items():
             if key == "current_connection" and isinstance(
                 result[0], WLAN_API.WLANConnectionAttributes
@@ -629,6 +658,7 @@ def get_interface_info(args, iface) -> str:
                 rssi = None
                 channel = None
                 band = None
+                freq_mhz = None
                 try:
                     bss_list = WLAN_API.WLAN.get_wireless_network_bss_list(
                         iface, is_bytes_arg=False
@@ -638,12 +668,12 @@ def get_interface_info(args, iface) -> str:
                             rssi = bss.rssi
                             channel = bss.channel_number.value
                             freq = bss.channel_frequency.value
-                            if is_two_four_band(freq):
-                                band = "2.4 GHz"
-                            elif is_five_band(freq):
-                                band = "5 GHz"
-                            elif is_six_band(freq):
-                                band = "6 GHz"
+                            mhz = _bss_freq_mhz(bss)
+                            band = _band_label(mhz) if mhz is not None else None
+                            if band is None:
+                                band = _band_label(freq)
+                                mhz = None
+                            freq_mhz = mhz
                             break
                 except Exception:
                     pass
@@ -732,51 +762,39 @@ def get_interface_info(args, iface) -> str:
             if "failed" not in result and key == "channel_number":
                 channel_from_query = result[0].value
 
-                if args.get_current_ap and args.get_current_channel:
-                    if args.json:
-                        return json.dumps(
-                            {
-                                "interface": iface.connection_name,
-                                "mac": iface.mac,
-                                "bssid": bssid,
-                                "channel": channel_from_query,
-                            },
-                            indent=args.json_indent,
-                        )
-                    elif args.raw:
-                        return f"{bssid}, {channel_from_query}"
-                    else:
-                        return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}, CHANNEL: {channel_from_query}"
-
-                if args.get_current_ap:
-                    if args.json:
-                        return json.dumps(
-                            {
-                                "interface": iface.connection_name,
-                                "mac": iface.mac,
-                                "bssid": bssid,
-                            },
-                            indent=args.json_indent,
-                        )
-                    elif args.raw:
-                        return bssid
-                    else:
-                        return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, BSSID: {bssid}"
-
-                if args.get_current_channel:
-                    if args.json:
-                        return json.dumps(
-                            {
-                                "interface": iface.connection_name,
-                                "mac": iface.mac,
-                                "channel": channel_from_query,
-                            },
-                            indent=args.json_indent,
-                        )
-                    elif args.raw:
+                if args.get_current_ap or args.get_current_channel:
+                    if args.raw:
+                        if args.get_current_ap and args.get_current_channel:
+                            return f"{bssid}, {channel_from_query}"
+                        if args.get_current_ap:
+                            return bssid
                         return channel_from_query
-                    else:
-                        return f"INTERFACE: {iface.connection_name}, MAC: {iface.mac}, CHANNEL: {channel_from_query}"
+
+                    info = {
+                        "interface": iface.connection_name,
+                        "mac": iface.mac,
+                    }
+                    if args.get_current_ap:
+                        info["bssid"] = bssid
+                    if args.get_current_channel:
+                        info["channel"] = channel_from_query
+                        if band is not None:
+                            info["band"] = band
+                        if freq_mhz is not None:
+                            info["freq_mhz"] = freq_mhz
+                    if args.json:
+                        return json.dumps(info, indent=args.json_indent)
+                    labels = {
+                        "interface": "INTERFACE",
+                        "mac": "MAC",
+                        "bssid": "BSSID",
+                        "channel": "CHANNEL",
+                        "band": "BAND",
+                        "freq_mhz": "FREQ",
+                    }
+                    return ", ".join(
+                        f"{labels[key]}: {value}" for key, value in info.items()
+                    )
 
         return outstr
     else:

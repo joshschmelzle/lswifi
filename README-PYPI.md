@@ -162,7 +162,7 @@ options:
   --display-ethers      display the list of saved ethers; (BSSID,APNAME) mapping
   --data-location       displays where config items are stored on the local machine
   -ap                   print the BSSID of the connected AP
-  -channel              print the channel of the connected AP
+  -channel              print the channel, band, and frequency of the connected AP
   -raw                  format output as the raw value for other scripts (for -ap and -channel only)
   --get-interfaces      print current Wi-Fi status and information
   --list-interfaces     print a list of available WLAN interfaces
