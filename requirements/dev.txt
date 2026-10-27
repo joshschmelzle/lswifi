@@ -100,7 +100,7 @@ pyyaml==6.0.2
     # via pre-commit
 requests==2.33.0
     # via genbadge
-ruff==0.17.1
+ruff==0.17.2
     # via -r dev.in
 scapy==2.6.1
     # via -r tests.in
