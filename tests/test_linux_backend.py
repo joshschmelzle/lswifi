@@ -184,6 +184,8 @@ class FakeKernel:
         self.interfaces = [iface_attrs(5, "wlan1")]
         self.bss = [bss_attrs(0x01, 2412, channel=1)]
         self.stations: list[bytes] = []
+        self.link_stations: list[bytes] | None = None
+        self.reject_link_stats = False
         self.surveys: list[bytes] = []
         self.band_payloads = None
         self.wiphy_messages = None
@@ -272,7 +274,15 @@ class FakeKernel:
                 ]
             return multi(CMD_NEW_WIPHY, items)
         if msg.cmd == nl.CMD_GET_STATION:
-            return multi(nl.CMD_NEW_STATION, self.stations)
+            flagged = nl.ATTR_STA_DUMP_LINK_STATS in msg.attrs
+            if flagged and self.reject_link_stats:
+                return [nl.build_error(seq, -errno.EINVAL)]
+            items = (
+                self.link_stations
+                if flagged and self.link_stations is not None
+                else self.stations
+            )
+            return multi(nl.CMD_NEW_STATION, items)
         if msg.cmd == nl.CMD_GET_SURVEY:
             if self.survey_error:
                 return [nl.build_error(seq, -self.survey_error)]
@@ -768,6 +778,59 @@ class TestInterfaceInfo:
         assert info["bssid"] == "02:00:00:00:00:21"
         assert info["channel"] == 36
         assert info["state"] == "connected"
+        assert info["links"] is None
+        assert info["ap_mld"] is None
+        assert info["frequency_mhz"] == 5180
+        assert info["band"] == "5 GHz"
+        assert info["width_mhz"] == 80
+        assert set(info) == {
+            "interface",
+            "mac",
+            "description",
+            "state",
+            "ssid",
+            "bssid",
+            "ap_mld",
+            "channel",
+            "frequency_mhz",
+            "band",
+            "width_mhz",
+            "center_freq1_mhz",
+            "center_freq2_mhz",
+            "interface_mode",
+            "rssi",
+            "signal_chains",
+            "signal_avg",
+            "signal_avg_chains",
+            "beacon_signal_avg",
+            "ack_signal",
+            "ack_signal_avg",
+            "tx_rate_mbps",
+            "tx_rate",
+            "rx_rate_mbps",
+            "rx_rate",
+            "tx_retries",
+            "tx_failed",
+            "rx_packets",
+            "tx_packets",
+            "rx_bytes",
+            "tx_bytes",
+            "tx_duration_us",
+            "rx_duration_us",
+            "connected_time_s",
+            "inactive_time_ms",
+            "beacon_loss",
+            "expected_throughput_mbps",
+            "channel_busy_percent",
+            "tx_power_dbm",
+            "supported_channels",
+            "phy",
+            "gateway_ip",
+            "gateway_mac",
+            "links",
+            "country_code",
+            "bus",
+        }
 
     def test_disconnected(self, kernel, backend):
         out = backend.interface_info(
@@ -1083,8 +1146,11 @@ class TestInterfaceDetails:
                 "frequency_mhz": 6135,
                 "channel": 37,
                 "band": "6 GHz",
+                "active": None,
+                "stats": None,
             }
         ]
+        assert info["ap_mld"] == "68:51:34:7c:32:05"
         assert info["interface_mode"] == "managed"
 
     def test_mlo_stats_only_inside_one_link(self, kernel, backend, tmp_path):
@@ -1098,7 +1164,9 @@ class TestInterfaceDetails:
         )
         assert line(out, "Receive (Rx) Rate:") == "Receive (Rx) Rate: 24 Mbps"
         assert line(out, "Link 0:") == (
-            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
+            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz, "
+            "signal -41 dBm, signal avg -41 dBm, rx 52323 B, tx 1795 B, "
+            "rx 214 pkts, tx 14 pkts, rx 24 Mbps, tx 288.2 Mbps"
         )
         assert out.count("Transmit (Tx) Rate:") == 1
 
@@ -1111,7 +1179,8 @@ class TestInterfaceDetails:
         )
         out, _iface = self.text(kernel, backend)
         assert line(out, "Receive (Rx) Rate:") == "Receive (Rx) Rate: 24 Mbps"
-        assert "6 Mbps" not in out
+        assert "6 Mbps" not in line(out, "Receive (Rx) Rate:")
+        assert "rx 6 Mbps" in line(out, "Link 0:")
 
     def test_two_links_without_aggregate_are_not_hoisted(
         self, kernel, backend, tmp_path
@@ -1132,11 +1201,17 @@ class TestInterfaceDetails:
         )
         out, _iface = self.text(kernel, backend)
         assert "Transmit (Tx) Rate:" not in out
+        per_link = (
+            "signal -41 dBm, signal avg -41 dBm, rx 52323 B, tx 1795 B, "
+            "rx 214 pkts, tx 14 pkts, rx 24 Mbps, tx 288.2 Mbps"
+        )
         assert line(out, "Link 0:") == (
-            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz"
+            "Link 0: AP BSSID 68:51:34:7c:32:05, channel 37, 6135 MHz, 6 GHz, "
+            + per_link
         )
         assert line(out, "Link 1:") == (
-            "Link 1: AP BSSID 68:51:34:7c:32:06, channel 42, 5210 MHz, 5 GHz"
+            "Link 1: AP BSSID 68:51:34:7c:32:06, channel 42, 5210 MHz, 5 GHz, "
+            + per_link
         )
 
     def test_interface_mlo_link_is_the_channel(self, kernel, backend, tmp_path):
@@ -1154,8 +1229,8 @@ class TestInterfaceDetails:
         ]
         kernel.stations = [station_message(MLD, BE_STA)]
         out, iface = self.text(kernel, backend)
-        assert line(out, "Link 0:") == (
-            "Link 0: STA a6:b1:f5:a2:1e:29, channel 37, 6135 MHz, 6 GHz, "
+        assert line(out, "Link 0 (active):") == (
+            "Link 0 (active): STA a6:b1:f5:a2:1e:29, channel 37, 6135 MHz, 6 GHz, "
             "80 MHz, center 6145 MHz, 22 dBm"
         )
         assert line(out, "Channel:") == "Channel: 37"
@@ -1206,9 +1281,9 @@ class TestInterfaceDetails:
         out, iface = self.text(kernel, backend)
         assert line(out, "AP MLD:") == "AP MLD: 68:51:34:7c:32:05"
         assert "\n    BSSID:" not in out
-        assert line(out, "Link 0:") == (
-            "Link 0: AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, channel 37, "
-            "6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
+        assert line(out, "Link 0 (active):") == (
+            "Link 0 (active): AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, "
+            "channel 37, 6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
         )
         assert line(out, "Link 2:") == (
             "Link 2: AP BSSID 68:51:34:7c:31:f5, STA 7a:e3:a9:42:cd:3a, channel 11, "
@@ -1249,6 +1324,11 @@ class TestInterfaceDetails:
         assert info["links"][1]["band"] == "2.4 GHz"
         assert "width_mhz" not in info["links"][1]
         assert "tx_power_dbm" not in info["links"][1]
+        assert info["links"][0]["active"] is True
+        assert info["links"][1]["active"] is False
+        assert info["links"][0]["stats"] is None
+        assert info["links"][1]["stats"] is None
+        assert info["ap_mld"] == info["bssid"] == "68:51:34:7c:32:05"
 
     def test_placeholder_mld_signal_dropped_with_per_link_signal(
         self, kernel, backend, tmp_path
@@ -1286,13 +1366,14 @@ class TestInterfaceDetails:
         ]
         out, iface = self.text(kernel, backend)
         assert "RSSI" not in out
-        assert line(out, "Link 0:") == (
-            "Link 0: AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, channel 37, "
-            "6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
+        assert line(out, "Link 0 (active):") == (
+            "Link 0 (active): AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, "
+            "channel 37, 6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm, "
+            "signal -40 dBm"
         )
         assert line(out, "Link 2:") == (
             "Link 2: AP BSSID 68:51:34:7c:31:f5, STA 7a:e3:a9:42:cd:3a, channel 11, "
-            "2462 MHz, 2.4 GHz"
+            "2462 MHz, 2.4 GHz, signal -62 dBm"
         )
         info = json.loads(
             backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
@@ -1345,9 +1426,9 @@ class TestInterfaceDetails:
         ]
         out, iface = self.text(kernel, backend)
         assert line(out, "AP MLD:") == "AP MLD: 68:51:34:7c:32:05"
-        assert line(out, "Link 0:") == (
-            "Link 0: AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, channel 37, "
-            "6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
+        assert line(out, "Link 0 (active):") == (
+            "Link 0 (active): AP BSSID 68:51:34:7c:32:05, STA a6:b1:f5:a2:1e:29, "
+            "channel 37, 6135 MHz, 6 GHz, 80 MHz, center 6145 MHz, 22 dBm"
         )
         assert line(out, "Link 2:") == (
             "Link 2: AP BSSID 68:51:34:7c:31:f5, STA 7a:e3:a9:42:cd:3a, channel 11, "
@@ -1377,6 +1458,434 @@ class TestInterfaceDetails:
         assert info["links"][1]["channel"] == 11
         assert info["links"][1]["band"] == "2.4 GHz"
         assert len(info["links"]) == 2
+
+    def _three_link_active_on_one(self, kernel):
+        sta0 = bytes.fromhex("a6b1f5a21e29")
+        sta1 = bytes.fromhex("a6b1f5a21e2a")
+        sta2 = bytes.fromhex("a6b1f5a21e2b")
+        ap1 = bytes.fromhex("6851347c3206")
+        ap2 = bytes.fromhex("6851347c31f5")
+        kernel.interfaces = [
+            iface_attrs(
+                3,
+                "wlan0",
+                ssid=b"mlo-net",
+                freq=None,
+                links=[
+                    mlo_link(0, sta0),
+                    mlo_link(1, sta1, 5280, width=1, center1=5280, tx_mbm=2200),
+                    mlo_link(2, sta2, tx_mbm=1800),
+                ],
+                last=0x63,
+            )
+        ]
+        kernel.bss = [
+            associated_bss(MLD, 5975, 0, MLD),
+            associated_bss(ap1, 5280, 1, MLD),
+            associated_bss(ap2, 2462, 2, MLD),
+        ]
+        return ap1, ap2
+
+    def test_active_link_channel_is_not_link_zero(self, kernel, backend, tmp_path):
+        backend.proc_net = str(tmp_path)
+        ap1, _ap2 = self._three_link_active_on_one(kernel)
+        kernel.stations = [
+            station_message(
+                MLD,
+                [s8(nl.STA_INFO_SIGNAL, -45), EHT_TX],
+                [
+                    mlo_link(0, MLD),
+                    mlo_link(1, ap1),
+                    mlo_link(2, bytes.fromhex("6851347c31f5")),
+                ],
+            )
+        ]
+        out, iface = self.text(kernel, backend)
+        assert line(out, "Channel:") == "Channel: 56"
+        assert line(out, "Frequency:") == "Frequency: 5280 MHz"
+        assert line(out, "Band:") == "Band: 5 GHz"
+        assert line(out, "Width:") == "Width: 20 MHz"
+        assert line(out, "Center Frequency:") == "Center Frequency: 5280 MHz"
+        assert "Link 1 (active):" in out
+        assert "Link 0 (active)" not in out
+        assert "Link 2 (active)" not in out
+        assert "5975 MHz" in line(out, "Link 0:")
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["channel"] == 56
+        assert info["frequency_mhz"] == 5280
+        assert info["band"] == "5 GHz"
+        assert info["width_mhz"] == 20
+        assert info["center_freq1_mhz"] == 5280
+        assert info["bssid"] == "68:51:34:7c:32:05"
+        assert info["ap_mld"] == "68:51:34:7c:32:05"
+        assert [item["active"] for item in info["links"]] == [False, True, False]
+        assert info["links"][0]["frequency_mhz"] == 5975
+        assert info["links"][1]["frequency_mhz"] == 5280
+        assert info["links"][1]["channel"] == 56
+        assert info["links"][2]["frequency_mhz"] == 2462
+        assert "width_mhz" not in info["links"][0]
+        assert info["links"][1]["width_mhz"] == 20
+        assert "width_mhz" not in info["links"][2]
+        assert info["links"][2]["tx_power_dbm"] == 18.0
+
+    def test_association_link_when_no_link_is_active(self, kernel, backend, tmp_path):
+        backend.proc_net = str(tmp_path)
+        sta0 = bytes.fromhex("a6b1f5a21e29")
+        sta1 = bytes.fromhex("a6b1f5a21e2a")
+        sta2 = bytes.fromhex("a6b1f5a21e2b")
+        ap1 = bytes.fromhex("6851347c3206")
+        ap2 = bytes.fromhex("6851347c31f5")
+        kernel.interfaces = [
+            iface_attrs(
+                3,
+                "wlan0",
+                ssid=b"mlo-net",
+                freq=None,
+                links=[mlo_link(0, sta0), mlo_link(1, sta1), mlo_link(2, sta2)],
+                last=0x63,
+            )
+        ]
+        kernel.bss = [
+            associated_bss(MLD, 5975, 0, MLD),
+            associated_bss(ap1, 5280, 1, MLD),
+            associated_bss(ap2, 2462, 2, MLD),
+        ]
+        kernel.stations = [
+            station_message(MLD, [s8(nl.STA_INFO_SIGNAL, -40)])
+            + nl.attr_u8(nl.ATTR_MLO_LINK_ID, 1)
+        ]
+        _out, iface = self.text(kernel, backend)
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["frequency_mhz"] == 5280
+        assert info["channel"] == 56
+        assert info["band"] == "5 GHz"
+        assert info["width_mhz"] is None
+        assert [item["active"] for item in info["links"]] == [False, False, False]
+
+    def test_several_active_links_prefer_the_association_link(
+        self, kernel, backend, tmp_path
+    ):
+        backend.proc_net = str(tmp_path)
+        kernel.interfaces = [
+            iface_attrs(
+                3,
+                "wlan0",
+                ssid=b"mlo-net",
+                freq=None,
+                links=[
+                    mlo_link(
+                        0,
+                        bytes.fromhex("a6b1f5a21e29"),
+                        5975,
+                        width=5,
+                        center1=6025,
+                        tx_mbm=2200,
+                    ),
+                    mlo_link(
+                        1,
+                        bytes.fromhex("a6b1f5a21e2a"),
+                        5280,
+                        width=1,
+                        center1=5280,
+                        tx_mbm=2000,
+                    ),
+                ],
+                last=0x63,
+            )
+        ]
+        kernel.stations = [
+            station_message(MLD, [s8(nl.STA_INFO_SIGNAL, -40)])
+            + nl.attr_u8(nl.ATTR_MLO_LINK_ID, 1)
+        ]
+        iface = backend.list_interfaces()[0]
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert [item["active"] for item in info["links"]] == [True, True]
+        assert info["frequency_mhz"] == 5280
+        assert info["channel"] == 56
+        assert info["width_mhz"] == 20
+        assert info["center_freq1_mhz"] == 5280
+        assert info["tx_power_dbm"] == 20.0
+        assert info["ap_mld"] == "68:51:34:7c:32:05"
+
+    def test_per_link_station_stats_follow_the_dump(self, kernel, backend, tmp_path):
+        backend.proc_net = str(tmp_path)
+        ap1, ap2 = self._three_link_active_on_one(kernel)
+        aggregate = [
+            s8(nl.STA_INFO_SIGNAL, 0),
+            s8(nl.STA_INFO_SIGNAL_AVG, -46),
+            EHT_TX,
+            legacy_bitrate(nl.STA_INFO_RX_BITRATE, 3249),
+            nl.attr_u32(nl.STA_INFO_RX_BYTES, 5000),
+            nl.attr_u32(nl.STA_INFO_TX_BYTES, 900),
+        ]
+        kernel.stations = [station_message(MLD, aggregate)]
+        kernel.link_stations = [
+            station_message(MLD, aggregate),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        0,
+                        MLD,
+                        sta=[
+                            s8(nl.STA_INFO_SIGNAL, 0),
+                            nl.attr_u32(nl.STA_INFO_RX_BYTES, 0),
+                            nl.attr_u32(nl.STA_INFO_TX_BYTES, 900),
+                            nl.attr_u32(nl.STA_INFO_RX_PACKETS, 0),
+                            nl.attr_u32(nl.STA_INFO_TX_PACKETS, 8),
+                        ],
+                    )
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        1,
+                        ap1,
+                        sta=[
+                            s8(nl.STA_INFO_SIGNAL, -45),
+                            nl.attr_u32(nl.STA_INFO_RX_BYTES, 5000),
+                            nl.attr_u32(nl.STA_INFO_TX_BYTES, 0),
+                            nl.attr_u32(nl.STA_INFO_RX_PACKETS, 40),
+                            nl.attr_u32(nl.STA_INFO_TX_PACKETS, 0),
+                            legacy_bitrate(nl.STA_INFO_RX_BITRATE, 3249),
+                        ],
+                    )
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        2,
+                        ap2,
+                        sta=[
+                            s8(nl.STA_INFO_SIGNAL, 0),
+                            nl.attr_u32(nl.STA_INFO_RX_BYTES, 0),
+                            nl.attr_u32(nl.STA_INFO_TX_BYTES, 0),
+                        ],
+                    )
+                ],
+            ),
+        ]
+        out, iface = self.text(kernel, backend)
+        requests = [msg for msg in kernel.sent if msg.cmd == nl.CMD_GET_STATION]
+        assert requests
+        assert all(nl.ATTR_STA_DUMP_LINK_STATS in msg.attrs for msg in requests)
+        assert nl.ATTR_STA_DUMP_LINK_STATS == 367
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["tx_rate_mbps"] == 288.2
+        assert info["rx_rate_mbps"] == 324.9
+        assert info["signal_avg"] == -46
+        assert info["rssi"] is None
+        idle, active, quiet = info["links"]
+        assert idle["active"] is False
+        assert active["active"] is True
+        assert quiet["active"] is False
+        assert idle["stats"]["tx_bytes"] == 900
+        assert idle["stats"]["rx_bytes"] == 0
+        assert idle["stats"]["signal"] is None
+        assert idle["stats"]["tx_rate"] is None
+        assert idle["stats"]["signal_avg"] is None
+        assert active["stats"]["rx_bytes"] == 5000
+        assert active["stats"]["tx_bytes"] == 0
+        assert active["stats"]["rx_packets"] == 40
+        assert active["stats"]["signal"] == -45
+        assert active["stats"]["signal_avg"] is None
+        assert active["stats"]["tx_rate"] is None
+        assert active["stats"]["rx_rate"]["mbps"] == 324.9
+        assert active["stats"]["tx_retries"] is None
+        assert set(active["stats"]) == {
+            "signal",
+            "signal_avg",
+            "rx_bytes",
+            "tx_bytes",
+            "rx_packets",
+            "tx_packets",
+            "tx_retries",
+            "tx_failed",
+            "rx_rate",
+            "tx_rate",
+        }
+        assert quiet["stats"]["rx_bytes"] == 0
+        assert quiet["stats"]["signal"] is None
+        assert quiet["stats"]["tx_rate"] is None
+        assert "signal 0 dBm" not in out
+        active_line = line(out, "Link 1 (active):")
+        assert "signal -45 dBm" in active_line
+        assert "rx 5000 B" in active_line
+        assert "tx 0 B" in active_line
+        assert "rx 324.9 Mbps" in active_line
+        assert "288.2" not in active_line
+        assert "signal avg" not in active_line
+        assert "tx 900 B" in line(out, "Link 0:")
+        assert "(active)" not in line(out, "Link 0:")
+
+    def test_per_link_signal_zero_is_null(self, kernel, backend, tmp_path):
+        backend.proc_net = str(tmp_path)
+        ap1, ap2 = self._three_link_active_on_one(kernel)
+        kernel.link_stations = [
+            station_message(
+                MLD,
+                [
+                    s8(nl.STA_INFO_SIGNAL, 0),
+                    s8(nl.STA_INFO_SIGNAL_AVG, -46),
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        0,
+                        MLD,
+                        sta=[
+                            s8(nl.STA_INFO_SIGNAL, 0),
+                            s8(nl.STA_INFO_SIGNAL_AVG, 0),
+                            nl.attr_u32(nl.STA_INFO_RX_BYTES, 0),
+                        ],
+                    )
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        1,
+                        ap1,
+                        sta=[s8(nl.STA_INFO_SIGNAL, -45)],
+                    )
+                ],
+            ),
+            station_message(
+                MLD,
+                links=[
+                    mlo_link(
+                        2,
+                        ap2,
+                        sta=[s8(nl.STA_INFO_SIGNAL, 0)],
+                    )
+                ],
+            ),
+        ]
+        out, iface = self.text(kernel, backend)
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        assert info["rssi"] is None
+        assert info["signal_avg"] == -46
+        assert info["links"][0]["stats"]["signal"] is None
+        assert info["links"][0]["stats"]["signal_avg"] == 0
+        assert info["links"][0]["stats"]["rx_bytes"] == 0
+        assert info["links"][1]["stats"]["signal"] == -45
+        assert info["links"][2]["stats"]["signal"] is None
+        assert "signal 0 dBm" not in out
+        assert "signal avg 0 dBm" in line(out, "Link 0:")
+        assert "signal -45 dBm" in line(out, "Link 1 (active):")
+        assert "signal" not in line(out, "Link 2:")
+
+    def test_per_link_stats_fall_back_when_the_kernel_rejects_the_flag(
+        self, kernel, backend, tmp_path
+    ):
+        backend.proc_net = str(tmp_path)
+        ap1, _ap2 = self._three_link_active_on_one(kernel)
+        kernel.reject_link_stats = True
+        kernel.stations = [
+            station_message(
+                MLD,
+                [s8(nl.STA_INFO_SIGNAL, -45), EHT_TX],
+                [mlo_link(0, MLD), mlo_link(1, ap1)],
+            )
+        ]
+        iface = backend.list_interfaces()[0]
+        requests_before = len(kernel.sent)
+        info = json.loads(
+            backend.interface_info(parse(["--get-interfaces", "--json"]), iface)
+        )
+        requests = [
+            msg
+            for msg in kernel.sent[requests_before:]
+            if msg.cmd == nl.CMD_GET_STATION
+        ]
+        assert len(requests) == 2
+        assert nl.ATTR_STA_DUMP_LINK_STATS in requests[0].attrs
+        assert nl.ATTR_STA_DUMP_LINK_STATS not in requests[1].attrs
+        assert info["channel"] == 56
+        assert info["frequency_mhz"] == 5280
+        assert info["tx_rate_mbps"] == 288.2
+        assert info["rssi"] == -45
+        assert info["links"][1]["active"] is True
+        assert info["links"][0]["stats"] is None
+        assert info["links"][1]["stats"] is None
+
+    def test_watchevents_follow_the_active_link(self, kernel, backend):
+        ap1, _ap2 = self._three_link_active_on_one(kernel)
+        kernel.stations = [
+            station_message(
+                MLD,
+                [s8(nl.STA_INFO_SIGNAL, 0), EHT_TX],
+                [mlo_link(1, ap1, 5280)],
+            )
+        ]
+        lines: list = []
+        watcher = LinuxEventWatcher(
+            backend,
+            backend.list_interfaces(),
+            parse(["--watchevents"]),
+            emit=lines.append,
+        )
+        (watching,) = watcher.start()
+        assert watching.record["freq_mhz"] == 5280
+        assert watching.record["channel"] == 56
+        assert watching.record["width_mhz"] == 20
+        assert watching.record["band"] == "5 GHz"
+        assert watching.record["ap_mld"] == "68:51:34:7c:32:05"
+        assert "old_ap_mld" not in watching.record
+        assert [item["active"] for item in watching.record["links"]] == [
+            False,
+            True,
+            False,
+        ]
+        assert watching.record["links"][1]["stats"] is None
+
+        def msg(cmd, *attrs):
+            raw = event(cmd, nl.attr_u32(nl.ATTR_IFINDEX, 3) + b"".join(attrs))
+            return nl.to_genl(next(nl.iter_messages(raw)))
+
+        (idle,) = watcher.handle(
+            msg(
+                nl.CMD_CH_SWITCH_NOTIFY,
+                nl.attr_u8(nl.ATTR_MLO_LINK_ID, 0),
+                nl.attr_u32(nl.ATTR_WIPHY_FREQ, 5955),
+                nl.attr_u32(nl.ATTR_CHANNEL_WIDTH, 5),
+            )
+        )
+        assert idle.record["freq_mhz"] == 5280
+        assert idle.record["channel"] == 56
+        assert idle.record["width_mhz"] == 20
+        assert idle.record["links"][0]["frequency_mhz"] == 5955
+        assert idle.record["links"][0]["active"] is False
+        assert idle.record["links"][1]["frequency_mhz"] == 5280
+        assert "event: (link_channel_change)" in idle
+        (moved,) = watcher.handle(
+            msg(
+                nl.CMD_CH_SWITCH_NOTIFY,
+                nl.attr_u8(nl.ATTR_MLO_LINK_ID, 1),
+                nl.attr_u32(nl.ATTR_WIPHY_FREQ, 5300),
+                nl.attr_u32(nl.ATTR_CHANNEL_WIDTH, 1),
+            )
+        )
+        assert moved.record["freq_mhz"] == 5300
+        assert moved.record["channel"] == 60
+        assert moved.record["width_mhz"] == 20
 
     def test_split_wiphy_dump_merges_channels(self, kernel, backend):
         kernel.interfaces = [
@@ -1600,6 +2109,9 @@ class TestEvents:
             "ssid: (ExampleNet), rssi: (-48), event: (watching), "
             "channel: (36@80 5 GHz), tx_rate: (864.5 Mbps)"
         )
+        assert "old_ap_mld" not in lines[0].record
+        assert "ap_mld" not in lines[0].record
+        assert "links" not in lines[0].record
 
     def test_disconnect_with_reason(self, kernel, backend):
         watcher, _ = self.watcher(kernel, backend)
@@ -1632,6 +2144,9 @@ class TestEvents:
         assert "old_freq: (5180)" in line
         assert "channel: (5@80 6 GHz)" in line
         assert line.record["old_bssid"] == "02:00:00:00:00:21"
+        assert line.record["old_ap_mld"] is None
+        assert "old_ap_mld:" not in line
+        assert "ap_mld" not in line.record
         assert line.record["freq_mhz"] == 5975
 
     def test_connect_and_failure(self, kernel, backend):
@@ -1640,6 +2155,8 @@ class TestEvents:
             self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
         )
         assert "event: (connected)" in ok
+        assert ok.record["old_ap_mld"] is None
+        assert "old_ap_mld:" not in ok
         (bad,) = watcher.handle(
             self.msg(
                 nl.CMD_CONNECT,
@@ -1757,6 +2274,8 @@ class TestEvents:
         assert "links: (0: 68:51:34:7c:32:05 6 GHz ch 37@80, " in connected
         assert connected.record["rssi"] is None
         assert connected.record["freq_mhz"] == 6135
+        assert connected.record["old_ap_mld"] is None
+        assert "old_ap_mld:" not in connected
 
     def test_bss_dump_links_in_watchevents(self, kernel, backend):
         active = bytes.fromhex("a6b1f5a21e29")
@@ -1945,6 +2464,86 @@ class TestEvents:
         assert line.record["ap_mld"] == "68:51:34:7c:32:05"
         assert line.record["bssid"] == "68:51:34:7c:32:05"
         assert "mld" not in line.record
+        assert "old_ap_mld" not in line.record
+
+    def test_old_ap_mld_on_roam_and_reconnect(self, kernel, backend):
+        self._two_link(kernel)
+        watcher, _lines = self._watch(kernel, backend)
+        new_mld = bytes.fromhex("6851347c32aa")
+        kernel.stations = [
+            station_message(
+                new_mld,
+                [
+                    s8(nl.STA_INFO_SIGNAL, -50),
+                    legacy_bitrate(nl.STA_INFO_TX_BITRATE, 688),
+                ],
+            )
+        ]
+        (roamed,) = watcher.handle(
+            self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, new_mld))
+        )
+        assert roamed.record["bssid"] == "68:51:34:7c:32:aa"
+        assert roamed.record["old_bssid"] == "68:51:34:7c:32:05"
+        assert roamed.record["old_ap_mld"] == "68:51:34:7c:32:05"
+        assert "old_ap_mld: (68:51:34:7c:32:05)" in roamed
+        assert "old_bssid: (68:51:34:7c:32:05)" in roamed
+        assert '"old_ap_mld": "68:51:34:7c:32:05"' in dumps(
+            roamed.record, timestamp="2026-01-01T00:00:00.000+00:00"
+        )
+
+        self._two_link(kernel)
+        (back,) = watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, MLD)))
+        assert back.record["old_bssid"] == "68:51:34:7c:32:aa"
+        assert back.record["old_ap_mld"] == "68:51:34:7c:32:aa"
+        assert "old_ap_mld: (68:51:34:7c:32:aa)" in back
+
+        (gone,) = watcher.handle(
+            self.msg(
+                nl.CMD_DISCONNECT,
+                nl.attr_u16(nl.ATTR_REASON_CODE, 3),
+            )
+        )
+        assert "old_ap_mld" not in gone.record
+        kernel.stations = [station_message(new_mld, [s8(nl.STA_INFO_SIGNAL, -55)])]
+        (connected,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert connected.record["old_bssid"] == "68:51:34:7c:32:05"
+        assert connected.record["old_ap_mld"] == "68:51:34:7c:32:05"
+        assert connected.record["bssid"] == "68:51:34:7c:32:aa"
+        assert "old_ap_mld: (68:51:34:7c:32:05)" in connected
+        assert '"old_ap_mld": "68:51:34:7c:32:05"' in dumps(
+            connected.record, timestamp="2026-01-01T00:00:00.000+00:00"
+        )
+
+    def test_connect_failed_keeps_previous_ap_mld(self, kernel, backend):
+        self._two_link(kernel)
+        watcher, _lines = self._watch(kernel, backend)
+        (gone,) = watcher.handle(
+            self.msg(
+                nl.CMD_DISCONNECT,
+                nl.attr_u16(nl.ATTR_REASON_CODE, 3),
+            )
+        )
+        assert gone.record["ap_mld"] == "68:51:34:7c:32:05"
+        (failed,) = watcher.handle(
+            self.msg(
+                nl.CMD_CONNECT,
+                nl.pack_attr(nl.ATTR_MAC, mac(0x44)),
+                nl.attr_u16(nl.ATTR_STATUS_CODE, 17),
+            )
+        )
+        assert "event: (connect_failed)" in failed
+        assert failed.record["bssid"] == "02:00:00:00:00:44"
+        assert "old_ap_mld" not in failed.record
+        new_mld = bytes.fromhex("6851347c32aa")
+        kernel.stations = [station_message(new_mld, [s8(nl.STA_INFO_SIGNAL, -55)])]
+        (connected,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert connected.record["bssid"] == "68:51:34:7c:32:aa"
+        assert connected.record["old_bssid"] == "68:51:34:7c:32:05"
+        assert connected.record["old_ap_mld"] == "68:51:34:7c:32:05"
 
     def test_missing_fields_are_hidden_and_json_null(self):
         formatter = LinkFormatter("02:00:00:00:00:13")

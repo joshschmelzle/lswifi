@@ -32,6 +32,7 @@ from lswifi.backends.base import BackendError, InterfaceInfo
 from lswifi.backends.linux import (
     LinkInfo,
     LinuxInterface,
+    _choose_link,
     _public_link,
     band_name,
     channel_number,
@@ -42,6 +43,8 @@ from lswifi.helpers import format_mbps
 from lswifi.watchjson import event_record, shared_writer, watch_json_requested
 
 log = logging.getLogger(__name__)
+
+_MISSING: Any = object()
 
 # IEEE 802.11-2020 Table 9-50, the common status codes for connect_failed
 STATUS_CODES = {
@@ -73,7 +76,9 @@ def _snapshot(link: LinkInfo) -> dict[str, Any]:
     channel = link.channel
     band = link.band
     if len(links) > 1 and freq is None:
-        primary = next((item for item in links if item.get("id") == 0), links[0])
+        assoc = link.extra.get("assoc_link_id")
+        assoc_id = assoc if isinstance(assoc, int) else None
+        primary = _choose_link(links, assoc_id) or links[0]
         freq = primary.get("frequency_mhz")
         width = primary.get("width_mhz")
         channel = primary.get("channel")
@@ -152,12 +157,18 @@ def links_from_attrs(attrs: dict[int, bytes]) -> list[dict[str, Any]]:
     return found
 
 
-def _association_id(links: list[dict[str, Any]]) -> Any:
-    for item in links:
-        if item.get("id") == 0:
-            return 0
-    if links:
-        return links[0].get("id")
+def _association_id(links: list[dict[str, Any]], assoc_id: int | None = None) -> Any:
+    chosen = _choose_link(links, assoc_id)
+    if not chosen:
+        return None
+    return chosen.get("id")
+
+
+def _previous_mld(link: LinkInfo) -> str | None:
+    if not link.bssid:
+        return None
+    if link.extra.get("links") or link.extra.get("ap_mld"):
+        return link.bssid
     return None
 
 
@@ -173,7 +184,7 @@ def _overlay_link(
             _apply_chandef(current, freq, width)
         updated.append(current)
     if not found:
-        created: dict[str, Any] = {"id": link_id}
+        created: dict[str, Any] = {"id": link_id, "active": None, "stats": None}
         _apply_chandef(created, freq, width)
         updated.append(created)
     return updated
@@ -217,6 +228,7 @@ class LinkFormatter:
     ) -> EventLine:
         affected = fields.pop("affected", None)
         mlo_address = fields.pop("_mlo_address", False)
+        old_ap_mld = fields.pop("old_ap_mld", _MISSING)
         snap = _snapshot(link)
         mlo_text, mlo_fields = self._mlo(link, snap)
         record = event_record(
@@ -237,6 +249,8 @@ class LinkFormatter:
             record["channel"] = snap["channel"]
             record["width_mhz"] = snap["width"]
             record["band"] = snap["band"]
+        if old_ap_mld is not _MISSING:
+            record["old_ap_mld"] = old_ap_mld
         parts = [f"({self.mac})"]
         if link.bssid:
             if mlo_address or (link.connected and snap["links"]):
@@ -289,14 +303,23 @@ class LinkFormatter:
     def connected(self, link: LinkInfo) -> EventLine:
         old, self.last = self.last, link
         extra, fields = self.link_extra(link)
+        old_mld = None
         if old.bssid and link.bssid and old.bssid != link.bssid:
             # reconnect to a different AP after the link went down; not a roam
             extra += f", old_bssid: ({old.bssid})"
             fields["old_bssid"] = old.bssid
+            old_mld = _previous_mld(old)
+        if old_mld:
+            extra += f", old_ap_mld: ({old_mld})"
+        fields["old_ap_mld"] = old_mld
         return self.line(link, "connected", extra, **fields)
 
     def connect_failed(self, bssid: str, status: int, timed_out: bool) -> EventLine:
-        self.last = LinkInfo(bssid=self.last.bssid)
+        kept: dict[str, Any] = {}
+        previous = _previous_mld(self.last)
+        if previous:
+            kept["ap_mld"] = previous
+        self.last = LinkInfo(bssid=self.last.bssid, extra=kept)
         target = LinkInfo(bssid=bssid or None)
         extra = f", status: ({status} {status_text(status)})"
         fields: dict[str, Any] = {
@@ -311,9 +334,14 @@ class LinkFormatter:
     def roamed(self, link: LinkInfo) -> EventLine:
         old, self.last = self.last, link
         extra, fields = self.link_extra(link)
+        old_mld = None
         if old.bssid:
             extra += f", old_bssid: ({old.bssid})"
             fields["old_bssid"] = old.bssid
+            old_mld = _previous_mld(old)
+        if old_mld:
+            extra += f", old_ap_mld: ({old_mld})"
+        fields["old_ap_mld"] = old_mld
         old_snap, new_snap = _snapshot(old), _snapshot(link)
         if old_snap["freq"] != new_snap["freq"] and old_snap["freq"] is not None:
             extra += f", old_freq: ({old_snap['freq']})"
@@ -329,8 +357,11 @@ class LinkFormatter:
 
     def disconnected(self, reason: int | None, by_ap: bool) -> EventLine:
         old = self.last
-        was_mlo = bool(old.extra.get("links"))
-        self.last = LinkInfo(bssid=old.bssid)
+        was_mlo = bool(old.extra.get("links")) or bool(old.extra.get("ap_mld"))
+        kept: dict[str, Any] = {}
+        if was_mlo and old.bssid:
+            kept["ap_mld"] = old.bssid
+        self.last = LinkInfo(bssid=old.bssid, extra=kept)
         gone = LinkInfo(bssid=old.bssid)
         extra = ""
         fields: dict[str, Any] = {}
@@ -380,7 +411,9 @@ class LinkFormatter:
         new_item = next(item for item in updated if item.get("id") == link_id)
         if not started:
             link.extra["links"] = updated
-            if _association_id(updated) == link_id:
+            assoc = link.extra.get("assoc_link_id")
+            assoc_id = assoc if isinstance(assoc, int) else None
+            if _association_id(updated, assoc_id) == link_id:
                 if freq is not None:
                     link.frequency_mhz = freq
                 if width is not None:
