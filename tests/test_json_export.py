@@ -1,5 +1,10 @@
 import json
+import re
+import sys
 
+import pytest
+
+from lswifi import __main__ as lswifi_main
 from lswifi import app
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
@@ -205,3 +210,70 @@ def test_export_width_skips_80_plus_80(tmp_path, caplog):
         assert not path.exists()
     assert "Exported" not in caplog.text
     assert "Error exporting" not in caplog.text
+
+
+def _raw_export(tmp_path, monkeypatch, argv):
+    monkeypatch.setattr(app, "app_data_dir", lambda: str(tmp_path / "appdata"))
+    record = BssRecord(
+        ssid=b"ExampleNet", bssid="02:00:00:00:00:21", frequency_mhz=5180, ies=b""
+    )
+    session = Session([WirelessNetworkBss(record)])
+    app.lswifi().parse_bss_list(session, False, "", "", parse(argv))
+    return sorted(
+        p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()
+    )
+
+
+def test_exportraw_writes_to_path(tmp_path, monkeypatch):
+    files = _raw_export(
+        tmp_path, monkeypatch, ["-exportraw", "all", "-path", str(tmp_path / "raw")]
+    )
+    assert files == ["raw/02-00-00-00-00-21.bss", "raw/02-00-00-00-00-21.ies"]
+
+
+def test_exportraw_uses_the_directory_of_a_pcapng_path(tmp_path, monkeypatch):
+    files = _raw_export(
+        tmp_path,
+        monkeypatch,
+        ["-exportraw", "all", "-path", str(tmp_path / "out" / "scan.pcapng")],
+    )
+    assert files == ["out/02-00-00-00-00-21.bss", "out/02-00-00-00-00-21.ies"]
+
+
+def test_exportraw_defaults_to_app_data(tmp_path, monkeypatch):
+    files = _raw_export(tmp_path, monkeypatch, ["-exportraw", "all"])
+    shape = r"appdata/\d{4}-\d{2}-\d{2}/\d{6}/02-00-00-00-00-21\.(bss|ies)"
+    assert len(files) == 2
+    assert all(re.fullmatch(shape, name) for name in files)
+    assert files[0].rsplit("/", 1)[0] == files[1].rsplit("/", 1)[0]
+
+
+def test_exportraw_relative_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    files = _raw_export(tmp_path, monkeypatch, ["-exportraw", "all", "-path", "raw"])
+    assert files == ["raw/02-00-00-00-00-21.bss", "raw/02-00-00-00-00-21.ies"]
+
+
+def test_exportraw_rejects_a_file_path(tmp_path, monkeypatch, capsys):
+    target = tmp_path / "notes.txt"
+    target.write_text("x")
+    monkeypatch.setattr(
+        sys, "argv", ["lswifi", "-exportraw", "all", "-path", str(target)]
+    )
+    with pytest.raises(SystemExit) as exited:
+        lswifi_main.main()
+    assert exited.value.code == 2
+    assert "-exportraw needs a directory" in capsys.readouterr().err
+
+
+def test_exportraw_rejects_a_path_it_cannot_create(tmp_path, monkeypatch, capsys):
+    blocker = tmp_path / "blocker.pcapng"
+    blocker.write_text("x")
+    target = blocker / "raw"
+    monkeypatch.setattr(
+        sys, "argv", ["lswifi", "-exportraw", "all", "-path", str(target)]
+    )
+    with pytest.raises(SystemExit) as exited:
+        lswifi_main.main()
+    assert exited.value.code == 2
+    assert f"-path {target}:" in capsys.readouterr().err

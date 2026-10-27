@@ -83,6 +83,13 @@ def rate_list(rates):
     return text.split(" ") if text else []
 
 
+def exportraw_dir(path: str) -> str:
+    target = os.path.abspath(path)
+    if target.lower().endswith(".pcapng"):
+        return os.path.dirname(target)
+    return target
+
+
 class lswifi:
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -600,26 +607,19 @@ class lswifi:
         pcap_path = None
 
         if args.exportraw:
-            appdata_path = app_data_dir()
-            is_path = os.path.isdir(appdata_path)
-            if not is_path:
-                os.makedirs(appdata_path)
-
-            datepath = os.path.join(appdata_path, str(datetime.date.today()))
-            datepathexists = os.path.isdir(datepath)
-            if not datepathexists:
-                os.makedirs(datepath)
-
-            exportraw_path = os.path.join(
-                datepath,
-                str(datetime.datetime.now().replace(microsecond=0).time()).replace(
-                    ":", ""
-                ),
-            )
+            if args.export_path:
+                exportraw_path = exportraw_dir(args.export_path)
+            else:
+                exportraw_path = os.path.join(
+                    app_data_dir(),
+                    str(datetime.date.today()),
+                    str(datetime.datetime.now().replace(microsecond=0).time()).replace(
+                        ":", ""
+                    ),
+                )
             exportpath = exportraw_path
             log.debug(f"raw byte files exported to {exportraw_path}")
-            if not os.path.isdir(exportraw_path):
-                os.makedirs(exportraw_path)
+            os.makedirs(exportraw_path, exist_ok=True)
 
         if args.export:
             # Build filename with optional BSSID suffix
