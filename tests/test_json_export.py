@@ -205,3 +205,35 @@ def test_export_width_skips_80_plus_80(tmp_path, caplog):
         assert not path.exists()
     assert "Exported" not in caplog.text
     assert "Error exporting" not in caplog.text
+
+
+def _raw_export(tmp_path, monkeypatch, argv):
+    monkeypatch.setattr(app, "app_data_dir", lambda: str(tmp_path / "appdata"))
+    session = Session([WirelessNetworkBss(BssRecord(**ARUBA))])
+    app.lswifi().parse_bss_list(session, False, "", "", parse(argv))
+    return sorted(
+        p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()
+    )
+
+
+def test_exportraw_writes_to_path(tmp_path, monkeypatch):
+    files = _raw_export(
+        tmp_path, monkeypatch, ["-exportraw", "all", "-path", str(tmp_path / "raw")]
+    )
+    assert files == ["raw/98-8f-00-9a-a4-80.bss", "raw/98-8f-00-9a-a4-80.ies"]
+
+
+def test_exportraw_uses_the_directory_of_a_pcapng_path(tmp_path, monkeypatch):
+    files = _raw_export(
+        tmp_path,
+        monkeypatch,
+        ["-exportraw", "all", "-path", str(tmp_path / "out" / "scan.pcapng")],
+    )
+    assert files == ["out/98-8f-00-9a-a4-80.bss", "out/98-8f-00-9a-a4-80.ies"]
+
+
+def test_exportraw_defaults_to_app_data(tmp_path, monkeypatch):
+    files = _raw_export(tmp_path, monkeypatch, ["-exportraw", "all"])
+    assert len(files) == 2
+    assert all(name.startswith("appdata/") for name in files)
+    assert files[0].endswith("/98-8f-00-9a-a4-80.bss")

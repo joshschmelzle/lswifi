@@ -605,7 +605,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "-path",
         type=str,
         dest="export_path",
-        help="specify output path for pcapng export (defaults to app data directory)",
+        help="output path for -export and directory for -exportraw (defaults to app data directory)",
     )
     parser.add_argument(
         "-decoderaw",

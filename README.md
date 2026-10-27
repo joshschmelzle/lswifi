@@ -228,7 +228,7 @@ options:
                         export raw bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
   -export, -exp [BSSID]
                         export scan results to pcapng file. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
-  -path EXPORT_PATH     specify output path for pcapng export (defaults to app data directory)
+  -path EXPORT_PATH     output path for -export and directory for -exportraw (defaults to app data directory)
   -decoderaw BYTE_FILE  decode a raw .BSS or .IES file
   -decode PCAP_FILE     parse scan results from pcap/pcapng file. by default shows all networks in the file, can be combined with filtering options.
   --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
