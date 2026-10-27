@@ -1440,6 +1440,7 @@ class lswifi:
             line_number = traceback.extract_tb(sys.exc_info()[2])[-1][1]
             error_msg = f"Error parsing pcap at line {line_number}: {str(e)}\n{trace}"
             log.error(error_msg)
+            sys.exit(-1)
 
     def print_rnr_list(self, rnr_results: list, client_mac, args):
         log = logging.getLogger(__name__)
@@ -1618,7 +1619,13 @@ class lswifi:
 
     def decode_bytefile(self, args):
         if os.path.isfile(args.decoderaw):
-            if args.decoderaw.lower().rsplit(".", 1)[1] == "ies":
+            extension = os.path.splitext(args.decoderaw)[1].lower()
+            if extension not in (".ies", ".bss"):
+                logging.getLogger(__name__).error(
+                    "-decoderaw needs a .ies or .bss file: %s", args.decoderaw
+                )
+                sys.exit(-1)
+            if extension == ".ies":
                 with open(args.decoderaw, "rb") as fh:
                     _bytearray = bytearray(fh.read())
                 print(
@@ -1671,7 +1678,7 @@ class lswifi:
                 print(out)
                 return
 
-            if args.decoderaw.lower().rsplit(".", 1)[1] == "bss":
+            if extension == ".bss":
                 if sys.platform != "win32":
                     # a .bss file is a raw Windows WLAN_BSS_ENTRY; the ctypes
                     # layout (c_ulong size) only matches on Windows
@@ -1679,7 +1686,7 @@ class lswifi:
                         "decoding a .bss file requires Windows (WLAN_BSS_ENTRY "
                         "layout); decode the matching .ies file instead"
                     )
-                    return
+                    sys.exit(-1)
                 from lswifi import wlanapi as WLAN_API
                 from lswifi.backends.windows import bss_entry_to_record
 

@@ -347,6 +347,7 @@ class TestRawIes:
         bss_file = tmp_path / "98-8f-00-9a-a4-80.bss"
         bss_file.write_bytes(b"\x00" * 64)
         result = run_lswifi("-decoderaw", str(bss_file))
+        assert result.returncode != 0
         assert "Traceback" not in result.stderr
         assert "requires Windows" in result.stdout + result.stderr
 
@@ -558,6 +559,36 @@ class TestFakeBackend:
             app.run(parse(["-all"]), backend=backend)
         assert exited.value.code == -1
         assert "no wireless interfaces found" in caplog.text
+
+    @pytest.mark.parametrize(
+        "flag, name, content, message",
+        [
+            ("-decode", "corrupt.pcapng", b"not a capture", "Unknown file format"),
+            ("-decode", "empty.pcap", b"", "Unknown file format"),
+            ("-decoderaw", "notes.txt", b"\x00" * 8, "needs a .ies or .bss file"),
+            ("-decoderaw", "noextension", b"\x00" * 8, "needs a .ies or .bss file"),
+        ],
+    )
+    def test_decode_bad_file_exits_nonzero(
+        self, tmp_path, flag, name, content, message, caplog
+    ):
+        target = tmp_path / name
+        target.write_bytes(content)
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse([flag, str(target)]), backend=None)
+        assert exited.value.code == -1
+        assert message in caplog.text
+
+    def test_run_interrupted_exits_nonzero(self):
+        backend = FakeBackend(fake_records())
+
+        def interrupted(*_args, **_kwargs):
+            raise KeyboardInterrupt
+
+        backend.list_interfaces = interrupted
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse(["-all"]), backend=backend)
+        assert exited.value.code == -1
 
     @pytest.mark.parametrize("flag", ["-decode", "-decoderaw"])
     def test_decode_missing_file_exits_nonzero(self, tmp_path, flag, capsys):

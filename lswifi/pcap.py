@@ -474,8 +474,7 @@ class PCAP:
         elif file_format == "pcapng":
             self.log.debug("Detected pcapng format")
         else:
-            self.log.error("Unknown file format")
-            return
+            raise ValueError("Unknown file format")
 
         interfaces = []
 
