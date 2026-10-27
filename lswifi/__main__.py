@@ -57,7 +57,9 @@ def main():
     if args.exportraw and args.export_path:
         target = app.exportraw_dir(args.export_path)
         if os.path.isfile(target):
-            parser.error(f"-path {args.export_path} is a file; -exportraw needs a directory")
+            parser.error(
+                f"-path {args.export_path} is a file; -exportraw needs a directory"
+            )
         try:
             os.makedirs(target, exist_ok=True)
         except OSError as error:
