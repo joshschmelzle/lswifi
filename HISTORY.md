@@ -4,6 +4,23 @@ Release History
 RELEASED
 --------
 
+0.5.0 (2026-10-27)
+------------------
+
+Breaking `--json` changes:
+
+- `--watchevents --json` leaves out keys whose value is unknown instead of writing `null`, at every level of the record. Old: `"rssi": null`, `"old_ap_mld": null`, `"active": null`, `"stats": null`. New: the key is absent. `false` and `0` are still written. Read these keys with a default (#150).
+- On Linux, the scan-finished `--watchevents` event is `scan_complete`, the name Windows uses. Old: `scan_cache_updated`, printed only with `--debug`. New: `scan_complete`, printed by default (#151).
+
+Other changes:
+
+- `-channel` prints the band and frequency of the connected channel. `-channel --json` gains `band` and `freq_mhz`. `-raw` output is unchanged (#149).
+- On Linux, `--watchevents` prints `scan_started`, `scan_complete`, and `scan_aborted`, with the frequency and BSSID counts. `connected` gains `roam` and, for a roam, `roam_type` (`ft`, `pmksa`, `sae`, or `full`) and `roam_ms`. `port_authorized` gains `since_connect_ms` and `roam_total_ms` (#151).
+- On Linux, a failed connect while associated no longer hides the next roam (#154). Fixes #153.
+- On Linux, `--watchevents` prints `auth_failed` when the AP rejects authentication or authentication times out, and `assoc_failed` when association times out (#155). Fixes #122.
+- `-exportraw` writes to the `-path` directory, or to the directory of a `.pcapng` path. An unusable `-path` stops lswifi before it scans (#156). Fixes #125.
+- lswifi exits nonzero when it fails, including a missing interface, Ctrl+C, and a `-decode` or `-decoderaw` file it cannot read. It used to exit 0 (#158). Fixes #157.
+
 0.4.0 (2026-10-26)
 ------------------
 
