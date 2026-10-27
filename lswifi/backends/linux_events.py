@@ -93,8 +93,18 @@ _MGMT_HEADER = 24
 _HT_CONTROL = 4
 _AUTH_SUBTYPE = 0xB
 
-# Success, anti-clogging token request, SAE hash-to-element, SAE-PK.
-AUTH_CONTINUE_STATUS = frozenset({0, 76, 126, 127})
+STATUS_SUCCESS = 0
+STATUS_ANTI_CLOGGING_TOKEN_REQUIRED = 76
+STATUS_SAE_HASH_TO_ELEMENT = 126
+STATUS_SAE_PK = 127
+AUTH_CONTINUE_STATUS = frozenset(
+    {
+        STATUS_SUCCESS,
+        STATUS_ANTI_CLOGGING_TOKEN_REQUIRED,
+        STATUS_SAE_HASH_TO_ELEMENT,
+        STATUS_SAE_PK,
+    }
+)
 
 
 def _elapsed_ms(start: float, end: float) -> int:
@@ -102,7 +112,6 @@ def _elapsed_ms(start: float, end: float) -> int:
 
 
 def _auth_body(frame: bytes) -> bytes | None:
-    """Body of an unprotected Authentication frame (header and body, no FCS)."""
     if len(frame) < _MGMT_HEADER + 2:
         return None
     fc = int.from_bytes(frame[:2], "little")
@@ -131,7 +140,6 @@ def auth_algorithm(frame: bytes) -> int | None:
 
 
 def auth_failure(frame: bytes) -> tuple[str, int] | None:
-    """(AP address, status code) when a received Authentication frame rejects us."""
     body = _auth_body(frame)
     if body is None or len(body) < 6:
         return None
