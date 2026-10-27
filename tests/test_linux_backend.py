@@ -759,12 +759,86 @@ class TestInterfaceInfo:
             "INTERFACE: wlan0, MAC: 02:00:00:00:00:13, BSSID: 02:00:00:00:00:21"
         )
         assert backend.interface_info(parse(["-channel", "-raw"]), iface) == "36"
+        assert backend.interface_info(parse(["-ap", "-channel", "-raw"]), iface) == (
+            "02:00:00:00:00:21, 36"
+        )
+
+    @pytest.mark.parametrize(
+        "freq, channel, band",
+        [
+            (2412, 1, "2.4 GHz"),
+            (5180, 36, "5 GHz"),
+            (5955, 1, "6 GHz"),
+        ],
+    )
+    def test_channel_includes_band_and_frequency(
+        self, kernel, backend, freq, channel, band
+    ):
+        kernel.interfaces = [
+            iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=freq, last=0x13)
+        ]
+        kernel.stations = [station_attrs(0x21, -48, 8645)]
+        iface = backend.list_interfaces()[0]
+        text = (
+            "INTERFACE: wlan0, MAC: 02:00:00:00:00:13, "
+            f"CHANNEL: {channel}, BAND: {band}, FREQ: {freq}"
+        )
+        assert backend.interface_info(parse(["-channel"]), iface) == text
+        both = (
+            "INTERFACE: wlan0, MAC: 02:00:00:00:00:13, "
+            f"BSSID: 02:00:00:00:00:21, CHANNEL: {channel}, BAND: {band}, FREQ: {freq}"
+        )
+        assert backend.interface_info(parse(["-ap", "-channel"]), iface) == both
+        assert backend.interface_info(parse(["-channel", "-raw"]), iface) == str(
+            channel
+        )
+        assert backend.interface_info(parse(["-ap", "-channel", "-raw"]), iface) == (
+            f"02:00:00:00:00:21, {channel}"
+        )
+        info = json.loads(backend.interface_info(parse(["-channel", "--json"]), iface))
+        assert list(info) == ["interface", "mac", "channel", "band", "freq_mhz"]
+        assert info["channel"] == channel
+        assert info["band"] == band
+        assert info["freq_mhz"] == freq
+        both_info = json.loads(
+            backend.interface_info(parse(["-ap", "-channel", "--json"]), iface)
+        )
+        assert list(both_info) == [
+            "interface",
+            "mac",
+            "bssid",
+            "channel",
+            "band",
+            "freq_mhz",
+        ]
+        assert both_info["bssid"] == "02:00:00:00:00:21"
+        ap = json.loads(backend.interface_info(parse(["-ap", "--json"]), iface))
+        assert list(ap) == ["interface", "mac", "bssid"]
+
+    def test_channel_omits_band_when_frequency_is_unknown(self, kernel, backend):
+        kernel.interfaces = [
+            iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=1000, last=0x13)
+        ]
+        kernel.stations = [station_attrs(0x21, -48, 8645)]
+        iface = backend.list_interfaces()[0]
+        assert backend.interface_info(parse(["-channel"]), iface) == (
+            "INTERFACE: wlan0, MAC: 02:00:00:00:00:13, CHANNEL: None"
+        )
+        info = json.loads(backend.interface_info(parse(["-channel", "--json"]), iface))
+        assert list(info) == ["interface", "mac", "channel"]
+        assert info["channel"] is None
 
     def test_down_hides_stale_channel(self, kernel, backend):
         iface = self.connected(kernel, backend)
         backend.sysfs.up = False
         assert backend.link(iface.native).channel is None
         assert backend.interface_info(parse(["-channel", "-raw"]), iface) == "None"
+        assert backend.interface_info(parse(["-channel"]), iface) == (
+            "INTERFACE: wlan0, MAC: 02:00:00:00:00:13, CHANNEL: None"
+        )
+        down = json.loads(backend.interface_info(parse(["-channel", "--json"]), iface))
+        assert list(down) == ["interface", "mac", "channel"]
+        assert down["channel"] is None
         out = backend.interface_info(parse(["--get-interfaces"]), iface)
         assert "Channel:" not in out
         assert "Frequency:" not in out
@@ -1529,6 +1603,42 @@ class TestInterfaceDetails:
         assert info["links"][1]["width_mhz"] == 20
         assert "width_mhz" not in info["links"][2]
         assert info["links"][2]["tx_power_dbm"] == 18.0
+
+    def test_channel_follows_the_active_link(self, kernel, backend, tmp_path):
+        backend.proc_net = str(tmp_path)
+        ap1, _ap2 = self._three_link_active_on_one(kernel)
+        kernel.stations = [
+            station_message(
+                MLD,
+                [s8(nl.STA_INFO_SIGNAL, -45), EHT_TX],
+                [
+                    mlo_link(0, MLD),
+                    mlo_link(1, ap1),
+                    mlo_link(2, bytes.fromhex("6851347c31f5")),
+                ],
+            )
+        ]
+        iface = backend.list_interfaces()[0]
+        assert backend.interface_info(parse(["-channel"]), iface) == (
+            "INTERFACE: wlan0, MAC: 02:00:00:00:00:63, "
+            "CHANNEL: 56, BAND: 5 GHz, FREQ: 5280"
+        )
+        assert backend.interface_info(parse(["-channel", "-raw"]), iface) == "56"
+        info = json.loads(
+            backend.interface_info(parse(["-ap", "-channel", "--json"]), iface)
+        )
+        assert list(info) == [
+            "interface",
+            "mac",
+            "bssid",
+            "channel",
+            "band",
+            "freq_mhz",
+        ]
+        assert info["channel"] == 56
+        assert info["band"] == "5 GHz"
+        assert info["freq_mhz"] == 5280
+        assert info["bssid"] == "68:51:34:7c:32:05"
 
     def test_association_link_when_no_link_is_active(self, kernel, backend, tmp_path):
         backend.proc_net = str(tmp_path)

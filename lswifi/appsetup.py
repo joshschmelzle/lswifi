@@ -534,7 +534,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "-channel",
         dest="get_current_channel",
         action="store_true",
-        help="print the channel of the connected AP",
+        help="print the channel, band, and frequency of the connected AP",
     )
     parser.add_argument(
         "-raw",

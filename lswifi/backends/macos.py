@@ -537,7 +537,13 @@ class MacOSBackend:
         ssid = _nsdata_bytes(cw_iface.ssidData()).decode("utf-8", errors="replace")
         channel = cw_iface.wlanChannel()
         channel_number = channel.channelNumber() if channel is not None else None
-        band = BAND_NAMES.get(channel.channelBand()) if channel is not None else None
+        band_id = channel.channelBand() if channel is not None else None
+        band = BAND_NAMES.get(band_id) if band_id is not None else None
+        freq_mhz = None
+        if band is not None and channel_number is not None:
+            mhz = frequency_from_channel(channel_number, band_id)
+            if mhz:
+                freq_mhz = mhz
         width = (
             CW_CHANNEL_WIDTH_MHZ.get(channel.channelWidth())
             if channel is not None
@@ -549,21 +555,26 @@ class MacOSBackend:
 
         base = {"interface": iface.connection_name, "mac": iface.mac}
         if args.get_current_ap or args.get_current_channel:
-            fields = {}
+            fields: dict[str, Any] = {}
             if args.get_current_ap:
                 fields["bssid"] = bssid
             if args.get_current_channel:
                 fields["channel"] = channel_number
             if args.json:
-                return json.dumps(base | fields, indent=args.json_indent)
+                payload = base | fields
+                if args.get_current_channel and band is not None:
+                    payload["band"] = band
+                if args.get_current_channel and freq_mhz is not None:
+                    payload["freq_mhz"] = freq_mhz
+                return json.dumps(payload, indent=args.json_indent)
             if args.raw:
                 return ", ".join(str(value) for value in fields.values())
-            return ", ".join(
-                f"{key.upper()}: {value}"
-                for key, value in (
-                    {"interface": iface.connection_name, "mac": iface.mac} | fields
-                ).items()
-            )
+            shown = base | fields
+            if args.get_current_channel and band is not None:
+                shown["band"] = band
+            if args.get_current_channel and freq_mhz is not None:
+                shown["freq"] = freq_mhz
+            return ", ".join(f"{key.upper()}: {value}" for key, value in shown.items())
 
         connected = state == "connected"
         channels = summarize_supported_channels(
