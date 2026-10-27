@@ -3,13 +3,14 @@
 """Linux (nl80211) backend tests with synthetic netlink messages. Runs on any OS."""
 
 import errno
+import io
 import json
 import struct
 import sys
 
 import pytest
 
-from lswifi import appsetup
+from lswifi import appsetup, watchjson
 from lswifi.backends import nl80211 as nl
 from lswifi.backends.base import BackendError, BackendUnavailableError, InterfaceInfo
 from lswifi.backends.linux import (
@@ -26,7 +27,7 @@ from lswifi.backends.linux import (
 )
 from lswifi.backends.linux_events import LinkFormatter, LinuxEventWatcher
 from lswifi.elements import WirelessNetworkBss
-from lswifi.watchjson import dumps
+from lswifi.watchjson import NDJSONWriter, dumps
 
 FAMILY = 0x1C
 CMD_NEW_WIPHY = 3
@@ -382,6 +383,21 @@ def reset_warning(monkeypatch):
 
 def parse(argv):
     return appsetup.setup_parser().parse_args(argv)
+
+
+def watch_payload(record):
+    return json.loads(dumps(record, timestamp="2026-01-01T00:00:00.000+00:00"))
+
+
+def assert_no_null(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            assert item is not None, key
+            assert_no_null(item)
+    elif isinstance(value, list):
+        for item in value:
+            assert item is not None
+            assert_no_null(item)
 
 
 class TestNetlink:
@@ -2144,7 +2160,7 @@ class TestEvents:
         assert "old_freq: (5180)" in line
         assert "channel: (5@80 6 GHz)" in line
         assert line.record["old_bssid"] == "02:00:00:00:00:21"
-        assert line.record["old_ap_mld"] is None
+        assert "old_ap_mld" not in watch_payload(line.record)
         assert "old_ap_mld:" not in line
         assert "ap_mld" not in line.record
         assert line.record["freq_mhz"] == 5975
@@ -2155,7 +2171,7 @@ class TestEvents:
             self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
         )
         assert "event: (connected)" in ok
-        assert ok.record["old_ap_mld"] is None
+        assert "old_ap_mld" not in watch_payload(ok.record)
         assert "old_ap_mld:" not in ok
         (bad,) = watcher.handle(
             self.msg(
@@ -2253,14 +2269,13 @@ class TestEvents:
         assert watching.record["channel"] == 37
         assert watching.record["width_mhz"] == 80
         assert watching.record["band"] == "6 GHz"
-        assert watching.record["rssi"] is None
         assert watching.record["ap_mld"] == "68:51:34:7c:32:05"
         assert watching.record["links"][0]["bssid"] == "68:51:34:7c:32:05"
         assert watching.record["links"][1]["channel"] == 11
         assert "width_mhz" not in watching.record["links"][1]
-        assert '"rssi": null' in dumps(
-            watching.record, timestamp="2026-01-01T00:00:00.000+00:00"
-        )
+        watching_json = watch_payload(watching.record)
+        assert "rssi" not in watching_json
+        assert_no_null(watching_json)
 
         self._two_link(kernel, tx_units=688)
         (connected,) = watcher.handle(
@@ -2272,9 +2287,11 @@ class TestEvents:
         assert "tx_rate: (68.8 Mbps)" in connected
         assert "rssi:" not in connected
         assert "links: (0: 68:51:34:7c:32:05 6 GHz ch 37@80, " in connected
-        assert connected.record["rssi"] is None
-        assert connected.record["freq_mhz"] == 6135
-        assert connected.record["old_ap_mld"] is None
+        connected_json = watch_payload(connected.record)
+        assert "rssi" not in connected_json
+        assert "old_ap_mld" not in connected_json
+        assert connected_json["freq_mhz"] == 6135
+        assert_no_null(connected_json)
         assert "old_ap_mld:" not in connected
 
     def test_bss_dump_links_in_watchevents(self, kernel, backend):
@@ -2545,7 +2562,7 @@ class TestEvents:
         assert connected.record["old_bssid"] == "68:51:34:7c:32:05"
         assert connected.record["old_ap_mld"] == "68:51:34:7c:32:05"
 
-    def test_missing_fields_are_hidden_and_json_null(self):
+    def test_missing_fields_are_omitted(self):
         formatter = LinkFormatter("02:00:00:00:00:13")
         line = formatter.watching(
             LinkInfo(
@@ -2558,11 +2575,111 @@ class TestEvents:
         assert "freq:" not in line
         assert "channel:" not in line
         assert "rssi: (0)" in line
-        assert line.record["freq_mhz"] is None
-        assert line.record["rssi"] == 0
-        assert line.record["channel"] is None
-        assert line.record["width_mhz"] is None
-        assert line.record["band"] is None
+        payload = watch_payload(line.record)
+        assert payload["rssi"] == 0
+        assert "freq_mhz" not in payload
+        assert "channel" not in payload
+        assert "width_mhz" not in payload
+        assert "band" not in payload
+        assert_no_null(payload)
+
+    def test_watch_json_omits_null(self, kernel, backend, monkeypatch):
+        stream = io.StringIO()
+        monkeypatch.setattr(watchjson, "_writer", NDJSONWriter(stream))
+        kernel.interfaces = [
+            iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=None, last=0x13)
+        ]
+        kernel.stations = [station_message(mac(0x21))]
+        watcher = LinuxEventWatcher(
+            backend,
+            backend.list_interfaces(),
+            parse(["--watchevents", "--json"]),
+        )
+
+        def emit(lines):
+            for line in lines:
+                watcher.emit(line)
+
+        emit(watcher.start())
+        emit(
+            watcher.handle(
+                self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+            )
+        )
+        kernel.interfaces = [
+            iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=2412, width=1, last=0x13)
+        ]
+        kernel.stations = [station_message(mac(0x22), [s8(nl.STA_INFO_SIGNAL, -55)])]
+        emit(
+            watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22))))
+        )
+        emit(
+            watcher.handle(
+                self.msg(
+                    nl.CMD_DISCONNECT,
+                    nl.attr_u16(nl.ATTR_REASON_CODE, 3),
+                    nl.attr_flag(nl.ATTR_DISCONNECTED_BY_AP),
+                )
+            )
+        )
+
+        self._two_link(kernel)
+        link2 = bytes.fromhex("6851347c31f5")
+        kernel.stations = [
+            station_message(
+                MLD,
+                [s8(nl.STA_INFO_SIGNAL, 0), EHT_TX],
+                [
+                    mlo_link(
+                        0,
+                        MLD,
+                        6135,
+                        sta=[
+                            s8(nl.STA_INFO_SIGNAL, -40),
+                            nl.attr_u32(nl.STA_INFO_RX_BYTES, 0),
+                            legacy_bitrate(nl.STA_INFO_TX_BITRATE, 240),
+                        ],
+                    ),
+                    mlo_link(2, link2, 2462),
+                ],
+            )
+        ]
+        emit(watcher.start())
+        new_mld = bytes.fromhex("6851347c32aa")
+        kernel.stations = [station_message(new_mld, [s8(nl.STA_INFO_SIGNAL, -50)])]
+        kernel.interfaces = [
+            iface_attrs(3, "wlan0", ssid=b"ExampleNet", freq=5180, last=0x63)
+        ]
+        emit(watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, new_mld))))
+
+        records = [json.loads(line) for line in stream.getvalue().splitlines()]
+        assert [record["event"] for record in records] == [
+            "watching",
+            "connected",
+            "roamed",
+            "disconnected",
+            "watching",
+            "roamed",
+        ]
+        for record in records:
+            assert_no_null(record)
+        assert "rssi" not in records[1]
+        assert "width_mhz" not in records[1]
+        assert "old_ap_mld" not in records[1]
+        assert records[2]["rssi"] == -55
+        assert records[2]["old_bssid"] == "02:00:00:00:00:21"
+        assert "old_ap_mld" not in records[2]
+        assert records[3]["locally_generated"] is False
+        assert records[4]["width_mhz"] == 80
+        assert "rssi" not in records[4]
+        assert [item["active"] for item in records[4]["links"]] == [True, False]
+        assert "stats" not in records[4]["links"][1]
+        stats = records[4]["links"][0]["stats"]
+        assert stats["signal"] == -40 and stats["rx_bytes"] == 0
+        assert "signal_avg" not in stats and "tx_retries" not in stats
+        assert stats["tx_rate"] == {"mbps": 24.0}
+        assert records[5]["old_ap_mld"] == "68:51:34:7c:32:05"
+        assert records[5]["old_bssid"] == "68:51:34:7c:32:05"
 
     def test_scan_results_only_with_debug(self, kernel, backend):
         watcher, _ = self.watcher(kernel, backend)

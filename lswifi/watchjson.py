@@ -26,8 +26,8 @@ The common link fields follow when known: ``bssid``, ``freq_mhz``,
 join timing.
 
 A value that is unknown or does not apply is omitted, never ``null`` or
-``""``. Numbers are JSON numbers. Log messages stay on stderr; only these
-objects go to stdout.
+``""``, including inside nested objects. Numbers are JSON numbers. Log
+messages stay on stderr; only these objects go to stdout.
 """
 
 import datetime
@@ -195,12 +195,23 @@ def windows_event_record(
     return event_record(mac, str(wlan_event), bssid=bssid, **fields)
 
 
+def _without_nulls(value: Any) -> Any:
+    """Copy a record, leaving out keys whose value is null, at every level"""
+    if isinstance(value, dict):
+        return {
+            key: _without_nulls(item) for key, item in value.items() if item is not None
+        }
+    if isinstance(value, list):
+        return [_without_nulls(item) for item in value]
+    return value
+
+
 def dumps(record: dict, timestamp: str | None = None) -> str:
-    """One NDJSON line (no newline), timestamp first"""
-    line = {
-        "timestamp": timestamp or iso_timestamp(),
-        **{k: v for k, v in record.items() if k != "timestamp"},
-    }
+    """One NDJSON line (no newline), timestamp first. Null values are left out."""
+    body: dict[str, Any] = _without_nulls(
+        {key: value for key, value in record.items() if key != "timestamp"}
+    )
+    line = {"timestamp": timestamp or iso_timestamp(), **body}
     return json.dumps(line, separators=(", ", ": "), allow_nan=False)
 
 

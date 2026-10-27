@@ -35,6 +35,17 @@ from lswifi.watchjson import (
 MAC = "c0:c7:db:00:00:01"
 
 
+def assert_no_null(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            assert item is not None, key
+            assert_no_null(item)
+    elif isinstance(value, list):
+        for item in value:
+            assert item is not None
+            assert_no_null(item)
+
+
 class Clock:
     def __init__(self):
         self.now = 1000.0
@@ -161,6 +172,46 @@ class TestHelper:
         assert "\n" not in line
         assert list(json.loads(line)) == ["timestamp", "interface_mac", "event", "ssid"]
         assert json.loads(line)["ssid"] == "a\nb"
+
+    def test_dumps_omits_null_at_every_level(self):
+        stats = {"signal": -45, "signal_avg": None, "rx_bytes": 0}
+        record = {
+            "interface_mac": MAC,
+            "event": "connected",
+            "rssi": None,
+            "width_mhz": None,
+            "old_ap_mld": None,
+            "locally_generated": False,
+            "channel": 0,
+            "links": [
+                {"id": 0, "active": False, "stats": None, "width_mhz": None},
+                {
+                    "id": 1,
+                    "active": True,
+                    "stats": stats,
+                    "tx_rate": {
+                        "mbps": 24.0,
+                        "phy": None,
+                        "mcs": None,
+                        "nss": None,
+                        "width_mhz": None,
+                        "gi": None,
+                    },
+                },
+            ],
+        }
+        line = dumps(record, "T")
+        payload = json.loads(line)
+        assert stats["signal_avg"] is None  # the caller's record is not rewritten
+        assert "rssi" not in payload
+        assert "width_mhz" not in payload
+        assert "old_ap_mld" not in payload
+        assert payload["locally_generated"] is False
+        assert payload["channel"] == 0
+        assert payload["links"][0] == {"id": 0, "active": False}
+        assert payload["links"][1]["stats"] == {"signal": -45, "rx_bytes": 0}
+        assert payload["links"][1]["tx_rate"] == {"mbps": 24.0}
+        assert_no_null(payload)
 
     def test_writer_flushes_each_line(self):
         class Stream(io.StringIO):
@@ -437,6 +488,74 @@ class TestMacOSWatcherJSON:
         )
         assert json.loads(stream.getvalue())["event"] == "watching"
 
+    def test_json_lines_omit_null(self, monkeypatch):
+        watcher, stream, _ = make_watcher(monkeypatch)
+        formatter = EventFormatter(MAC, Clock())
+        batches = [
+            formatter.state_change(state()),
+            formatter.state_change(
+                state(
+                    bssid="02:00:00:00:00:08",
+                    channel=149,
+                    frequency_mhz=5745,
+                    rssi=-60,
+                    width_mhz=80,
+                    noise=None,
+                    tx_rate=None,
+                )
+            ),
+            formatter.state_change(
+                state(
+                    bssid="02:00:00:00:00:08",
+                    channel=149,
+                    frequency_mhz=5745,
+                    rssi=-60,
+                    width_mhz=80,
+                    country_code="",
+                )
+            ),
+            formatter.state_change(
+                state(
+                    connected=False,
+                    bssid="",
+                    ssid="",
+                    channel=None,
+                    band=None,
+                    width_mhz=None,
+                    frequency_mhz=0,
+                    rssi=None,
+                    noise=None,
+                    tx_rate=None,
+                    country_code="",
+                    mode=0,
+                )
+            ),
+            formatter.state_change(LinkState(power=False, country_code="")),
+        ]
+        for batch in batches:
+            for line in batch:
+                watcher.emit(line)
+        watcher.on_log_event(
+            LogEvent("deauth", "reason: (4 x)", {"reason_code": 4, "reason_text": "x"})
+        )
+        records = [json.loads(line) for line in stream.getvalue().splitlines()]
+        assert [record["event"] for record in records] == [
+            "watching",
+            "roamed",
+            "country_code_change",
+            "disconnected",
+            "power_off",
+            "deauth",
+        ]
+        for record in records:
+            assert_no_null(record)
+        assert records[0]["rssi"] == -44 and records[0]["noise"] == -94
+        assert "noise" not in records[1] and "tx_rate_mbps" not in records[1]
+        assert "country_code" not in records[2]
+        assert records[2]["old_country_code"] == "US"
+        assert records[4]["event"] == "power_off"
+        assert set(records[4]) == {"timestamp", "interface_mac", "event"}
+
     def test_text_mode_unchanged(self, monkeypatch, caplog):
         watcher, stream, _ = make_watcher(monkeypatch)
         watcher.args.json = None
@@ -542,6 +661,26 @@ class TestWindowsClientEmit:
         assert rec["event"] == "scan_complete" and rec["scan_bssid_count"] == 12
         assert rec["freq_mhz"] == 5220 and rec["rssi"] == -61
         assert caplog.records == [] and sent == [msg]
+
+    def test_json_lines_omit_null(self, monkeypatch):
+        emit, fake, stream, _sent = self.make(monkeypatch, "lswifi_x.json")
+        emit(fake, "a", "connected", "02:00:00:00:00:14", fake_bss(rssi=0))
+        emit(fake, "b", "connected", "02:00:00:00:00:14", None)
+        emit(fake, "c", "scan_complete", "00:00:00:00:00:00", None, 0)
+        emit(fake, "d", "disconnected")
+        records = [json.loads(line) for line in stream.getvalue().splitlines()]
+        assert [record["event"] for record in records] == [
+            "connected",
+            "connected",
+            "scan_complete",
+            "disconnected",
+        ]
+        for record in records:
+            assert_no_null(record)
+        assert records[0]["rssi"] == 0
+        assert set(records[1]) == {"timestamp", "interface_mac", "event", "bssid"}
+        assert "bssid" not in records[2] and records[2]["scan_bssid_count"] == 0
+        assert set(records[3]) == {"timestamp", "interface_mac", "event"}
 
 
 # ---------------------------------------------------------------- CLI
