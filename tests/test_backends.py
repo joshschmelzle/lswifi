@@ -565,6 +565,8 @@ class TestFakeBackend:
         [
             ("-decode", "corrupt.pcapng", b"not a capture", "Unknown file format"),
             ("-decode", "empty.pcap", b"", "Unknown file format"),
+            ("-decode", "magic.pcap", b"\xd4\xc3\xb2\xa1", "header too short"),
+            ("-decode", "magic.pcapng", b"\x0a\x0d\x0d\x0a", "header too short"),
             ("-decoderaw", "notes.txt", b"\x00" * 8, "needs a .ies or .bss file"),
             ("-decoderaw", "noextension", b"\x00" * 8, "needs a .ies or .bss file"),
         ],
