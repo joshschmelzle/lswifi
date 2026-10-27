@@ -30,6 +30,7 @@ from lswifi.backends.linux_events import (
     LinkFormatter,
     LinuxEventWatcher,
     auth_algorithm,
+    auth_failure,
 )
 from lswifi.elements import WirelessNetworkBss
 from lswifi.watchjson import NDJSONWriter, dumps
@@ -48,12 +49,19 @@ def ie(eid: int, body: bytes) -> bytes:
     return bytes([eid, len(body)]) + body
 
 
-def auth_frame(algorithm: int, *, order: bool = False) -> bytes:
+def auth_frame(
+    algorithm: int,
+    *,
+    order: bool = False,
+    status: int = 0,
+    ap: int = 0x22,
+    seq: int = 2,
+) -> bytes:
     header = struct.pack("<HH", 0x00B0 | (0x8000 if order else 0), 0)
-    header += bytes(6) + mac(0x13) + mac(0x22) + struct.pack("<H", 0)
+    header += mac(0x13) + mac(ap) + mac(ap) + struct.pack("<H", 0)
     if order:
         header += b"\x00\x00\x00\x00"
-    return header + struct.pack("<HHH", algorithm, 1, 0)
+    return header + struct.pack("<HHH", algorithm, seq, status)
 
 
 def rsn_ie(pmkid: bytes | None = None) -> bytes:
@@ -3332,6 +3340,107 @@ class TestEvents:
         protected[1] |= 0x40
         assert auth_algorithm(bytes(protected)) is None
         assert auth_algorithm(b"\xb0\x00" + b"\x00" * 10) is None
+
+    @pytest.mark.parametrize(
+        "algorithm, seq, status, failed",
+        [
+            (0, 2, 0, False),
+            (3, 1, 0, False),
+            (3, 1, 76, False),
+            (3, 1, 77, False),
+            (3, 1, 126, False),
+            (3, 1, 127, False),
+            (8, 2, 153, False),
+            (3, 1, 1, True),
+            (3, 2, 1, True),
+            (3, 2, 126, True),
+            (3, 2, 127, True),
+            (0, 2, 76, True),
+            (0, 2, 126, True),
+            (2, 2, 127, True),
+            (0, 2, 153, True),
+            (0, 2, 17, True),
+        ],
+    )
+    def test_auth_failure_frame(self, algorithm, seq, status, failed):
+        frame = auth_frame(algorithm, seq=seq, status=status)
+        expected = ("02:00:00:00:00:22", status) if failed else None
+        assert auth_failure(frame) == expected
+
+    def test_failed_auth_does_not_type_the_next_roam(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        (failed,) = watcher.handle(
+            self.msg(
+                nl.CMD_AUTHENTICATE,
+                nl.pack_attr(nl.ATTR_FRAME, auth_frame(3, seq=1, status=1, ap=0x24)),
+            )
+        )
+        assert failed.record["event"] == "auth_failed"
+        clock["t"] = 1000.5
+        self._join(kernel, 0x22)
+        watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22))))
+        clock["t"] = 1000.6
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert "roam_type" not in conn.record
+        assert conn.record["roam_ms"] == 100
+
+    def test_auth_failure_frame_shapes(self):
+        assert auth_failure(auth_frame(0, status=17, order=True)) == (
+            "02:00:00:00:00:22",
+            17,
+        )
+        assert auth_failure(auth_frame(3, seq=1, status=1)[:-2]) is None
+
+    def test_auth_and_assoc_failures(self, kernel, backend):
+        watcher, _ = self.watcher(kernel, backend)
+        (rejected,) = watcher.handle(
+            self.msg(
+                nl.CMD_AUTHENTICATE,
+                nl.pack_attr(nl.ATTR_FRAME, auth_frame(3, status=1, ap=0x24)),
+            )
+        )
+        assert rejected.record["event"] == "auth_failed"
+        assert rejected.record["bssid"] == "02:00:00:00:00:24"
+        assert rejected.record["status_code"] == 1
+        assert "timed_out" not in rejected.record
+        assert "event: (auth_failed), status: (1 " in rejected
+        assert (
+            watcher.handle(
+                self.msg(
+                    nl.CMD_AUTHENTICATE,
+                    nl.pack_attr(nl.ATTR_FRAME, auth_frame(3, seq=1, status=126)),
+                )
+            )
+            == []
+        )
+        for cmd, name in (
+            (nl.CMD_AUTHENTICATE, "auth_failed"),
+            (nl.CMD_ASSOCIATE, "assoc_failed"),
+        ):
+            (late,) = watcher.handle(
+                self.msg(
+                    cmd,
+                    nl.attr_flag(nl.ATTR_TIMED_OUT),
+                    nl.pack_attr(nl.ATTR_MAC, mac(0x25)),
+                )
+            )
+            assert late.record["event"] == name
+            assert late.record["bssid"] == "02:00:00:00:00:25"
+            assert late.record["timed_out"] is True
+            assert "status_code" not in late.record
+            assert "timed_out: (yes)" in late
+        assert (
+            watcher.handle(
+                self.msg(nl.CMD_ASSOCIATE, nl.pack_attr(nl.ATTR_REQ_IE, rsn_ie()))
+            )
+            == []
+        )
 
     def test_other_interfaces_ignored(self, kernel, backend):
         watcher, _ = self.watcher(kernel, backend)

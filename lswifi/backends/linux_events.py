@@ -16,7 +16,8 @@ lswifi.backends.linux_events
 
 The kernel pushes connect, roam, disconnect (with the 802.11 reason code
 and whether the AP or this station ended it), port authorized (4-way
-handshake done) and channel switch events, so nothing is polled. A link
+handshake done), channel switch, rejected or timed-out authentication and
+timed-out association events, so nothing is polled. A link
 added or removed, and a channel switch that names a link, are reported for
 that link. Scan started, scan complete and scan aborted print by default.
 A locally generated disconnect followed by a connect on the same SSID stays
@@ -26,6 +27,7 @@ Windows and macOS watchers.
 """
 
 import logging
+import struct
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -79,6 +81,7 @@ ROAM_WINDOW_S = 2.0
 AUTH_OPEN = 0
 AUTH_FT = 2
 AUTH_SAE = 3
+AUTH_802_1X = 8
 
 EID_RSN = 48
 EID_FAST_BSS_TRANSITION = 55
@@ -92,18 +95,28 @@ _MGMT_HEADER = 24
 _HT_CONTROL = 4
 _AUTH_SUBTYPE = 0xB
 
+STATUS_SUCCESS = 0
+STATUS_ANTI_CLOGGING_TOKEN_REQUIRED = 76
+STATUS_FINITE_CYCLIC_GROUP_NOT_SUPPORTED = 77
+STATUS_SAE_HASH_TO_ELEMENT = 126
+STATUS_SAE_PK = 127
+STATUS_802_1X_AUTH_SUCCESS = 153
+SAE_COMMIT = 1
+SAE_COMMIT_CONTINUE_STATUS = frozenset(
+    {
+        STATUS_ANTI_CLOGGING_TOKEN_REQUIRED,
+        STATUS_FINITE_CYCLIC_GROUP_NOT_SUPPORTED,
+        STATUS_SAE_HASH_TO_ELEMENT,
+        STATUS_SAE_PK,
+    }
+)
+
 
 def _elapsed_ms(start: float, end: float) -> int:
     return max(0, round((end - start) * 1000))
 
 
-def auth_algorithm(frame: bytes) -> int | None:
-    """Authentication algorithm from a CMD_AUTHENTICATE ATTR_FRAME.
-
-    The kernel sends the received Authentication frame (header and body, no
-    FCS). Open is 0, FT is 2 and SAE is 3. nl80211 ATTR_AUTH_TYPE is a
-    different enum and is not included on this event.
-    """
+def _auth_body(frame: bytes) -> bytes | None:
     if len(frame) < _MGMT_HEADER + 2:
         return None
     fc = int.from_bytes(frame[:2], "little")
@@ -117,7 +130,36 @@ def auth_algorithm(frame: bytes) -> int | None:
     offset = _MGMT_HEADER + (_HT_CONTROL if fc & _FC_ORDER else 0)
     if len(frame) < offset + 2:
         return None
-    return int.from_bytes(frame[offset : offset + 2], "little")
+    return frame[offset:]
+
+
+def auth_algorithm(frame: bytes) -> int | None:
+    """Authentication algorithm from a CMD_AUTHENTICATE ATTR_FRAME.
+
+    The kernel sends the received Authentication frame (header and body, no
+    FCS). Open is 0, FT is 2 and SAE is 3. nl80211 ATTR_AUTH_TYPE is a
+    different enum and is not included on this event.
+    """
+    body = _auth_body(frame)
+    return None if body is None else int.from_bytes(body[:2], "little")
+
+
+def auth_failure(frame: bytes) -> tuple[str, int] | None:
+    body = _auth_body(frame)
+    if body is None or len(body) < 6:
+        return None
+    algorithm, transaction, status = struct.unpack_from("<HHH", body)
+    if status == STATUS_SUCCESS:
+        return None
+    if (
+        algorithm == AUTH_SAE
+        and transaction == SAE_COMMIT
+        and status in SAE_COMMIT_CONTINUE_STATUS
+    ):
+        return None
+    if algorithm == AUTH_802_1X and status == STATUS_802_1X_AUTH_SUCCESS:
+        return None
+    return nl.mac_str(frame[10:16]), status
 
 
 def _elements(buf: bytes) -> Iterator[tuple[int, bytes]]:
@@ -543,6 +585,20 @@ class LinkFormatter:
             fields["timed_out"] = True
         return self.line(target, "connect_failed", extra, **fields)
 
+    def mlme_failed(
+        self, event: str, bssid: str, status: int | None, timed_out: bool
+    ) -> EventLine:
+        self._clear_auth()
+        extra = ""
+        fields: dict[str, Any] = {}
+        if status is not None:
+            extra += f", status: ({status} {status_text(status)})"
+            fields.update(status_code=status, status_text=status_text(status))
+        if timed_out:
+            extra += ", timed_out: (yes)"
+            fields["timed_out"] = True
+        return self.line(LinkInfo(bssid=bssid or None), event, extra, **fields)
+
     def roamed(self, link: LinkInfo) -> EventLine:
         now = time.monotonic()
         old, self.last = self.last, link
@@ -789,6 +845,14 @@ class LinuxEventWatcher:
         cmd = message.cmd
         if cmd in (nl.CMD_AUTHENTICATE, nl.CMD_ASSOCIATE):
             formatter.observe_mlme(message.attrs)
+            event = "auth_failed" if cmd == nl.CMD_AUTHENTICATE else "assoc_failed"
+            if nl.ATTR_TIMED_OUT in message.attrs:
+                bssid = nl.mac_str(message.attrs.get(nl.ATTR_MAC))
+                return [formatter.mlme_failed(event, bssid, None, True)]
+            frame = message.attrs.get(nl.ATTR_FRAME)
+            rejected = auth_failure(frame) if frame else None
+            if rejected:
+                return [formatter.mlme_failed(event, *rejected, False)]
             return []
         if cmd == nl.CMD_CONNECT:
             status = nl.get_uint(message.attrs, nl.ATTR_STATUS_CODE, 0) or 0
