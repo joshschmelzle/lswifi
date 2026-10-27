@@ -3367,6 +3367,29 @@ class TestEvents:
         expected = ("02:00:00:00:00:22", status) if failed else None
         assert auth_failure(frame) == expected
 
+    def test_failed_auth_does_not_type_the_next_roam(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        (failed,) = watcher.handle(
+            self.msg(
+                nl.CMD_AUTHENTICATE,
+                nl.pack_attr(nl.ATTR_FRAME, auth_frame(3, seq=1, status=1, ap=0x24)),
+            )
+        )
+        assert failed.record["event"] == "auth_failed"
+        clock["t"] = 1000.5
+        self._join(kernel, 0x22)
+        watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22))))
+        clock["t"] = 1000.6
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert "roam_type" not in conn.record
+        assert conn.record["roam_ms"] == 100
+
     def test_auth_failure_frame_shapes(self):
         assert auth_failure(auth_frame(0, status=17, order=True)) == (
             "02:00:00:00:00:22",

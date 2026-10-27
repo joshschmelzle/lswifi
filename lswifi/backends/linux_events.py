@@ -588,6 +588,7 @@ class LinkFormatter:
     def mlme_failed(
         self, event: str, bssid: str, status: int | None, timed_out: bool
     ) -> EventLine:
+        self._clear_auth()
         extra = ""
         fields: dict[str, Any] = {}
         if status is not None:
