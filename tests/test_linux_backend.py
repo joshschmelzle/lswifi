@@ -3171,6 +3171,29 @@ class TestEvents:
         assert "since_connect_ms: (250)" in port
         assert "roam_total_ms: (500)" in port
 
+    def test_failed_connect_while_associated_counts_as_leaving(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        (failed,) = watcher.handle(
+            self.msg(
+                nl.CMD_CONNECT,
+                nl.pack_attr(nl.ATTR_MAC, mac(0x23)),
+                nl.attr_u16(nl.ATTR_STATUS_CODE, 1),
+            )
+        )
+        assert failed.record["event"] == "connect_failed"
+        clock["t"] = 1000.1
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 1000.4
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert conn.record["roam_ms"] == 400
+
     def test_failed_attempt_does_not_type_the_next_roam(
         self, kernel, backend, monkeypatch
     ):

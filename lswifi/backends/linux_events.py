@@ -523,6 +523,9 @@ class LinkFormatter:
         return self.line(link, "connected", extra, **fields)
 
     def connect_failed(self, bssid: str, status: int, timed_out: bool) -> EventLine:
+        old = self.last
+        if old.connected and old.bssid and self._disc is None:
+            self._disc = (time.monotonic(), old.bssid, bytes(old.ssid))
         kept: dict[str, Any] = {}
         previous = _previous_mld(self.last)
         if previous:
