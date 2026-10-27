@@ -4,6 +4,15 @@ Release History
 RELEASED
 --------
 
+0.4.0 (2026-10-26)
+------------------
+
+- VHT Operation channel width is 80, 160, or 80+80 from the centre frequency gap, including deprecated width values 2 and 3. When VHT Capabilities Extended NSS BW Support requires it, the second centre comes from HT Operation CCFS2. A 2.4 GHz BSS keeps its HT width. On 6 GHz, HE Operation width code 3 with no 160 MHz gap is 80 MHz, and a wider gap is 80+80. Only `channel_width` in the table, CSV, and `--json` changes (#145).
+- `-ies` text decodes Wi-Fi 4/5/6 capability and operation fields: HT and VHT MCS maps per spatial stream, LDPC, short GI, STBC, beamforming, protection mode and CCFS2, VHT max MPDU and channel width, and HE TWT and beamforming flags. Summary columns and `--json` are unchanged (#146).
+- On Linux MLO associations, `--get-interfaces` and `--watchevents` connected and roamed events take top-level channel, frequency, band, and width from the link carrying traffic instead of link 0 (#147). Fixes #129.
+- `--get-interfaces` text marks the active link and prints per-link counters when the kernel sends them. `--get-interfaces --json` gains `ap_mld`. Each `links` entry gains `active` and `stats`. Connected and roamed `--watchevents` events gain `old_ap_mld`. JSON changes are additive (#147).
+- Per-link station stats are requested on GET_STATION and the dump is retried without the link-stats attribute when the kernel rejects it (#147).
+
 0.3.4 (2026-10-26)
 ------------------
 
