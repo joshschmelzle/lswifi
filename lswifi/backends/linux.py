@@ -192,7 +192,7 @@ def interface_from_attrs(attrs: dict[int, bytes]) -> LinuxInterface | None:
         center_freq1=nl.get_uint(attrs, nl.ATTR_CENTER_FREQ1),
         center_freq2=nl.get_uint(attrs, nl.ATTR_CENTER_FREQ2),
         tx_power_mbm=nl.get_uint(attrs, nl.ATTR_WIPHY_TX_POWER_LEVEL),
-        links=parse_mlo_links(attrs, mac_field="addr"),
+        links=parse_mlo_links(attrs, mac_field="addr", from_interface=True),
     )
 
 
@@ -415,7 +415,10 @@ def parse_sta_info(payload: bytes) -> dict[str, Any]:
 
 
 def parse_mlo_links(
-    attrs: dict[int, bytes], mac_field: str = "bssid"
+    attrs: dict[int, bytes],
+    mac_field: str = "bssid",
+    *,
+    from_interface: bool = False,
 ) -> list[dict[str, Any]]:
     blob = attrs.get(nl.ATTR_MLO_LINKS)
     if not blob:
@@ -445,6 +448,10 @@ def parse_mlo_links(
             link["tx_power_mbm"] = nl.get_uint(inner, nl.ATTR_WIPHY_TX_POWER_LEVEL)
         if nl.ATTR_STA_INFO in inner:
             link["station"] = parse_sta_info(inner[nl.ATTR_STA_INFO])
+        if from_interface:
+            link["active"] = (
+                nl.ATTR_WIPHY_FREQ in inner or nl.ATTR_CHANNEL_WIDTH in inner
+            )
         if link:
             links.append(link)
     return links
@@ -496,7 +503,63 @@ def _public_link(link: dict[str, Any]) -> dict[str, Any]:
         public["center_freq2_mhz"] = link["center_freq2_mhz"]
     if link.get("tx_power_mbm") is not None:
         public["tx_power_dbm"] = link["tx_power_mbm"] / 100
+    if not public:
+        return public
+    active = link.get("active")
+    public["active"] = active if isinstance(active, bool) else None
+    if "station" in link:
+        public["stats"] = _link_stats(link.get("station"))
+    elif "stats" in link:
+        stats = link.get("stats")
+        public["stats"] = dict(stats) if isinstance(stats, dict) else None
+    else:
+        public["stats"] = None
     return public
+
+
+_LINK_STAT_FIELDS = (
+    "signal",
+    "signal_avg",
+    "rx_bytes",
+    "tx_bytes",
+    "rx_packets",
+    "tx_packets",
+    "tx_retries",
+    "tx_failed",
+    "rx_rate",
+    "tx_rate",
+)
+
+
+def _link_stats(station: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not station:
+        return None
+    return {key: station.get(key) for key in _LINK_STAT_FIELDS}
+
+
+def _format_link_stats(stats: dict[str, Any] | None) -> str:
+    if not stats:
+        return ""
+    bits = []
+    if stats.get("signal") is not None:
+        bits.append(f"signal {stats['signal']} dBm")
+    if stats.get("signal_avg") is not None:
+        bits.append(f"signal avg {stats['signal_avg']} dBm")
+    if stats.get("rx_bytes") is not None:
+        bits.append(f"rx {stats['rx_bytes']} B")
+    if stats.get("tx_bytes") is not None:
+        bits.append(f"tx {stats['tx_bytes']} B")
+    if stats.get("rx_packets") is not None:
+        bits.append(f"rx {stats['rx_packets']} pkts")
+    if stats.get("tx_packets") is not None:
+        bits.append(f"tx {stats['tx_packets']} pkts")
+    rx = stats.get("rx_rate") or {}
+    if rx.get("mbps") is not None:
+        bits.append(f"rx {format_mbps(rx['mbps'])} Mbps")
+    tx = stats.get("tx_rate") or {}
+    if tx.get("mbps") is not None:
+        bits.append(f"tx {format_mbps(tx['mbps'])} Mbps")
+    return ", ".join(bits)
 
 
 def format_link(item: dict[str, Any]) -> str:
@@ -520,23 +583,40 @@ def format_link(item: dict[str, Any]) -> str:
     if item.get("tx_power_dbm") is not None:
         bits.append(f"{format_mbps(item['tx_power_dbm'])} dBm")
     label = f"Link {item['id']}" if item.get("id") is not None else "Link"
-    return f"{label}: {', '.join(bits)}"
+    if item.get("active") is True:
+        label += " (active)"
+    text = f"{label}: {', '.join(bits)}"
+    stats = _format_link_stats(item.get("stats"))
+    if stats:
+        text += f", {stats}"
+    return text
 
 
-def merge_station_dump(messages) -> tuple[str | None, dict[str, Any] | None, list]:
+def merge_station_dump(
+    messages,
+) -> tuple[str | None, dict[str, Any] | None, list, int | None]:
     """Fold a GET_STATION dump into one BSSID, MLD stats, and per-link identity.
 
     Top-level STA_INFO is the MLD aggregate. A dump that only nests STA_INFO
     under a single link uses that. Stats are not copied onto every link.
+    A top-level MLO link id on the aggregate, when the kernel sends one, is
+    the association link.
     """
     bssid = None
     aggregate = None
+    assoc_id = None
     found: list[dict[str, Any]] = []
     for message in messages:
         attrs = message.attrs
         mac = nl.mac_str(attrs.get(nl.ATTR_MAC))
         if mac and bssid is None:
             bssid = mac
+        if (
+            assoc_id is None
+            and nl.ATTR_STA_INFO in attrs
+            and nl.ATTR_MLO_LINK_ID in attrs
+        ):
+            assoc_id = nl.get_uint(attrs, nl.ATTR_MLO_LINK_ID)
         if nl.ATTR_STA_INFO in attrs:
             parsed = parse_sta_info(attrs[nl.ATTR_STA_INFO])
             if parsed and aggregate is None:
@@ -549,7 +629,7 @@ def merge_station_dump(messages) -> tuple[str | None, dict[str, Any] | None, lis
             aggregate = nested[0]
     if bssid is None and len(links) == 1:
         bssid = links[0].get("bssid")
-    return bssid, aggregate, links
+    return bssid, aggregate, links, assoc_id
 
 
 def associated_mlo_links(messages) -> tuple[str | None, list[dict[str, Any]]]:
@@ -599,9 +679,26 @@ def _unlocal_bssid(link: dict[str, Any], local: dict[int, str]) -> dict[str, Any
     return item
 
 
-def _association(links: list[dict[str, Any]]) -> dict[str, Any] | None:
+def _choose_link(
+    links: list[dict[str, Any]], assoc_id: int | None = None
+) -> dict[str, Any] | None:
+    """Link carrying traffic: the active link, else the association link, else 0."""
     if not links:
         return None
+    active = [item for item in links if item.get("active") is True]
+    if active:
+        if assoc_id is not None:
+            for item in active:
+                if item.get("id") == assoc_id:
+                    return item
+        return min(
+            active,
+            key=lambda item: item["id"] if isinstance(item.get("id"), int) else 1 << 30,
+        )
+    if assoc_id is not None:
+        for item in links:
+            if item.get("id") == assoc_id:
+                return item
     for item in links:
         if item.get("id") == 0:
             return item
@@ -615,21 +712,28 @@ def _fill_from_link(
     center1: int | None,
     center2: int | None,
     tx_power: int | None,
+    assoc_id: int | None = None,
 ) -> tuple[int | None, int | None, int | None, int | None, int | None]:
-    chosen = _association(links)
+    chosen = _choose_link(links, assoc_id)
     if not chosen:
         return freq, width, center1, center2, tx_power
-    if freq is None:
-        freq = chosen.get("frequency_mhz")
-    if width is None:
-        width = chosen.get("width_mhz")
-    if center1 is None:
-        center1 = chosen.get("center_freq1_mhz")
-    if center2 is None:
-        center2 = chosen.get("center_freq2_mhz")
-    if tx_power is None:
-        tx_power = chosen.get("tx_power_mbm")
-    return freq, width, center1, center2, tx_power
+    override = chosen.get("active") is True
+
+    def pick(current: int | None, key: str) -> int | None:
+        value = chosen.get(key)
+        if override and value is not None:
+            return value
+        if current is None:
+            return value
+        return current
+
+    return (
+        pick(freq, "frequency_mhz"),
+        pick(width, "width_mhz"),
+        pick(center1, "center_freq1_mhz"),
+        pick(center2, "center_freq2_mhz"),
+        pick(tx_power, "tx_power_mbm"),
+    )
 
 
 def _drop_placeholder_mld_signal(station: dict[str, Any] | None, links: list) -> None:
@@ -1152,6 +1256,26 @@ class LinuxBackend:
             log.debug("GET_SCAN on %s failed: %s", native.name, error)
             return []
 
+    def _station_dump(self, native: LinuxInterface):
+        plain = nl.attr_u32(nl.ATTR_IFINDEX, native.ifindex)
+        flagged = plain + nl.attr_flag(nl.ATTR_STA_DUMP_LINK_STATS)
+        try:
+            with self.netlink() as sock:
+                try:
+                    return sock.request(nl.CMD_GET_STATION, flagged, dump=True)
+                except nl.NetlinkError as error:
+                    if error.errno not in (errno.EINVAL, errno.EOPNOTSUPP):
+                        raise
+                    log.debug(
+                        "GET_STATION link stats rejected on %s (%s); retrying",
+                        native.name,
+                        error,
+                    )
+                    return sock.request(nl.CMD_GET_STATION, plain, dump=True)
+        except OSError as error:
+            log.debug("GET_STATION on %s failed: %s", native.name, error)
+            return []
+
     def link(self, native: LinuxInterface) -> LinkInfo:
         """Current SSID, BSSID, channel, RSSI and Tx rate"""
         native = self.refresh(native)
@@ -1177,17 +1301,8 @@ class LinuxBackend:
         )
         if not info.connected:
             return info
-        try:
-            with self.netlink() as sock:
-                stations = sock.request(
-                    nl.CMD_GET_STATION,
-                    nl.attr_u32(nl.ATTR_IFINDEX, native.ifindex),
-                    dump=True,
-                )
-        except OSError as error:
-            log.debug("GET_STATION on %s failed: %s", native.name, error)
-            stations = []
-        bssid, station, station_links = merge_station_dump(stations)
+        stations = self._station_dump(native)
+        bssid, station, station_links, assoc_id = merge_station_dump(stations)
         mld, bss_links = associated_mlo_links(self._bss_messages(native))
         if bssid is None:
             bssid = mld
@@ -1195,13 +1310,15 @@ class LinuxBackend:
         station_links = [_unlocal_bssid(item, local) for item in station_links]
         links = _merge_links(iface_links + station_links + bss_links)
         freq, width, center1, center2, tx_power = _fill_from_link(
-            links, freq, width, center1, center2, tx_power
+            links, freq, width, center1, center2, tx_power, assoc_id
         )
         info.frequency_mhz = freq
         info.width_mhz = width
         info.extra["center_freq1"] = center1
         info.extra["center_freq2"] = center2
         info.extra["tx_power_mbm"] = tx_power
+        if assoc_id is not None:
+            info.extra["assoc_link_id"] = assoc_id
         _drop_placeholder_mld_signal(station, links)
         info.bssid = bssid
         if station:
@@ -1524,6 +1641,7 @@ class LinuxBackend:
             "state": state,
             "ssid": link.ssid_text,
             "bssid": link.bssid,
+            "ap_mld": link.bssid if links else None,
             "channel": link.channel,
             "frequency_mhz": link.frequency_mhz,
             "band": link.band,
