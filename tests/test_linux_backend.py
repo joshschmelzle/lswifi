@@ -2516,6 +2516,35 @@ class TestEvents:
             connected.record, timestamp="2026-01-01T00:00:00.000+00:00"
         )
 
+    def test_connect_failed_keeps_previous_ap_mld(self, kernel, backend):
+        self._two_link(kernel)
+        watcher, _lines = self._watch(kernel, backend)
+        (gone,) = watcher.handle(
+            self.msg(
+                nl.CMD_DISCONNECT,
+                nl.attr_u16(nl.ATTR_REASON_CODE, 3),
+            )
+        )
+        assert gone.record["ap_mld"] == "68:51:34:7c:32:05"
+        (failed,) = watcher.handle(
+            self.msg(
+                nl.CMD_CONNECT,
+                nl.pack_attr(nl.ATTR_MAC, mac(0x44)),
+                nl.attr_u16(nl.ATTR_STATUS_CODE, 17),
+            )
+        )
+        assert "event: (connect_failed)" in failed
+        assert failed.record["bssid"] == "02:00:00:00:00:44"
+        assert "old_ap_mld" not in failed.record
+        new_mld = bytes.fromhex("6851347c32aa")
+        kernel.stations = [station_message(new_mld, [s8(nl.STA_INFO_SIGNAL, -55)])]
+        (connected,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert connected.record["bssid"] == "68:51:34:7c:32:aa"
+        assert connected.record["old_bssid"] == "68:51:34:7c:32:05"
+        assert connected.record["old_ap_mld"] == "68:51:34:7c:32:05"
+
     def test_missing_fields_are_hidden_and_json_null(self):
         formatter = LinkFormatter("02:00:00:00:00:13")
         line = formatter.watching(

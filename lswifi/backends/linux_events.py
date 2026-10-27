@@ -315,7 +315,11 @@ class LinkFormatter:
         return self.line(link, "connected", extra, **fields)
 
     def connect_failed(self, bssid: str, status: int, timed_out: bool) -> EventLine:
-        self.last = LinkInfo(bssid=self.last.bssid)
+        kept: dict[str, Any] = {}
+        previous = _previous_mld(self.last)
+        if previous:
+            kept["ap_mld"] = previous
+        self.last = LinkInfo(bssid=self.last.bssid, extra=kept)
         target = LinkInfo(bssid=bssid or None)
         extra = f", status: ({status} {status_text(status)})"
         fields: dict[str, Any] = {
