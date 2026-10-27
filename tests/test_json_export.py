@@ -277,3 +277,45 @@ def test_exportraw_rejects_a_path_it_cannot_create(tmp_path, monkeypatch, capsys
         lswifi_main.main()
     assert exited.value.code == 2
     assert f"-path {target}:" in capsys.readouterr().err
+
+
+def _two_bss_export(tmp_path, argv):
+    records = [
+        BssRecord(ssid=b"ExampleNet", bssid=bssid, frequency_mhz=5180, ies=b"")
+        for bssid in ("02:00:00:00:00:21", "02:00:00:00:00:22")
+    ]
+    session = Session([WirelessNetworkBss(record) for record in records])
+    app.lswifi().parse_bss_list(
+        session, False, "", "", parse([*argv, "-path", str(tmp_path)])
+    )
+    return sorted(p.name for p in tmp_path.iterdir())
+
+
+def test_exportraw_all_reports_once(tmp_path, capsys):
+    files = _two_bss_export(tmp_path, ["-exportraw", "all"])
+    assert files == [
+        "02-00-00-00-00-21.bss",
+        "02-00-00-00-00-21.ies",
+        "02-00-00-00-00-22.bss",
+        "02-00-00-00-00-22.ies",
+    ]
+    out = capsys.readouterr().out
+    assert out.splitlines() == [f"Files exported to {tmp_path}"]
+
+
+def test_exportraw_one_bssid_reports_once(tmp_path, capsys):
+    files = _two_bss_export(tmp_path, ["-exportraw", "02:00:00:00:00:22"])
+    assert files == ["02-00-00-00-00-22.bss", "02-00-00-00-00-22.ies"]
+    out = capsys.readouterr().out
+    assert out.splitlines() == [
+        f"Raw byte files for 02:00:00:00:00:22 exported to {tmp_path}"
+    ]
+
+
+def test_exportraw_missing_bssid_reports_once(tmp_path, capsys):
+    files = _two_bss_export(tmp_path, ["-exportraw", "02:00:00:00:00:99"])
+    assert files == []
+    out = capsys.readouterr().out
+    assert out.splitlines() == [
+        "No match for 02:00:00:00:00:99 found in scan results. Please try again ..."
+    ]

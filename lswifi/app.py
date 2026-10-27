@@ -683,63 +683,6 @@ class lswifi:
                     if args.bytes:
                         user_bss = args.bytes.lower()
                     if args.exportraw:
-                        if (
-                            args.exportraw != "all"
-                        ):  # if lswifi -export xx:xx:xx:nn:nn:nn
-                            user_bss = args.exportraw
-                            # print(f"{bss_len} {index}")
-                            # print(f"{wlanapi_bss} {user_bss}")
-
-                            if wlanapi_bss != user_bss:
-                                # print("{} {}".format(wlanapi_bss, user_bss))
-                                if bss_len == (index + 1):
-                                    print(
-                                        f"no match for {args.exportraw} found in scan results. please try again ..."
-                                    )
-                                continue
-
-                        # if lswifi -export
-                        export_bss = str(bss.bssid).lower().replace(":", "-")
-
-                        bsspath = export_bss + ".bss"
-                        # print(f"{os.path.join(exportpath, bss)}")
-                        # print(f"{type(bss.bssbytes)}")
-                        # print(f"{bss.bssbytes}")
-                        with open(
-                            os.path.join(exportraw_path, bsspath), "wb"
-                        ) as bssfile:
-                            bssfile.write(bss.bssbytes)
-
-                        bsspath = export_bss + ".bss"
-                        with open(
-                            os.path.join(exportraw_path, bsspath), "wb"
-                        ) as bssfile:
-                            bssfile.write(bss.bssbytes)
-
-                        iespath = export_bss + ".ies"
-                        # print(f"{os.path.join(exportpath, ies)}")
-                        # print(f"{type(bss.iesbytes)}")
-                        # print(f"{bss.iesbytes}")
-                        with open(
-                            os.path.join(exportraw_path, iespath), "wb"
-                        ) as iesfile:
-                            iesfile.write(bss.iesbytes)
-
-                        # print(f"{bsspath} {iespath}")
-                        if args.export != "all":
-                            log.info(
-                                f"found and exporting requested bssid from the scan results of {client.mac}."
-                            )
-                            print(
-                                f"raw byte files for {args.export} exported to {exportraw_path}"
-                            )
-                            break
-                        elif (bss_len - 1) == index:
-                            log.info(
-                                f"found and exporting {bss_len} bssids from the scan results of {client.mac}."
-                            )
-                            print(f"files exported to {exportraw_path}")
-
                         continue
 
                     # compare if bss from list is the same as the one the user wants details for
