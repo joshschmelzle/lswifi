@@ -347,6 +347,7 @@ class TestRawIes:
         bss_file = tmp_path / "98-8f-00-9a-a4-80.bss"
         bss_file.write_bytes(b"\x00" * 64)
         result = run_lswifi("-decoderaw", str(bss_file))
+        assert result.returncode != 0
         assert "Traceback" not in result.stderr
         assert "requires Windows" in result.stdout + result.stderr
 
@@ -519,8 +520,9 @@ class TestFakeBackend:
 
     def test_run_table(self, capsys):
         backend = FakeBackend(fake_records())
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["-all"]), backend=backend)
+        assert exited.value.code == 0
         out = capsys.readouterr().out
         assert "Wi-Fi 7" in out
         assert "98:8f:00:9a:a4:80(*)" in out
@@ -528,8 +530,9 @@ class TestFakeBackend:
 
     def test_run_list_interfaces(self, capsys):
         backend = FakeBackend([])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["--list-interfaces"]), backend=backend)
+        assert exited.value.code == 0
         out = capsys.readouterr().out
         assert "Connection Name: Wi-Fi" in out
         assert "GUID: 00000000-0000-0000-0000-000000000000" in out
@@ -537,15 +540,65 @@ class TestFakeBackend:
 
     def test_run_interface_info(self, capsys):
         backend = FakeBackend([])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["-ap"]), backend=backend)
+        assert exited.value.code == 0
         assert "INTERFACE: Wi-Fi" in capsys.readouterr().out
 
     def test_run_watchevents_unsupported(self, caplog):
         backend = FakeBackend([])
-        with pytest.raises(SystemExit):
+        with pytest.raises(SystemExit) as exited:
             app.run(parse(["--watchevents"]), backend=backend)
+        assert exited.value.code == -1
         assert "--watchevents is unsupported on fake" in caplog.text
+
+    def test_run_without_interfaces_exits_nonzero(self, caplog):
+        backend = FakeBackend([])
+        backend.list_interfaces = lambda: []
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse(["-all"]), backend=backend)
+        assert exited.value.code == -1
+        assert "no wireless interfaces found" in caplog.text
+
+    @pytest.mark.parametrize(
+        "flag, name, content, message",
+        [
+            ("-decode", "corrupt.pcapng", b"not a capture", "Unknown file format"),
+            ("-decode", "empty.pcap", b"", "Unknown file format"),
+            ("-decode", "magic.pcap", b"\xd4\xc3\xb2\xa1", "header too short"),
+            ("-decode", "magic.pcapng", b"\x0a\x0d\x0d\x0a", "header too short"),
+            ("-decoderaw", "notes.txt", b"\x00" * 8, "needs a .ies or .bss file"),
+            ("-decoderaw", "noextension", b"\x00" * 8, "needs a .ies or .bss file"),
+        ],
+    )
+    def test_decode_bad_file_exits_nonzero(
+        self, tmp_path, flag, name, content, message, caplog
+    ):
+        target = tmp_path / name
+        target.write_bytes(content)
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse([flag, str(target)]), backend=None)
+        assert exited.value.code == -1
+        assert message in caplog.text
+
+    def test_run_interrupted_exits_nonzero(self):
+        backend = FakeBackend(fake_records())
+
+        def interrupted(*_args, **_kwargs):
+            raise KeyboardInterrupt
+
+        backend.list_interfaces = interrupted
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse(["-all"]), backend=backend)
+        assert exited.value.code == -1
+
+    @pytest.mark.parametrize("flag", ["-decode", "-decoderaw"])
+    def test_decode_missing_file_exits_nonzero(self, tmp_path, flag, capsys):
+        missing = str(tmp_path / "missing.ies")
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse([flag, missing]), backend=None)
+        assert exited.value.code == -1
+        assert "does not exist" in capsys.readouterr().out
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="checks the non-Windows CLI")

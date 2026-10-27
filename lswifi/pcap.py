@@ -439,22 +439,24 @@ class PCAP:
         if not self.file or self.mode != "r":
             raise ValueError("File not open for reading")
 
+        first = True
         while True:
             block_type_data = self.file.read(4)
-            if len(block_type_data) < 4:
+            length_data = self.file.read(4)
+            if len(block_type_data) < 4 or len(length_data) < 4:
+                if first:
+                    raise ValueError("Invalid pcapng file: section header too short")
                 break
 
             block_type = struct.unpack("<I", block_type_data)[0]
-
-            length_data = self.file.read(4)
-            if len(length_data) < 4:
-                break
-
             block_length = struct.unpack("<I", length_data)[0]
 
             data_length = block_length - 12
 
             data = self.file.read(data_length)
+            if first and (data_length < 0 or len(data) < data_length):
+                raise ValueError("Invalid pcapng file: section header too short")
+            first = False
 
             self.file.read(4)
 
@@ -474,8 +476,7 @@ class PCAP:
         elif file_format == "pcapng":
             self.log.debug("Detected pcapng format")
         else:
-            self.log.error("Unknown file format")
-            return
+            raise ValueError("Unknown file format")
 
         interfaces = []
 
@@ -528,14 +529,12 @@ class PCAP:
         """Generator to read packets from legacy pcap format."""
         header = self.file.read(24)
         if len(header) < 24:
-            self.log.error("Invalid pcap file: header too short")
-            return
+            raise ValueError("Invalid pcap file: header too short")
 
         magic = struct.unpack("<I", header[:4])[0]
 
         if magic != PCAP_MAGIC:
-            self.log.error(f"Unknown pcap magic: {hex(magic)}")
-            return
+            raise ValueError(f"Unknown pcap magic: {hex(magic)}")
 
         version_major, version_minor, _, _, snaplen, linktype = struct.unpack(
             "<HHIIII", header[4:24]
