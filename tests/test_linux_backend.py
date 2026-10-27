@@ -3046,6 +3046,35 @@ class TestEvents:
         assert "roam_type" not in late.record
         assert "roam_ms" not in late.record
 
+    def test_failed_attempt_does_not_type_the_next_roam(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 1000.1
+        ft_ies = rsn_ie(PMKID) + ie(55, b"\x00\x20" + b"\x11" * 6)
+        watcher.handle(
+            self.msg(nl.CMD_AUTHENTICATE, nl.pack_attr(nl.ATTR_FRAME, auth_frame(2)))
+        )
+        watcher.handle(self.msg(nl.CMD_ASSOCIATE, nl.pack_attr(nl.ATTR_REQ_IE, ft_ies)))
+        (failed,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 1))
+        )
+        assert failed.record["event"] == "connect_failed"
+        clock["t"] = 1000.5
+        watcher.handle(
+            self.msg(nl.CMD_AUTHENTICATE, nl.pack_attr(nl.ATTR_FRAME, auth_frame(0)))
+        )
+        clock["t"] = 1000.6
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert "roam_type" not in conn.record
+        assert conn.record["roam_ms"] == 600
+
     def test_non_roam_connect(self, kernel, backend, monkeypatch):
         clock = self._clock(monkeypatch)
         clock["t"] = 3000.0

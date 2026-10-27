@@ -526,6 +526,7 @@ class LinkFormatter:
         if previous:
             kept["ap_mld"] = previous
         self.last = LinkInfo(bssid=self.last.bssid, extra=kept)
+        self._clear_auth()
         target = LinkInfo(bssid=bssid or None)
         extra = f", status: ({status} {status_text(status)})"
         fields: dict[str, Any] = {
