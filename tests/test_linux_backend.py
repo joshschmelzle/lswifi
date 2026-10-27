@@ -25,7 +25,12 @@ from lswifi.backends.linux import (
     ssid_from_ies,
     station_to_link,
 )
-from lswifi.backends.linux_events import LinkFormatter, LinuxEventWatcher
+from lswifi.backends.linux_events import (
+    ROAM_WINDOW_S,
+    LinkFormatter,
+    LinuxEventWatcher,
+    auth_algorithm,
+)
 from lswifi.elements import WirelessNetworkBss
 from lswifi.watchjson import NDJSONWriter, dumps
 
@@ -41,6 +46,32 @@ def mac(last: int) -> bytes:
 
 def ie(eid: int, body: bytes) -> bytes:
     return bytes([eid, len(body)]) + body
+
+
+def auth_frame(algorithm: int, *, order: bool = False) -> bytes:
+    header = struct.pack("<HH", 0x00B0 | (0x8000 if order else 0), 0)
+    header += bytes(6) + mac(0x13) + mac(0x22) + struct.pack("<H", 0)
+    if order:
+        header += b"\x00\x00\x00\x00"
+    return header + struct.pack("<HHH", algorithm, 1, 0)
+
+
+def rsn_ie(pmkid: bytes | None = None) -> bytes:
+    body = (
+        struct.pack("<H", 1)
+        + b"\x00\x0f\xac\x04"
+        + struct.pack("<H", 1)
+        + b"\x00\x0f\xac\x04"
+        + struct.pack("<H", 1)
+        + b"\x00\x0f\xac\x01"
+        + struct.pack("<H", 0x0080)
+    )
+    if pmkid is not None:
+        body += struct.pack("<H", 1) + pmkid
+    return ie(48, body)
+
+
+PMKID = bytes(range(16))
 
 
 # RSN: CCMP-128 group and pairwise, SAE + PSK, MFP capable
@@ -2281,6 +2312,10 @@ class TestEvents:
             self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
         )
         assert "event: (connected)" in ok
+        assert "roam: (no)" in ok
+        assert ok.record["roam"] is False
+        assert "roam_type" not in ok.record
+        assert "roam_ms" not in ok.record
         assert "old_ap_mld" not in watch_payload(ok.record)
         assert "old_ap_mld:" not in ok
         (bad,) = watcher.handle(
@@ -2544,9 +2579,8 @@ class TestEvents:
         stored = watcher.formatters[3].last.extra["links"]
         assert [item["id"] for item in stored] == [0]
 
-        watcher.scan_events = True
         (cached,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
-        assert "event: (scan_cache_updated)" in cached
+        assert "event: (scan_complete)" in cached
         assert cached.split("links:", 1)[1] == (
             " (0: 68:51:34:7c:32:05 6 GHz ch 37@80)"
         )
@@ -2791,21 +2825,490 @@ class TestEvents:
         assert records[5]["old_ap_mld"] == "68:51:34:7c:32:05"
         assert records[5]["old_bssid"] == "68:51:34:7c:32:05"
 
-    def test_scan_results_only_with_debug(self, kernel, backend):
+    def test_scan_events_print_by_default(self, kernel, backend):
+        kernel.bss = [
+            bss_attrs(0x01, 2412),
+            bss_attrs(0x02, 2437),
+            bss_attrs(0x03, 2462),
+        ]
         watcher, _ = self.watcher(kernel, backend)
-        assert watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS)) == []
-        watcher, _ = self.watcher(kernel, backend, ("--watchevents", "--debug"))
-        (line,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
-        assert "scan: (1 BSSIDs found)" in line
+        freqs = nl.pack_nested(
+            nl.ATTR_SCAN_FREQUENCIES,
+            [nl.attr_u32(index, mhz) for index, mhz in enumerate((2412, 2437, 5180))],
+        )
+        (started,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN, freqs))
+        assert "bssid: (02:00:00:00:00:21)" in started
+        assert "freq: (5180)" in started
+        assert "ssid: (ExampleNet)" in started
+        assert "event: (scan_started)" in started
+        assert "scan: (3 frequencies)" in started
+        assert started.record["event"] == "scan_started"
+        assert started.record["scan_frequency_count"] == 3
+        assert "scan_bssid_count" not in started.record
+
+        khz = nl.pack_nested(
+            nl.ATTR_SCAN_FREQ_KHZ,
+            [nl.attr_u32(index, mhz * 1000) for index, mhz in enumerate((2412, 2462))],
+        )
+        both = nl.pack_nested(
+            nl.ATTR_SCAN_FREQUENCIES,
+            [nl.attr_u32(0, 2412)],
+        )
+        (from_khz,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN, khz))
+        assert from_khz.record["scan_frequency_count"] == 2
+        (prefer_mhz,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN, khz + both))
+        assert prefer_mhz.record["scan_frequency_count"] == 1
+
+        (plain,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN))
+        assert "event: (scan_started)" in plain
+        assert "frequencies" not in plain
+        assert "scan_frequency_count" not in plain.record
+        assert set(started.record) - {"scan_frequency_count"} == set(plain.record)
+
+        (done,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
+        assert "event: (scan_complete)" in done
+        assert "scan_cache_updated" not in done
+        assert "scan: (3 BSSIDs found)" in done
+        assert done.record["event"] == "scan_complete"
+        assert done.record["scan_bssid_count"] == 3
+        assert done.record["bssid"] == "02:00:00:00:00:21"
+        assert done.record["freq_mhz"] == 5180
+        assert "scan_frequency_count" not in done.record
+        (again,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
+        assert set(done.record) == set(again.record)
+
+        (aborted,) = watcher.handle(self.msg(nl.CMD_SCAN_ABORTED))
+        assert "event: (scan_aborted)" in aborted
+        assert "bssid: (02:00:00:00:00:21)" in aborted
+        assert "freq: (5180)" in aborted
+        assert aborted.record["event"] == "scan_aborted"
+        assert "scan_bssid_count" not in aborted.record
+        assert "scan_frequency_count" not in aborted.record
+
+    def test_scan_events_omit_association_when_not_associated(self, kernel, backend):
+        self._two_link(kernel)
+        kernel.bss = [bss_attrs(0x01, 2412)]
+        watcher, _ = self._watch(kernel, backend)
+        (associated,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN))
+        assert "ap_mld: (68:51:34:7c:32:05)" in associated
+        assert "ssid: (wlanpiwlanpi)" in associated
+        assert "links:" in associated
+        assert associated.record["bssid"] == "68:51:34:7c:32:05"
+        assert associated.record["ssid"] == "wlanpiwlanpi"
+        assert [item["id"] for item in associated.record["links"]] == [0, 2]
+
+        watcher.handle(
+            self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1))
+        )
+        hidden = (
+            "bssid",
+            "ssid",
+            "ssid_hex",
+            "links",
+            "ap_mld",
+            "freq_mhz",
+            "rssi",
+            "channel",
+            "width_mhz",
+            "band",
+        )
+
+        def bare(line, event):
+            assert f"event: ({event})" in line
+            assert line.startswith("(02:00:00:00:00:63)")
+            assert "bssid:" not in line
+            assert "ap_mld:" not in line
+            assert "ssid:" not in line
+            assert "freq:" not in line
+            assert "links:" not in line
+            assert "rssi:" not in line
+            for key in hidden:
+                assert key not in line.record
+            assert line.record["interface_mac"] == "02:00:00:00:00:63"
+
+        (started,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN))
+        bare(started, "scan_started")
+        assert "scan_frequency_count" not in started.record
+        (done,) = watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS))
+        bare(done, "scan_complete")
+        assert done.record["scan_bssid_count"] == 1
+        assert "scan: (1 BSSIDs found)" in done
+        (aborted,) = watcher.handle(self.msg(nl.CMD_SCAN_ABORTED))
+        bare(aborted, "scan_aborted")
 
     def test_scan_dump_failure_does_not_stop_watch(self, kernel, backend, monkeypatch):
-        watcher, _ = self.watcher(kernel, backend, ("--watchevents", "--debug"))
+        watcher, _ = self.watcher(kernel, backend)
 
         def gone(native):
             raise BackendError("reading scan results failed on wlan1: No such device")
 
         monkeypatch.setattr(backend, "dump_scan", gone)
         assert watcher.handle(self.msg(nl.CMD_NEW_SCAN_RESULTS)) == []
+        (started,) = watcher.handle(self.msg(nl.CMD_TRIGGER_SCAN))
+        assert started.record["event"] == "scan_started"
+
+    def _clock(self, monkeypatch):
+        clock = {"t": 1000.0}
+
+        def now():
+            return clock["t"]
+
+        monkeypatch.setattr("lswifi.backends.linux_events.time.monotonic", now)
+        return clock
+
+    def _join(
+        self, kernel, bssid_last: int, ssid: bytes = b"ExampleNet", freq: int = 5300
+    ):
+        kernel.interfaces = [iface_attrs(3, "wlan0", ssid=ssid, freq=freq, last=0x13)]
+        kernel.stations = [station_attrs(bssid_last, -55, 8645)]
+
+    def test_roam_sequences(self, kernel, backend, monkeypatch):
+        clock = self._clock(monkeypatch)
+        pmkid = PMKID
+        # PMKID count is 1 but the element stops short of a 16-octet PMKID.
+        truncated = ie(
+            48,
+            struct.pack("<H", 1)
+            + b"\x00\x0f\xac\x04"
+            + struct.pack("<H", 1)
+            + b"\x00\x0f\xac\x04"
+            + struct.pack("<H", 1)
+            + b"\x00\x0f\xac\x01"
+            + struct.pack("<H", 0x0080)
+            + struct.pack("<H", 1)
+            + b"\x00\x01\x02\x03",
+        )
+        cases = (
+            (2, rsn_ie(pmkid), "ft", True),
+            (0, rsn_ie(pmkid), "pmksa", False),
+            (0, rsn_ie(), "full", False),
+            (3, rsn_ie(), "sae", False),
+            (0, truncated, None, False),
+        )
+        typed: list[set[str]] = []
+        ports: list[set[str]] = []
+        unknown: set[str] = set()
+        for algorithm, ies, expected, order in cases:
+            clock["t"] = 1000.0
+            watcher, _ = self.watcher(kernel, backend)
+            (disc,) = watcher.handle(
+                self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1))
+            )
+            assert disc.record["event"] == "disconnected"
+            assert disc.record["locally_generated"] is True
+            assert "roam" not in disc.record
+            clock["t"] = 1000.125
+            assert (
+                watcher.handle(
+                    self.msg(
+                        nl.CMD_AUTHENTICATE,
+                        nl.pack_attr(nl.ATTR_FRAME, auth_frame(algorithm, order=order)),
+                    )
+                )
+                == []
+            )
+            clock["t"] = 1000.25
+            self._join(kernel, 0x22)
+            (conn,) = watcher.handle(
+                self.msg(
+                    nl.CMD_CONNECT,
+                    nl.attr_u16(nl.ATTR_STATUS_CODE, 0),
+                    nl.pack_attr(nl.ATTR_REQ_IE, ies),
+                )
+            )
+            assert conn.record["event"] == "connected"
+            assert conn.record["roam"] is True
+            assert "roam: (yes)" in conn
+            assert conn.record["roam_ms"] == 250
+            assert "roam_ms: (250)" in conn
+            assert conn.record["old_bssid"] == "02:00:00:00:00:21"
+            assert conn.record["bssid"] == "02:00:00:00:00:22"
+            if expected is None:
+                assert "roam_type" not in conn.record
+                assert "roam_type:" not in conn
+                unknown = set(conn.record)
+            else:
+                assert conn.record["roam_type"] == expected
+                assert f"roam_type: ({expected})" in conn
+                typed.append(set(conn.record))
+            clock["t"] = 1000.5
+            (port,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+            assert port.record["event"] == "port_authorized"
+            assert port.record["since_connect_ms"] == 250
+            assert port.record["roam_total_ms"] == 500
+            assert "since_connect_ms: (250)" in port
+            assert "roam_total_ms: (500)" in port
+            ports.append(set(port.record))
+            saved = json.loads(
+                dumps(conn.record, timestamp="2026-01-01T00:00:00.000+00:00")
+            )
+            assert saved["roam"] is True
+            if expected is None:
+                assert "roam_type" not in saved
+            else:
+                assert saved["roam_type"] == expected
+        assert typed[0] == typed[1] == typed[2] == typed[3]
+        assert unknown == typed[0] - {"roam_type"}
+        assert ports[0] == ports[1] == ports[2] == ports[3] == ports[4]
+        assert "roam_type" in typed[0]
+        assert "roam_ms" in typed[0]
+        assert "roam_total_ms" in ports[0]
+        assert "since_connect_ms" in ports[0]
+
+    def test_connect_after_roam_command(self, kernel, backend, monkeypatch):
+        clock = self._clock(monkeypatch)
+        clock["t"] = 2000.0
+        watcher, _ = self.watcher(kernel, backend)
+        ies = rsn_ie() + ie(55, b"\x00\x20" + b"\x11" * 6)
+        (roamed,) = watcher.handle(
+            self.msg(
+                nl.CMD_ROAM,
+                nl.pack_attr(nl.ATTR_MAC, mac(0x22)),
+                nl.pack_attr(nl.ATTR_REQ_IE, ies),
+            )
+        )
+        assert roamed.record["event"] == "roamed"
+        assert "roam" not in roamed.record
+        clock["t"] = 2000.125
+        assert (
+            watcher.handle(
+                self.msg(
+                    nl.CMD_AUTHENTICATE,
+                    nl.pack_attr(nl.ATTR_FRAME, auth_frame(0)),
+                )
+            )
+            == []
+        )
+        clock["t"] = 2000.25
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert conn.record["roam_type"] == "ft"
+        assert conn.record["roam_ms"] == 125
+        clock["t"] = 2000.25 + ROAM_WINDOW_S + 0.25
+        watcher2, _ = self.watcher(kernel, backend)
+        watcher2.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22))))
+        clock["t"] += ROAM_WINDOW_S + 0.5
+        (late,) = watcher2.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert late.record["roam"] is False
+        assert "roam_type" not in late.record
+        assert "roam_ms" not in late.record
+
+    def test_port_authorized_after_kernel_roam_times_from_the_roam(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        (joined,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert joined.record["roam"] is False
+        clock["t"] = 1000.25
+        (first,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert first.record["since_connect_ms"] == 250
+        assert "roam_total_ms" not in first.record
+
+        clock["t"] = 5000.0
+        watcher.handle(
+            self.msg(
+                nl.CMD_AUTHENTICATE,
+                nl.pack_attr(nl.ATTR_FRAME, auth_frame(2)),
+            )
+        )
+        clock["t"] = 5000.25
+        self._join(kernel, 0x23)
+        (roamed,) = watcher.handle(
+            self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x23)))
+        )
+        assert roamed.record["event"] == "roamed"
+        assert "roam" not in roamed.record
+        clock["t"] = 5000.5
+        (port,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert port.record["since_connect_ms"] == 250
+        assert port.record["roam_total_ms"] == 250
+        assert "since_connect_ms: (250)" in port
+        assert "roam_total_ms: (250)" in port
+
+        clock["t"] = 8000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 8000.125
+        watcher.handle(self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22))))
+        clock["t"] = 8002.0
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert conn.record["roam_ms"] == 1875
+
+    def test_connect_then_port_authorized_keeps_kernel_roam_origin(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        clock["t"] = 3000.0
+        watcher, _ = self.watcher(kernel, backend)
+        (roamed,) = watcher.handle(
+            self.msg(nl.CMD_ROAM, nl.pack_attr(nl.ATTR_MAC, mac(0x22)))
+        )
+        assert roamed.record["event"] == "roamed"
+        clock["t"] = 3000.25
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert conn.record["roam_ms"] == 250
+        assert "roam_ms: (250)" in conn
+        assert "roam_type" not in conn.record
+        clock["t"] = 3000.5
+        (port,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert port.record["since_connect_ms"] == 250
+        assert port.record["roam_total_ms"] == 500
+        assert "since_connect_ms: (250)" in port
+        assert "roam_total_ms: (500)" in port
+
+    def test_failed_attempt_does_not_type_the_next_roam(
+        self, kernel, backend, monkeypatch
+    ):
+        clock = self._clock(monkeypatch)
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 1000.1
+        ft_ies = rsn_ie(PMKID) + ie(55, b"\x00\x20" + b"\x11" * 6)
+        watcher.handle(
+            self.msg(nl.CMD_AUTHENTICATE, nl.pack_attr(nl.ATTR_FRAME, auth_frame(2)))
+        )
+        watcher.handle(self.msg(nl.CMD_ASSOCIATE, nl.pack_attr(nl.ATTR_REQ_IE, ft_ies)))
+        (failed,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 1))
+        )
+        assert failed.record["event"] == "connect_failed"
+        clock["t"] = 1000.5
+        watcher.handle(
+            self.msg(nl.CMD_AUTHENTICATE, nl.pack_attr(nl.ATTR_FRAME, auth_frame(0)))
+        )
+        clock["t"] = 1000.6
+        self._join(kernel, 0x22)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is True
+        assert "roam_type" not in conn.record
+        assert conn.record["roam_ms"] == 600
+
+    def test_non_roam_connect(self, kernel, backend, monkeypatch):
+        clock = self._clock(monkeypatch)
+        clock["t"] = 3000.0
+        watcher, _ = self.watcher(kernel, backend)
+        (conn,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert conn.record["roam"] is False
+        assert "roam: (no)" in conn
+        assert "roam_type" not in conn.record
+        assert "roam_ms" not in conn.record
+        plain_keys = set(conn.record)
+        clock["t"] = 3000.25
+        (port,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert port.record["since_connect_ms"] == 250
+        assert "roam_total_ms" not in port.record
+        assert "since_connect_ms: (250)" in port
+        assert "roam_total_ms:" not in port
+        plain_port = set(port.record)
+
+        clock["t"] = 4000.0
+        watcher, _ = self.watcher(kernel, backend)
+        (again,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert set(again.record) == plain_keys
+        clock["t"] = 4000.25
+        (port_again,) = watcher.handle(self.msg(nl.CMD_PORT_AUTHORIZED))
+        assert set(port_again.record) == plain_port
+
+        clock["t"] = 5000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(
+            self.msg(
+                nl.CMD_DISCONNECT,
+                nl.attr_u16(nl.ATTR_REASON_CODE, 3),
+                nl.attr_flag(nl.ATTR_DISCONNECTED_BY_AP),
+            )
+        )
+        clock["t"] = 5000.1
+        self._join(kernel, 0x22)
+        (after_ap,) = watcher.handle(
+            self.msg(
+                nl.CMD_CONNECT,
+                nl.attr_u16(nl.ATTR_STATUS_CODE, 0),
+                nl.pack_attr(nl.ATTR_REQ_IE, rsn_ie()),
+            )
+        )
+        assert after_ap.record["roam"] is False
+        assert after_ap.record["old_bssid"] == "02:00:00:00:00:21"
+        assert "roam_type" not in after_ap.record
+        assert "roam_ms" not in after_ap.record
+
+        clock["t"] = 6000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 6000.1
+        self._join(kernel, 0x22, ssid=b"OtherNet")
+        (other,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert other.record["roam"] is False
+        assert other.record["ssid"] == "OtherNet"
+        assert "roam_type" not in other.record
+
+        clock["t"] = 7000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 7000.1
+        (same,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert same.record["roam"] is False
+        assert "old_bssid" not in same.record
+
+        clock["t"] = 8000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 8000.0 + ROAM_WINDOW_S
+        self._join(kernel, 0x22)
+        (edge,) = watcher.handle(
+            self.msg(
+                nl.CMD_CONNECT,
+                nl.attr_u16(nl.ATTR_STATUS_CODE, 0),
+                nl.pack_attr(nl.ATTR_REQ_IE, rsn_ie()),
+            )
+        )
+        assert edge.record["roam"] is True
+        assert edge.record["roam_ms"] == 2000
+        assert "roam_type" not in edge.record
+        clock["t"] = 9000.0
+        watcher, _ = self.watcher(kernel, backend)
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
+        clock["t"] = 9000.0 + ROAM_WINDOW_S + 0.5
+        self._join(kernel, 0x22)
+        (late,) = watcher.handle(
+            self.msg(nl.CMD_CONNECT, nl.attr_u16(nl.ATTR_STATUS_CODE, 0))
+        )
+        assert late.record["roam"] is False
+        assert "roam_ms" not in late.record
+
+    def test_auth_algorithm_frame(self):
+        assert auth_algorithm(auth_frame(2, order=True)) == 2
+        assert auth_algorithm(auth_frame(3)) == 3
+        assert auth_algorithm(auth_frame(0)) == 0
+        protected = bytearray(auth_frame(2))
+        protected[1] |= 0x40
+        assert auth_algorithm(bytes(protected)) is None
+        assert auth_algorithm(b"\xb0\x00" + b"\x00" * 10) is None
 
     def test_other_interfaces_ignored(self, kernel, backend):
         watcher, _ = self.watcher(kernel, backend)

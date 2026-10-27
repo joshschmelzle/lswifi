@@ -18,13 +18,16 @@ The kernel pushes connect, roam, disconnect (with the 802.11 reason code
 and whether the AP or this station ended it), port authorized (4-way
 handshake done) and channel switch events, so nothing is polled. A link
 added or removed, and a channel switch that names a link, are reported for
-that link. Lines use the same layout and --json schema as the Windows and
-macOS watchers. scan_cache_updated lines print only with --debug, as on
-macOS.
+that link. Scan started, scan complete and scan aborted print by default.
+A locally generated disconnect followed by a connect on the same SSID stays
+those two events; the connect carries whether it was a roam, the roam type
+and how long it took. Lines use the same layout and --json schema as the
+Windows and macOS watchers.
 """
 
 import logging
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Iterator
 from typing import Any
 
 from lswifi.backends import nl80211 as nl
@@ -67,6 +70,133 @@ STATUS_CODES = {
 
 def status_text(code: int) -> str:
     return STATUS_CODES.get(code, "see IEEE 802.11 Table 9-50")
+
+
+# A locally generated disconnect and the connect that follows, same SSID.
+ROAM_WINDOW_S = 2.0
+
+# 802.11 Authentication algorithm numbers (frame body). Not nl80211 AUTH_TYPE.
+AUTH_OPEN = 0
+AUTH_FT = 2
+AUTH_SAE = 3
+
+EID_RSN = 48
+EID_FAST_BSS_TRANSITION = 55
+
+_FC_TYPE_MASK = 0x000C
+_FC_SUBTYPE_SHIFT = 4
+_FC_SUBTYPE_MASK = 0x000F
+_FC_PROTECTED = 0x4000
+_FC_ORDER = 0x8000
+_MGMT_HEADER = 24
+_HT_CONTROL = 4
+_AUTH_SUBTYPE = 0xB
+
+
+def _elapsed_ms(start: float, end: float) -> int:
+    return max(0, round((end - start) * 1000))
+
+
+def auth_algorithm(frame: bytes) -> int | None:
+    """Authentication algorithm from a CMD_AUTHENTICATE ATTR_FRAME.
+
+    The kernel sends the received Authentication frame (header and body, no
+    FCS). Open is 0, FT is 2 and SAE is 3. nl80211 ATTR_AUTH_TYPE is a
+    different enum and is not included on this event.
+    """
+    if len(frame) < _MGMT_HEADER + 2:
+        return None
+    fc = int.from_bytes(frame[:2], "little")
+    if fc & _FC_TYPE_MASK:
+        return None
+    subtype = (fc >> _FC_SUBTYPE_SHIFT) & _FC_SUBTYPE_MASK
+    if subtype != _AUTH_SUBTYPE:
+        return None
+    if fc & _FC_PROTECTED:
+        return None
+    offset = _MGMT_HEADER + (_HT_CONTROL if fc & _FC_ORDER else 0)
+    if len(frame) < offset + 2:
+        return None
+    return int.from_bytes(frame[offset : offset + 2], "little")
+
+
+def _elements(buf: bytes) -> Iterator[tuple[int, bytes]]:
+    offset = 0
+    while offset + 2 <= len(buf):
+        eid = buf[offset]
+        length = buf[offset + 1]
+        offset += 2
+        if offset + length > len(buf):
+            return
+        yield eid, buf[offset : offset + length]
+        offset += length
+
+
+def rsn_pmkid_count(body: bytes) -> int | None:
+    """PMKIDs in an RSNE body: 0 when the list is absent, None if truncated."""
+    if len(body) < 2:
+        return None
+    pos = 2
+    if pos + 4 > len(body):
+        return 0
+    pos += 4
+    if pos + 2 > len(body):
+        return 0
+    pairwise = int.from_bytes(body[pos : pos + 2], "little")
+    pos += 2
+    if pairwise > 20 or pos + 4 * pairwise > len(body):
+        return None
+    pos += 4 * pairwise
+    if pos + 2 > len(body):
+        return 0
+    akm = int.from_bytes(body[pos : pos + 2], "little")
+    pos += 2
+    if akm > 20 or pos + 4 * akm > len(body):
+        return None
+    pos += 4 * akm
+    if pos + 2 > len(body):
+        return 0
+    pos += 2
+    if pos + 2 > len(body):
+        return 0
+    count = int.from_bytes(body[pos : pos + 2], "little")
+    pos += 2
+    if count > 16 or pos + 16 * count > len(body):
+        return None
+    return count
+
+
+def roam_kind(auth_alg: int | None, ies: bytes | None) -> str | None:
+    """ft, pmksa, sae, full, or None when the frames do not say."""
+    fast = auth_alg == AUTH_FT
+    has_rsn = False
+    pmkids: int | None = 0
+    if ies:
+        for eid, body in _elements(ies):
+            if eid == EID_FAST_BSS_TRANSITION:
+                fast = True
+            elif eid == EID_RSN and not has_rsn:
+                has_rsn = True
+                pmkids = rsn_pmkid_count(body)
+    if fast:
+        return "ft"
+    if auth_alg == AUTH_SAE:
+        return "sae"
+    if pmkids:
+        return "pmksa"
+    if auth_alg == AUTH_OPEN and has_rsn and pmkids == 0:
+        return "full"
+    return None
+
+
+def scan_frequency_count(attrs: dict[int, bytes]) -> int | None:
+    """Channels in ATTR_SCAN_FREQUENCIES, or ATTR_SCAN_FREQ_KHZ when that is used."""
+    for kind in (nl.ATTR_SCAN_FREQUENCIES, nl.ATTR_SCAN_FREQ_KHZ):
+        raw = attrs.get(kind)
+        if raw is None:
+            continue
+        return sum(len(value) == 4 for _kind, value in nl.iter_attrs(raw))
+    return None
 
 
 def _snapshot(link: LinkInfo) -> dict[str, Any]:
@@ -222,6 +352,58 @@ class LinkFormatter:
     def __init__(self, mac: str) -> None:
         self.mac = mac
         self.last: LinkInfo = LinkInfo()
+        self._disc: tuple[float, str, bytes] | None = None
+        self._auth_alg: int | None = None
+        self._auth_at: float | None = None
+        self._req_ies: bytes | None = None
+        self._roam_cmd_at: float | None = None
+        self._connect_at: float | None = None
+        self._roam_origin: float | None = None
+
+    def _recent(self, started: float | None, now: float) -> bool:
+        return started is not None and 0 <= now - started <= ROAM_WINDOW_S
+
+    def _clear_auth(self) -> None:
+        self._auth_alg = None
+        self._auth_at = None
+        self._req_ies = None
+        self._roam_cmd_at = None
+
+    def observe_mlme(self, attrs: dict[int, bytes]) -> None:
+        frame = attrs.get(nl.ATTR_FRAME)
+        if frame:
+            alg = auth_algorithm(frame)
+            if alg is not None:
+                if self._auth_at is None:
+                    self._auth_at = time.monotonic()
+                self._auth_alg = alg
+        ies = attrs.get(nl.ATTR_REQ_IE)
+        if ies:
+            self._req_ies = ies
+
+    def observe_roam(self, attrs: dict[int, bytes]) -> None:
+        self._roam_cmd_at = time.monotonic()
+        ies = attrs.get(nl.ATTR_REQ_IE)
+        if ies:
+            self._req_ies = ies
+
+    def _request_ies(self, attrs: dict[int, bytes] | None) -> bytes | None:
+        if attrs:
+            ies = attrs.get(nl.ATTR_REQ_IE)
+            if ies:
+                return ies
+        return self._req_ies
+
+    def _disconnect_at(self, link: LinkInfo, now: float) -> float | None:
+        disc = self._disc
+        if disc is None or not self._recent(disc[0], now):
+            return None
+        started, bssid, ssid = disc
+        if not link.bssid or link.bssid.lower() == bssid.lower():
+            return None
+        if not ssid or bytes(link.ssid) != ssid:
+            return None
+        return started
 
     def line(
         self, link: LinkInfo, event: str, extra: str = "", **fields: Any
@@ -300,18 +482,44 @@ class LinkFormatter:
         extra, fields = self.link_extra(link)
         return self.line(link, "watching", extra, **fields)
 
-    def connected(self, link: LinkInfo) -> EventLine:
+    def connected(
+        self, link: LinkInfo, attrs: dict[int, bytes] | None = None
+    ) -> EventLine:
+        now = time.monotonic()
         old, self.last = self.last, link
         extra, fields = self.link_extra(link)
         old_mld = None
         if old.bssid and link.bssid and old.bssid != link.bssid:
-            # reconnect to a different AP after the link went down; not a roam
             extra += f", old_bssid: ({old.bssid})"
             fields["old_bssid"] = old.bssid
             old_mld = _previous_mld(old)
         if old_mld:
             extra += f", old_ap_mld: ({old_mld})"
         fields["old_ap_mld"] = old_mld
+        disc_at = self._disconnect_at(link, now)
+        roam = disc_at is not None or self._recent(self._roam_cmd_at, now)
+        origin: float | None = None
+        if roam:
+            if disc_at is not None:
+                origin = disc_at
+            elif self._recent(self._auth_at, now):
+                origin = self._auth_at
+            elif self._recent(self._roam_cmd_at, now):
+                origin = self._roam_cmd_at
+        fields["roam"] = roam
+        extra += f", roam: ({'yes' if roam else 'no'})"
+        kind = roam_kind(self._auth_alg, self._request_ies(attrs)) if roam else None
+        if kind:
+            fields["roam_type"] = kind
+            extra += f", roam_type: ({kind})"
+        if origin is not None:
+            elapsed = _elapsed_ms(origin, now)
+            fields["roam_ms"] = elapsed
+            extra += f", roam_ms: ({elapsed})"
+        self._connect_at = now
+        self._roam_origin = origin
+        self._disc = None
+        self._clear_auth()
         return self.line(link, "connected", extra, **fields)
 
     def connect_failed(self, bssid: str, status: int, timed_out: bool) -> EventLine:
@@ -320,6 +528,7 @@ class LinkFormatter:
         if previous:
             kept["ap_mld"] = previous
         self.last = LinkInfo(bssid=self.last.bssid, extra=kept)
+        self._clear_auth()
         target = LinkInfo(bssid=bssid or None)
         extra = f", status: ({status} {status_text(status)})"
         fields: dict[str, Any] = {
@@ -332,7 +541,14 @@ class LinkFormatter:
         return self.line(target, "connect_failed", extra, **fields)
 
     def roamed(self, link: LinkInfo) -> EventLine:
+        now = time.monotonic()
         old, self.last = self.last, link
+        starts = [
+            stamp for stamp in (self._auth_at, self._roam_cmd_at) if stamp is not None
+        ]
+        self._connect_at = now
+        self._roam_origin = max(starts) if starts else None
+        self._disc = None
         extra, fields = self.link_extra(link)
         old_mld = None
         if old.bssid:
@@ -357,6 +573,15 @@ class LinkFormatter:
 
     def disconnected(self, reason: int | None, by_ap: bool) -> EventLine:
         old = self.last
+        fresh = not by_ap and old.connected and bool(old.bssid)
+        if fresh or by_ap:
+            if fresh and old.bssid:
+                self._disc = (time.monotonic(), old.bssid, bytes(old.ssid))
+            else:
+                self._disc = None
+            self._connect_at = None
+            self._roam_origin = None
+            self._clear_auth()
         was_mlo = bool(old.extra.get("links")) or bool(old.extra.get("ap_mld"))
         kept: dict[str, Any] = {}
         if was_mlo and old.bssid:
@@ -377,7 +602,18 @@ class LinkFormatter:
 
     def port_authorized(self, link: LinkInfo) -> EventLine:
         self.last = link
-        return self.line(link, "port_authorized")
+        now = time.monotonic()
+        extra = ""
+        fields: dict[str, Any] = {}
+        if self._connect_at is not None:
+            elapsed = _elapsed_ms(self._connect_at, now)
+            extra += f", since_connect_ms: ({elapsed})"
+            fields["since_connect_ms"] = elapsed
+        if self._roam_origin is not None:
+            total = _elapsed_ms(self._roam_origin, now)
+            extra += f", roam_total_ms: ({total})"
+            fields["roam_total_ms"] = total
+        return self.line(link, "port_authorized", extra, **fields)
 
     def channel_change(self, link: LinkInfo) -> EventLine | None:
         old, self.last = self.last, link
@@ -460,13 +696,29 @@ class LinkFormatter:
             affected=described,
         )
 
-    def scan_cache(self, count: int) -> EventLine:
+    def _scan_link(self) -> LinkInfo:
+        if self.last.connected:
+            return self.last
+        return LinkInfo()
+
+    def scan_started(self, frequencies: int | None) -> EventLine:
+        extra = ""
+        fields: dict[str, Any] = {}
+        if frequencies is not None:
+            extra = f", scan: ({frequencies} frequencies)"
+            fields["scan_frequency_count"] = frequencies
+        return self.line(self._scan_link(), "scan_started", extra, **fields)
+
+    def scan_complete(self, count: int) -> EventLine:
         return self.line(
-            self.last,
-            "scan_cache_updated",
+            self._scan_link(),
+            "scan_complete",
             f", scan: ({count} BSSIDs found)",
             scan_bssid_count=count,
         )
+
+    def scan_aborted(self) -> EventLine:
+        return self.line(self._scan_link(), "scan_aborted")
 
 
 class LinuxEventWatcher:
@@ -487,7 +739,6 @@ class LinuxEventWatcher:
             self.add(info)
         self.emit = emit or self._emit
         self.json_writer = shared_writer() if watch_json_requested(args) else None
-        self.scan_events = getattr(args, "debug", logging.INFO) == logging.DEBUG
 
     def add(self, info: InterfaceInfo) -> None:
         native = info.native
@@ -533,6 +784,9 @@ class LinuxEventWatcher:
                 return []
         native, formatter = self.interfaces[ifindex], self.formatters[ifindex]
         cmd = message.cmd
+        if cmd in (nl.CMD_AUTHENTICATE, nl.CMD_ASSOCIATE):
+            formatter.observe_mlme(message.attrs)
+            return []
         if cmd == nl.CMD_CONNECT:
             status = nl.get_uint(message.attrs, nl.ATTR_STATUS_CODE, 0) or 0
             if status:
@@ -543,8 +797,9 @@ class LinuxEventWatcher:
                         nl.ATTR_TIMED_OUT in message.attrs,
                     )
                 ]
-            return [formatter.connected(self._link(native))]
+            return [formatter.connected(self._link(native), message.attrs)]
         if cmd == nl.CMD_ROAM:
+            formatter.observe_roam(message.attrs)
             return [formatter.roamed(self._link(native))]
         if cmd == nl.CMD_DISCONNECT:
             return [
@@ -590,13 +845,17 @@ class LinuxEventWatcher:
             if not added:
                 return []
             return [formatter.link_added(self._link(native), added)]
-        if cmd == nl.CMD_NEW_SCAN_RESULTS and self.scan_events:
+        if cmd == nl.CMD_TRIGGER_SCAN:
+            return [formatter.scan_started(scan_frequency_count(message.attrs))]
+        if cmd == nl.CMD_SCAN_ABORTED:
+            return [formatter.scan_aborted()]
+        if cmd == nl.CMD_NEW_SCAN_RESULTS:
             try:
                 count = len(self.backend.dump_scan(native))
             except (OSError, BackendError) as error:
                 log.debug("%s: scan dump failed: %s", native.name, error)
                 return []
-            return [formatter.scan_cache(count)]
+            return [formatter.scan_complete(count)]
         return []
 
     def run(self) -> None:
