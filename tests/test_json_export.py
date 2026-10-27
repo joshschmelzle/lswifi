@@ -1,5 +1,10 @@
 import json
+import re
+import sys
 
+import pytest
+
+from lswifi import __main__ as lswifi_main
 from lswifi import app
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
@@ -234,6 +239,25 @@ def test_exportraw_uses_the_directory_of_a_pcapng_path(tmp_path, monkeypatch):
 
 def test_exportraw_defaults_to_app_data(tmp_path, monkeypatch):
     files = _raw_export(tmp_path, monkeypatch, ["-exportraw", "all"])
+    shape = r"appdata/\d{4}-\d{2}-\d{2}/\d{6}/98-8f-00-9a-a4-80\.(bss|ies)"
     assert len(files) == 2
-    assert all(name.startswith("appdata/") for name in files)
-    assert files[0].endswith("/98-8f-00-9a-a4-80.bss")
+    assert all(re.fullmatch(shape, name) for name in files)
+    assert files[0].rsplit("/", 1)[0] == files[1].rsplit("/", 1)[0]
+
+
+def test_exportraw_relative_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    files = _raw_export(tmp_path, monkeypatch, ["-exportraw", "all", "-path", "raw"])
+    assert files == ["raw/98-8f-00-9a-a4-80.bss", "raw/98-8f-00-9a-a4-80.ies"]
+
+
+def test_exportraw_rejects_a_file_path(tmp_path, monkeypatch, capsys):
+    target = tmp_path / "notes.txt"
+    target.write_text("x")
+    monkeypatch.setattr(
+        sys, "argv", ["lswifi", "-exportraw", "all", "-path", str(target)]
+    )
+    with pytest.raises(SystemExit) as exited:
+        lswifi_main.main()
+    assert exited.value.code == 2
+    assert "-exportraw needs a directory" in capsys.readouterr().err

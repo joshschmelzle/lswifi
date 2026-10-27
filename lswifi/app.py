@@ -614,8 +614,7 @@ class lswifi:
                 )
             exportpath = exportraw_path
             log.debug(f"raw byte files exported to {exportraw_path}")
-            if not os.path.isdir(exportraw_path):
-                os.makedirs(exportraw_path)
+            os.makedirs(exportraw_path, exist_ok=True)
 
         if args.export:
             # Build filename with optional BSSID suffix
