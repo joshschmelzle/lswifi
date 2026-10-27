@@ -50,13 +50,18 @@ def ie(eid: int, body: bytes) -> bytes:
 
 
 def auth_frame(
-    algorithm: int, *, order: bool = False, status: int = 0, ap: int = 0x22
+    algorithm: int,
+    *,
+    order: bool = False,
+    status: int = 0,
+    ap: int = 0x22,
+    seq: int = 2,
 ) -> bytes:
     header = struct.pack("<HH", 0x00B0 | (0x8000 if order else 0), 0)
     header += mac(0x13) + mac(ap) + mac(ap) + struct.pack("<H", 0)
     if order:
         header += b"\x00\x00\x00\x00"
-    return header + struct.pack("<HHH", algorithm, 2, status)
+    return header + struct.pack("<HHH", algorithm, seq, status)
 
 
 def rsn_ie(pmkid: bytes | None = None) -> bytes:
@@ -3336,15 +3341,38 @@ class TestEvents:
         assert auth_algorithm(bytes(protected)) is None
         assert auth_algorithm(b"\xb0\x00" + b"\x00" * 10) is None
 
-    def test_auth_failure_frame(self):
-        assert auth_failure(auth_frame(3, status=1)) == ("02:00:00:00:00:22", 1)
+    @pytest.mark.parametrize(
+        "algorithm, seq, status, failed",
+        [
+            (0, 2, 0, False),
+            (3, 1, 0, False),
+            (3, 1, 76, False),
+            (3, 1, 77, False),
+            (3, 1, 126, False),
+            (3, 1, 127, False),
+            (8, 2, 153, False),
+            (3, 1, 1, True),
+            (3, 2, 1, True),
+            (3, 2, 126, True),
+            (3, 2, 127, True),
+            (0, 2, 76, True),
+            (0, 2, 126, True),
+            (2, 2, 127, True),
+            (0, 2, 153, True),
+            (0, 2, 17, True),
+        ],
+    )
+    def test_auth_failure_frame(self, algorithm, seq, status, failed):
+        frame = auth_frame(algorithm, seq=seq, status=status)
+        expected = ("02:00:00:00:00:22", status) if failed else None
+        assert auth_failure(frame) == expected
+
+    def test_auth_failure_frame_shapes(self):
         assert auth_failure(auth_frame(0, status=17, order=True)) == (
             "02:00:00:00:00:22",
             17,
         )
-        for status in (0, 76, 126, 127):
-            assert auth_failure(auth_frame(3, status=status)) is None
-        assert auth_failure(auth_frame(3, status=1)[:-2]) is None
+        assert auth_failure(auth_frame(3, seq=1, status=1)[:-2]) is None
 
     def test_auth_and_assoc_failures(self, kernel, backend):
         watcher, _ = self.watcher(kernel, backend)
@@ -3363,7 +3391,7 @@ class TestEvents:
             watcher.handle(
                 self.msg(
                     nl.CMD_AUTHENTICATE,
-                    nl.pack_attr(nl.ATTR_FRAME, auth_frame(3, status=126)),
+                    nl.pack_attr(nl.ATTR_FRAME, auth_frame(3, seq=1, status=126)),
                 )
             )
             == []

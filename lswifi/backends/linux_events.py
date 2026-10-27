@@ -27,6 +27,7 @@ Windows and macOS watchers.
 """
 
 import logging
+import struct
 import time
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -80,6 +81,7 @@ ROAM_WINDOW_S = 2.0
 AUTH_OPEN = 0
 AUTH_FT = 2
 AUTH_SAE = 3
+AUTH_802_1X = 8
 
 EID_RSN = 48
 EID_FAST_BSS_TRANSITION = 55
@@ -95,12 +97,15 @@ _AUTH_SUBTYPE = 0xB
 
 STATUS_SUCCESS = 0
 STATUS_ANTI_CLOGGING_TOKEN_REQUIRED = 76
+STATUS_FINITE_CYCLIC_GROUP_NOT_SUPPORTED = 77
 STATUS_SAE_HASH_TO_ELEMENT = 126
 STATUS_SAE_PK = 127
-AUTH_CONTINUE_STATUS = frozenset(
+STATUS_802_1X_AUTH_SUCCESS = 153
+SAE_COMMIT = 1
+SAE_COMMIT_CONTINUE_STATUS = frozenset(
     {
-        STATUS_SUCCESS,
         STATUS_ANTI_CLOGGING_TOKEN_REQUIRED,
+        STATUS_FINITE_CYCLIC_GROUP_NOT_SUPPORTED,
         STATUS_SAE_HASH_TO_ELEMENT,
         STATUS_SAE_PK,
     }
@@ -143,8 +148,16 @@ def auth_failure(frame: bytes) -> tuple[str, int] | None:
     body = _auth_body(frame)
     if body is None or len(body) < 6:
         return None
-    status = int.from_bytes(body[4:6], "little")
-    if status in AUTH_CONTINUE_STATUS:
+    algorithm, transaction, status = struct.unpack_from("<HHH", body)
+    if status == STATUS_SUCCESS:
+        return None
+    if (
+        algorithm == AUTH_SAE
+        and transaction == SAE_COMMIT
+        and status in SAE_COMMIT_CONTINUE_STATUS
+    ):
+        return None
+    if algorithm == AUTH_802_1X and status == STATUS_802_1X_AUTH_SUCCESS:
         return None
     return nl.mac_str(frame[10:16]), status
 
