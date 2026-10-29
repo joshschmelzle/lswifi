@@ -23,7 +23,7 @@ class Encryption(OutObject):
 
     def __init__(self):
         self.header = Header("ENCRYPTION", Alignment.LEFT)
-        self.subheader = SubHeader("[unicast/group]")
+        self.subheader = SubHeader("[pair/grp]")
         self.value = "NONE"
 
     def __format__(self, fmt):
