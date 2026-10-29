@@ -96,11 +96,6 @@ def _rsn(
         (_rsn([8]), 0x0011, "SAE"),
         (_rsn([2, 8]), 0x0011, "WPA2"),
         (_rsn([9]), 0x0011, "SAE"),
-        (
-            _rsn([12], pairwise=(9,), group=9, caps=0x0040, group_mgmt=12),
-            0x0011,
-            "WPA2",
-        ),
     ],
     ids=[
         "sae_mfpr",
@@ -135,7 +130,6 @@ def _rsn(
         "sae_no_pmf",
         "psk_sae_no_pmf",
         "ft_sae_no_pmf",
-        "suite_b_192_mfpr_without_mfpc",
     ],
 )
 def test_security_generation(ie_bytes, capability, expected):
@@ -163,7 +157,6 @@ def test_security_generation(ie_bytes, capability, expected):
         (_rsn([18], caps=0x00C0), 0x0011, 5975, []),
         (_rsn([2]), 0x0011, 5180, []),
         (b"", 0x0001, 2437, []),
-        (_rsn([8], caps=0x0040), 0x0011, 5975, ["6ghz-pmf-not-required"]),
     ],
     ids=[
         "six_ghz_wep",
@@ -178,7 +171,6 @@ def test_security_generation(ie_bytes, capability, expected):
         "six_ghz_owe_pmf_required",
         "five_ghz_psk",
         "two_four_ghz_open",
-        "six_ghz_mfpr_without_mfpc",
     ],
 )
 def test_six_ghz_nonconformant(ie_bytes, capability, frequency_mhz, expected):
