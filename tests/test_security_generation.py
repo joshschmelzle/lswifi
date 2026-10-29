@@ -142,7 +142,6 @@ def test_security_generation(ie_bytes, capability, expected):
     [
         (b"", 0x0011, 5975, ["6ghz-wep"]),
         (b"", 0x0001, 5975, ["6ghz-open"]),
-        (WPA_IE + _rsn([8], caps=0x00C0), 0x0011, 5975, ["6ghz-wpa"]),
         (_rsn([8], pairwise=(2,), caps=0x00C0), 0x0011, 5975, ["6ghz-tkip"]),
         (_rsn([8], group=2, caps=0x00C0), 0x0011, 5975, ["6ghz-tkip"]),
         (_rsn([2, 8], caps=0x00C0), 0x0011, 5975, ["6ghz-psk"]),
@@ -162,7 +161,6 @@ def test_security_generation(ie_bytes, capability, expected):
     ids=[
         "six_ghz_wep",
         "six_ghz_open",
-        "six_ghz_wpa_element",
         "six_ghz_tkip_pairwise",
         "six_ghz_tkip_group",
         "six_ghz_psk",

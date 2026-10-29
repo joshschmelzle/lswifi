@@ -112,7 +112,6 @@ class SecurityGeneration(OutObject):
         checks = [
             ("6ghz-wep", not self.rsn and not self.wpa and privacy),
             ("6ghz-open", not self.rsn and not self.wpa and not privacy),
-            ("6ghz-wpa", self.wpa),
             ("6ghz-tkip", self.rsn and (2 in self.pairwise or self.group == 2)),
             ("6ghz-psk", bool(self.akms & {2, 4, 6, 19, 20})),
             ("6ghz-dot1x-sha1", 1 in self.akms),
