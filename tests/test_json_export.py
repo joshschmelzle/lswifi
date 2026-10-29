@@ -327,12 +327,14 @@ def test_json_security_nonconformant_only_on_flagged_6ghz(tmp_path):
             ssid=b"x",
             bssid="02:00:00:00:00:61",
             frequency_mhz=5975,
+            capability=0x0001,
             ies=bytes([0, 1, ord("x")]),
         ),
         BssRecord(
             ssid=b"x",
             bssid="02:00:00:00:00:62",
             frequency_mhz=2412,
+            capability=0x0001,
             ies=bytes([0, 1, ord("x")]),
         ),
     ]

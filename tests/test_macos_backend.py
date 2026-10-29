@@ -379,6 +379,27 @@ class TestBackend:
         assert str(bss.security) == "PSK,SAE/CCMP-128/CCMP-128"
         assert "?" not in str(bss.auth) and "?" not in str(bss.encryption)
 
+    def test_unknown_capability_leaves_generation_unset(self, tmp_path):
+        network = granted_network()
+        network._ies = bytes([0, 4]) + b"open" + bytes([1, 1, 0x82])
+        network._channel = FakeChannel(5, macos.CW_CHANNEL_BAND_6GHZ, 1)
+        cw = FakeInterface(networks=[redacted_network(), network])
+        backend = MacOSBackend(fake_corewlan(cw))
+        path = tmp_path / "scan.json"
+        args = parse(["-all", "--json", str(path)])
+        session = backend.open_session(args, backend.list_interfaces()[0])
+        asyncio.run(session.scan())
+        for bss in session.data:
+            assert bss.security_generation.out().value == "--"
+            assert bss.security_generation.nonconformant == []
+        _out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
+            session, False, "", str(path), args
+        )
+        assert len(json_out) == 2
+        for row in json_out:
+            assert "security_generation" not in row
+            assert "security_nonconformant" not in row
+
     @pytest.mark.parametrize(
         "capability, expected", [(0x0011, "WEP"), (0x0001, "NONE")]
     )

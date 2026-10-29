@@ -120,7 +120,7 @@ class SecurityGeneration(OutObject):
         self.nonconformant = [code for code, hit in checks if hit]
 
     def out(self):
-        text = f"{self.value}!" if self.nonconformant else str(self.value)
+        text = f"{self.value}!" if self.nonconformant else self.value or "--"
         return OUT_TUPLE(text, self.header, self.subheader)
 
     def __format__(self, fmt):
