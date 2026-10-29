@@ -159,6 +159,7 @@ class WirelessNetworkBss:
             self.security = Security(self.capabilities)
             self.auth = Auth(self.capabilities)
             self.encryption = Encryption()
+            self.security_generation = SecurityGeneration()
             self.pmf = PMF()
             self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
             self.stations = OutObject(header="QBSS", subheader="STA")
@@ -191,6 +192,9 @@ class WirelessNetworkBss:
                         )
                     )
                     self._derive_phy_from_ies()
+                    self.security_generation.resolve(
+                        self.capabilities.ci.bits.PRIVACY == 1
+                    )
 
                     ##########################################
                     # Do stuff now that IEs have been parsed #
@@ -4078,6 +4082,7 @@ class WirelessNetworkBss:
             akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
         if self is not None:
             self.__record_security_suites(akm_list, pairwise_list, group_name)
+            self.security_generation.record_wpa()
         return (
             "Microsoft WPA Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}"
         ).format(
@@ -4113,6 +4118,7 @@ class WirelessNetworkBss:
         pairwise_cipher_suite = 0
         index = 8
         pairwise_list = []
+        pairwise_ids = []
         count = 0
         while count < pairwise_cipher_suite_count:
             # print("pairwise loop {} {}".format(count, self.bssid))
@@ -4120,6 +4126,7 @@ class WirelessNetworkBss:
                 [body[i] for i in [index, index + 1, index + 2]]
             )
             pairwise_cipher_suite = body[index + 3]
+            pairwise_ids.append(pairwise_cipher_suite)
             # print(pairwise_cipher_suite)
             try:
                 pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
@@ -4159,6 +4166,7 @@ class WirelessNetworkBss:
                 pairwise_list,
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
+        rsn_akms = [s for o, s in zip(akm_ouis, akm_ids) if o == "00:0f:ac"]
         akm_ids = "/".join(map(str, akm_ids))
         akm_ouis = "/".join(map(str, akm_ouis))
         out = "Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
@@ -4214,6 +4222,9 @@ class WirelessNetworkBss:
                 self.pmf.value = "{}".format("Required" if MFPR else "Capable")
             else:
                 self.pmf.value = "Disabled"
+            self.security_generation.record_rsn(
+                rsn_akms, pairwise_ids, group_cipher_suite, MFPC, MFPR
+            )
             # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
         out += "RSN Capabilities: 0x{:02x}{:02x}, PMF Capable (MFPC): {}, PMF Required (MFPR): {}\n".format(
             int(RSN_CAP1),

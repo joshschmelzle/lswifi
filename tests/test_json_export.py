@@ -98,7 +98,7 @@ def test_uptime_sorts_by_elapsed_time_and_keeps_unknown(tmp_path, monkeypatch):
         "--",
     ]
     assert [row["uptime"] for row in json_out] == expected
-    assert [row[11].value for row in out] == expected
+    assert [row[12].value for row in out] == expected
     assert [col.header.value for col in out[0]][-1] == "AP UPTIME"
 
 

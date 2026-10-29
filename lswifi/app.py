@@ -849,6 +849,11 @@ class lswifi:
                             "rates_data": rate_list(bss.wlanrateset.data),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
+                            **(
+                                {"security_generation": str(bss.security_generation)}
+                                if bss.security_generation.value
+                                else {}
+                            ),
                             "spatial_streams": str(bss.spatial_streams),
                             "ssid": str(bss.ssid),
                             "stations": str(bss.stations),
@@ -903,6 +908,7 @@ class lswifi:
                     bss.spatial_streams.out(),
                     bss.amendments.out(),
                     # bss.security.out(),
+                    bss.security_generation.out(),
                     bss.auth.out(),
                     bss.encryption.out(),
                     bss.pmf.out(),
