@@ -1439,8 +1439,6 @@ class lswifi:
             border: tuple[str, ...] = ()
             rnr_results_len = len(rnr_results[0]) - 1
             for index, _item in enumerate(rnr_results[0]):
-                if index == rnr_results_len:
-                    max_len = len(_item)
                 max_len = max(len(x) for x in [y[index] for y in rnr_results])
                 border = border + (
                     generate_pretty_separator(
@@ -1519,10 +1517,7 @@ class lswifi:
             border = ()
             for index, _item in enumerate(scan_results[0]):
                 # print(index, item)
-                if index == scan_results_len:
-                    max_len = len(_item)
-                else:
-                    max_len = max(len(x) for x in [y[index] for y in scan_results])
+                max_len = max(len(x) for x in [y[index] for y in scan_results])
                 border = border + (
                     generate_pretty_separator(
                         max_len, DECORS, DECORS_START, DECORS_END
