@@ -118,7 +118,7 @@ class TestElements:
             (5, ".1X-SHA256"),
             (6, "PSK-SHA256"),
             (12, ".1X-CNSA-SHA384"),
-            (13, "FT-.1X-SHA384"),
+            (13, "FT-.1X-CNSA-SHA384"),
         ],
     )
     def test_rsn_akm_names(self, akm, auth):
