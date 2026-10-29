@@ -5,3 +5,5 @@
 - No unnecessary code comments.
 - Run the full pytest suite and mypy before pushing.
 - Don't bump the version unless asked. A version change merged to `main` publishes a release.
+- Don't design for rare or future cases nobody asked about.
+- When reviewing, report a finding only if it would materially prevent or mislead a user doing ordinary work: name the task, the normal steps, and what they lose. Rate likelihood and severity from 1 to 10 each; if the product is below 5, leave the code alone.
