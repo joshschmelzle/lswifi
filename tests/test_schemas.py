@@ -179,3 +179,11 @@ class TestPMF:
     def test_pmf_format(self):
         p = PMF()
         assert f"{p:>10}" == "  Disabled"
+
+
+def test_pmf_text_uses_short_label_and_json_keeps_full_value():
+    p = PMF()
+    for full, short in (("Required", "Req"), ("Capable", "Cap"), ("Disabled", "Off")):
+        p.value = full
+        assert p.out().value == short
+        assert str(p) == full
