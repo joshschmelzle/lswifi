@@ -187,3 +187,32 @@ def test_pmf_text_uses_short_label_and_json_keeps_full_value():
         p.value = full
         assert p.out().value == short
         assert str(p) == full
+
+
+@pytest.mark.parametrize(
+    "value,shown",
+    [
+        (".1X-CNSA-SHA384,FT-.1X-SHA384", ".1X-CNSA-SHA384+FT"),
+        (".1X-SHA384,FT-.1X-SHA384", ".1X-SHA384+FT"),
+        (".1X-CNSA-SHA384,.1X-SHA384,FT-.1X-SHA384", ".1X-CNSA-SHA384+FT,.1X-SHA384"),
+        (".1X-CNSA-SHA384", ".1X-CNSA-SHA384"),
+        ("PSK,FT-PSK,SAE,FT-SAE", "PSK+FT,SAE+FT"),
+        ("FT-.1X,.1X-SHA256", ".1X-SHA256+FT"),
+        (".1X,FT-.1X,.1X-SHA256", ".1X+FT,.1X-SHA256"),
+        ("SAE,SAE-GDH,FT-SAE,FT-SAE-GDH", "SAE+FT,SAE-GDH+FT"),
+        ("FT-PSK", "FT-PSK"),
+        ("PSK,SAE", "PSK,SAE"),
+    ],
+)
+def test_auth_text_merges_ft_twins(value, shown):
+    from lswifi.schemas.auth import Auth
+
+    class Caps:
+        class ci:
+            class bits:
+                PRIVACY = 1
+
+    a = Auth(Caps())
+    a.value = value
+    assert a.out().value == shown
+    assert str(a) == value
