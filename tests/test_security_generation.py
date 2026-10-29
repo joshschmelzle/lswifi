@@ -59,7 +59,7 @@ def _rsn(
         (b"", 0x0011, "WEP"),
         (b"", 0x0001, "Open"),
         (_rsn([2], akm_oui=b"\x50\x6f\x9a"), 0x0011, "WPA2"),
-        (_rsn([9]), 0x0011, "WPA3"),
+        (_rsn([9], caps=0x00C0), 0x0011, "WPA3"),
         (_rsn([4, 9], caps=0x0080), 0x0011, "WPA2/WPA3"),
         (_rsn([12], pairwise=(9,), group=9, caps=0x00C0), 0x0011, "WPA3"),
         (
@@ -93,6 +93,9 @@ def _rsn(
         (_rsn([3]), 0x0011, "WPA2"),
         (_rsn([5], caps=0x0080), 0x0011, "WPA2/WPA3"),
         (_rsn([2, 6], caps=0x00C0), 0x0011, "WPA2"),
+        (_rsn([8]), 0x0011, "SAE"),
+        (_rsn([2, 8]), 0x0011, "WPA2"),
+        (_rsn([9]), 0x0011, "SAE"),
     ],
     ids=[
         "sae_mfpr",
@@ -124,6 +127,9 @@ def _rsn(
         "ft_dot1x_no_mfpc",
         "dot1x_sha256_mfpc",
         "psk_sha256_mfpr",
+        "sae_no_pmf",
+        "psk_sae_no_pmf",
+        "ft_sae_no_pmf",
     ],
 )
 def test_security_generation(ie_bytes, capability, expected):

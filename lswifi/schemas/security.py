@@ -62,7 +62,7 @@ class SecurityGeneration(OutObject):
     def resolve(self, privacy):
         parts = set()
         if self.rsn:
-            if self.akms & {8, 9, 24, 25}:
+            if self.akms & {8, 9, 24, 25} and self.mfpc:
                 parts.add("WPA3")
             if self.akms & {2, 4, 6, 19, 20}:
                 parts.add("WPA2")
@@ -89,7 +89,9 @@ class SecurityGeneration(OutObject):
             if self.akms - {2, 3, 4, 5, 6, 8, 9, 12, 13, 18, 19, 20, 24, 25}:
                 parts.add("WPA2")
             if not parts:
-                if 18 in self.akms:
+                if self.akms & {8, 9, 24, 25}:
+                    parts.add("SAE")
+                elif 18 in self.akms:
                     parts.add("OWE")
                 else:
                     parts.add("WPA2")
@@ -97,7 +99,9 @@ class SecurityGeneration(OutObject):
             parts.add("WPA")
         if parts:
             self.value = "/".join(
-                p for p in ["WPA", "WPA2", "WPA3", "WPA3-192", "OWE"] if p in parts
+                p
+                for p in ["WPA", "WPA2", "WPA3", "WPA3-192", "OWE", "SAE"]
+                if p in parts
             )
         elif not self.rsn and not self.wpa:
             self.value = "WEP" if privacy else "Open"
