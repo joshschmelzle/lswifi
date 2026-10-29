@@ -6,4 +6,6 @@
 - Run the full pytest suite and mypy before pushing.
 - Don't bump the version unless asked. A version change merged to `main` publishes a release.
 - Don't design for rare or future cases nobody asked about.
-- When reviewing, report a finding only if it would materially prevent or mislead a user doing ordinary work: name the task, the normal steps, and what they lose. Rate likelihood and severity from 1 to 10 each; if the product is below 5, leave the code alone.
+- When reviewing, report a finding only if it would materially prevent or mislead a user doing ordinary work, or could cause data loss, a security hole, or a crash. Write the scenario first: the task, the normal steps, and what the user loses. If you can't write a concrete scenario, drop the finding.
+- After the scenario, label the finding with one word: Blocker (fix it in this change), Follow-up (file an issue, leave the code alone), or Drop (don't report it). A rare data-loss, security, or crash bug never drops below Blocker just because it's rare.
+- Don't report style, naming, docs, or rare future cases nobody asked about. A review with no comments is fine.
