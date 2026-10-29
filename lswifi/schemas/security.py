@@ -80,6 +80,7 @@ class SecurityGeneration(OutObject):
                     and set(self.pairwise) == {9}
                     and self.group == 9
                     and self.group_mgmt == 12
+                    and self.mfpc
                     and self.mfpr
                 ):
                     parts.add("WPA3-192")
@@ -115,7 +116,7 @@ class SecurityGeneration(OutObject):
             ("6ghz-tkip", self.rsn and (2 in self.pairwise or self.group == 2)),
             ("6ghz-psk", bool(self.akms & {2, 4, 6, 19, 20})),
             ("6ghz-dot1x-sha1", 1 in self.akms),
-            ("6ghz-pmf-not-required", self.rsn and not self.mfpr),
+            ("6ghz-pmf-not-required", self.rsn and not (self.mfpc and self.mfpr)),
         ]
         self.nonconformant = [code for code, hit in checks if hit]
 
