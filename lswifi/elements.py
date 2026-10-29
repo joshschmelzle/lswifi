@@ -33,6 +33,7 @@ from lswifi.constants import (
     _160MHZ_CHANNEL_LIST,
 )
 from lswifi.helpers import *
+from lswifi.helpers import is_six_band
 from lswifi.schemas.auth import Auth
 from lswifi.schemas.band import *
 from lswifi.schemas.beacon import *
@@ -194,7 +195,8 @@ class WirelessNetworkBss:
                     )
                     self._derive_phy_from_ies()
                     self.security_generation.resolve(
-                        self.capabilities.ci.bits.PRIVACY == 1
+                        self.capabilities.ci.bits.PRIVACY == 1,
+                        is_six_band(self.channel_frequency.value),
                     )
 
                     ##########################################

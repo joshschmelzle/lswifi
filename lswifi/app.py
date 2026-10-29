@@ -854,6 +854,15 @@ class lswifi:
                                 if bss.security_generation.value
                                 else {}
                             ),
+                            **(
+                                {
+                                    "security_nonconformant": list(
+                                        bss.security_generation.nonconformant
+                                    )
+                                }
+                                if bss.security_generation.nonconformant
+                                else {}
+                            ),
                             "spatial_streams": str(bss.spatial_streams),
                             "ssid": str(bss.ssid),
                             "stations": str(bss.stations),

@@ -6,14 +6,14 @@ from lswifi.backends.base import BssRecord
 WPA_IE = bytes.fromhex("dd160050f20101000050f20201000050f20201000050f202")
 
 
-def _bss(ie_bytes, capability=0x0011):
+def _bss(ie_bytes, capability=0x0011, frequency_mhz=2437):
     ssid = b"test-net"
     ies = bytes([0, len(ssid)]) + ssid + bytes([1, 1, 0x82]) + ie_bytes
     return lswifi.elements.WirelessNetworkBss(
         BssRecord(
             ssid=ssid,
             bssid="02:00:00:00:00:10",
-            frequency_mhz=2437,
+            frequency_mhz=frequency_mhz,
             capability=capability,
             ies=ies,
         )
@@ -135,3 +135,57 @@ def _rsn(
 def test_security_generation(ie_bytes, capability, expected):
     bss = _bss(ie_bytes, capability)
     assert str(bss.security_generation) == expected
+
+
+@pytest.mark.parametrize(
+    "ie_bytes,capability,frequency_mhz,expected",
+    [
+        (b"", 0x0011, 5975, ["6ghz-wep"]),
+        (b"", 0x0001, 5975, ["6ghz-open"]),
+        (WPA_IE + _rsn([8], caps=0x00C0), 0x0011, 5975, ["6ghz-wpa"]),
+        (_rsn([8], pairwise=(2,), caps=0x00C0), 0x0011, 5975, ["6ghz-tkip"]),
+        (_rsn([8], group=2, caps=0x00C0), 0x0011, 5975, ["6ghz-tkip"]),
+        (_rsn([2, 8], caps=0x00C0), 0x0011, 5975, ["6ghz-psk"]),
+        (_rsn([1, 5], caps=0x00C0), 0x0011, 5975, ["6ghz-dot1x-sha1"]),
+        (_rsn([8], caps=0x0080), 0x0011, 5975, ["6ghz-pmf-not-required"]),
+        (
+            _rsn([2, 8], caps=0x0080),
+            0x0011,
+            5975,
+            ["6ghz-psk", "6ghz-pmf-not-required"],
+        ),
+        (_rsn([8], caps=0x00C0), 0x0011, 5975, []),
+        (_rsn([18], caps=0x00C0), 0x0011, 5975, []),
+        (_rsn([2]), 0x0011, 5180, []),
+        (b"", 0x0001, 2437, []),
+    ],
+    ids=[
+        "six_ghz_wep",
+        "six_ghz_open",
+        "six_ghz_wpa_element",
+        "six_ghz_tkip_pairwise",
+        "six_ghz_tkip_group",
+        "six_ghz_psk",
+        "six_ghz_dot1x_sha1",
+        "six_ghz_pmf_capable",
+        "six_ghz_psk_and_pmf_capable",
+        "six_ghz_sae_pmf_required",
+        "six_ghz_owe_pmf_required",
+        "five_ghz_psk",
+        "two_four_ghz_open",
+    ],
+)
+def test_six_ghz_nonconformant(ie_bytes, capability, frequency_mhz, expected):
+    bss = _bss(ie_bytes, capability, frequency_mhz)
+    assert bss.security_generation.nonconformant == expected
+
+
+def test_six_ghz_marker_leaves_label_unchanged():
+    bss = _bss(_rsn([2, 8], caps=0x0080), frequency_mhz=5975)
+    assert str(bss.security_generation) == "WPA2/WPA3"
+    assert bss.security_generation.out().value == "WPA2/WPA3!"
+
+
+def test_five_ghz_cell_has_no_marker():
+    bss = _bss(_rsn([2]), frequency_mhz=5180)
+    assert bss.security_generation.out().value == "WPA2"
