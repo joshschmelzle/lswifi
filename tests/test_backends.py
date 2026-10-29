@@ -218,7 +218,7 @@ class TestWindowsMapper:
         assert row["channel_frequency"] == "2.412"
         assert row["channel_width"] == "20"
         assert row["security"] == "PSK,SAE/CCMP-128/CCMP-128"
-        assert row["security_generation"] == "WPA2/WPA3"
+        assert row["security_generation"] == "WPA2/3"
         assert row["pmf"] == "Capable"
         assert row["modes"] == ["ax", "be", "g", "n"]
         assert row["rates_basic"] == ["1", "2", "5.5", "11"]

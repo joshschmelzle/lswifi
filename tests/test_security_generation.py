@@ -41,10 +41,10 @@ def _rsn(
     "ie_bytes,capability,expected",
     [
         (_rsn([8], caps=0x00C0), 0x0011, "WPA3"),
-        (_rsn([2, 8], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([2, 8], caps=0x0080), 0x0011, "WPA2/3"),
         (_rsn([24], caps=0x00C0), 0x0011, "WPA3"),
         (_rsn([5], caps=0x00C0), 0x0011, "WPA3"),
-        (_rsn([1, 5], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([1, 5], caps=0x0080), 0x0011, "WPA2/3"),
         (_rsn([1]), 0x0011, "WPA2"),
         (_rsn([5]), 0x0011, "WPA2"),
         (
@@ -60,7 +60,7 @@ def _rsn(
         (b"", 0x0001, "Open"),
         (_rsn([2], akm_oui=b"\x50\x6f\x9a"), 0x0011, "WPA2"),
         (_rsn([9], caps=0x00C0), 0x0011, "WPA3"),
-        (_rsn([4, 9], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([4, 9], caps=0x0080), 0x0011, "WPA2/3"),
         (_rsn([12], pairwise=(9,), group=9, caps=0x00C0), 0x0011, "WPA3"),
         (
             _rsn([12], pairwise=(9,), group=9, caps=0x00C0, group_mgmt=11),
@@ -89,9 +89,9 @@ def _rsn(
         ),
         (_rsn([1], caps=0x00C0), 0x0011, "WPA2"),
         (_rsn([3], caps=0x00C0), 0x0011, "WPA3"),
-        (_rsn([3], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([3], caps=0x0080), 0x0011, "WPA2/3"),
         (_rsn([3]), 0x0011, "WPA2"),
-        (_rsn([5], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([5], caps=0x0080), 0x0011, "WPA2/3"),
         (_rsn([2, 6], caps=0x00C0), 0x0011, "WPA2"),
         (_rsn([8]), 0x0011, "SAE"),
         (_rsn([2, 8]), 0x0011, "WPA2"),
@@ -180,8 +180,8 @@ def test_six_ghz_nonconformant(ie_bytes, capability, frequency_mhz, expected):
 
 def test_six_ghz_marker_leaves_label_unchanged():
     bss = _bss(_rsn([2, 8], caps=0x0080), frequency_mhz=5975)
-    assert str(bss.security_generation) == "WPA2/WPA3"
-    assert bss.security_generation.out().value == "WPA2/WPA3!"
+    assert str(bss.security_generation) == "WPA2/3"
+    assert bss.security_generation.out().value == "WPA2/3!"
 
 
 def test_five_ghz_cell_has_no_marker():

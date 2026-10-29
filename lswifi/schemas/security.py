@@ -37,7 +37,7 @@ class SecurityGeneration(OutObject):
     def __init__(self):
         self.value = ""
         self.header = Header("SECURITY", Alignment.LEFT)
-        self.subheader = SubHeader("[generation]")
+        self.subheader = SubHeader("[gen]")
         self.wpa = False
         self.rsn = False
         self.akms = set()
@@ -98,10 +98,13 @@ class SecurityGeneration(OutObject):
                     parts.add("WPA2")
         if self.wpa:
             parts.add("WPA")
+        if {"WPA2", "WPA3"} <= parts:
+            parts -= {"WPA2", "WPA3"}
+            parts.add("WPA2/3")
         if parts:
             self.value = "/".join(
                 p
-                for p in ["WPA", "WPA2", "WPA3", "WPA3-192", "OWE", "SAE"]
+                for p in ["WPA", "WPA2", "WPA2/3", "WPA3", "WPA3-192", "OWE", "SAE"]
                 if p in parts
             )
         elif not self.rsn and not self.wpa:
