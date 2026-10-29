@@ -43,17 +43,19 @@ class SecurityGeneration(OutObject):
         self.akms = set()
         self.pairwise = []
         self.group = 0
+        self.group_mgmt = 0
         self.mfpc = False
         self.mfpr = False
 
     def record_wpa(self):
         self.wpa = True
 
-    def record_rsn(self, akms, pairwise, group, mfpc, mfpr):
+    def record_rsn(self, akms, pairwise, group, group_mgmt, mfpc, mfpr):
         self.rsn = True
         self.akms = set(akms)
         self.pairwise = pairwise
         self.group = group
+        self.group_mgmt = group_mgmt
         self.mfpc = bool(mfpc)
         self.mfpr = bool(mfpr)
 
@@ -72,8 +74,16 @@ class SecurityGeneration(OutObject):
                 else:
                     parts.add("WPA2")
             if self.akms & {12, 13}:
-                if 9 in self.pairwise and self.group == 9 and self.mfpr:
+                if (
+                    self.akms == {12}
+                    and set(self.pairwise) == {9}
+                    and self.group == 9
+                    and self.group_mgmt == 12
+                    and self.mfpr
+                ):
                     parts.add("WPA3-192")
+                elif self.mfpc:
+                    parts.add("WPA3")
                 else:
                     parts.add("WPA2")
             if self.akms - {2, 3, 4, 5, 6, 8, 9, 12, 13, 18, 19, 20, 24, 25}:

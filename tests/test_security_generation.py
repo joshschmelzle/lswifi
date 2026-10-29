@@ -20,7 +20,9 @@ def _bss(ie_bytes, capability=0x0011):
     )
 
 
-def _rsn(akms, pairwise=(4,), group=4, caps=0x0000, akm_oui=b"\x00\x0f\xac"):
+def _rsn(
+    akms, pairwise=(4,), group=4, caps=0x0000, akm_oui=b"\x00\x0f\xac", group_mgmt=None
+):
     body = b"\x01\x00"
     body += b"\x00\x0f\xac" + bytes([group])
     body += len(pairwise).to_bytes(2, "little")
@@ -30,6 +32,8 @@ def _rsn(akms, pairwise=(4,), group=4, caps=0x0000, akm_oui=b"\x00\x0f\xac"):
     for a in akms:
         body += akm_oui + bytes([a])
     body += caps.to_bytes(2, "little")
+    if group_mgmt is not None:
+        body += b"\x00\x00" + b"\x00\x0f\xac" + bytes([group_mgmt])
     return bytes([48, len(body)]) + body
 
 
@@ -43,7 +47,11 @@ def _rsn(akms, pairwise=(4,), group=4, caps=0x0000, akm_oui=b"\x00\x0f\xac"):
         (_rsn([1, 5], caps=0x0080), 0x0011, "WPA2/WPA3"),
         (_rsn([1]), 0x0011, "WPA2"),
         (_rsn([5]), 0x0011, "WPA2"),
-        (_rsn([12], pairwise=(9,), group=9, caps=0x00C0), 0x0011, "WPA3-192"),
+        (
+            _rsn([12], pairwise=(9,), group=9, caps=0x00C0, group_mgmt=12),
+            0x0011,
+            "WPA3-192",
+        ),
         (_rsn([12], pairwise=(4,), group=4), 0x0011, "WPA2"),
         (_rsn([18]), 0x0011, "OWE"),
         (WPA_IE, 0x0011, "WPA"),
@@ -53,6 +61,38 @@ def _rsn(akms, pairwise=(4,), group=4, caps=0x0000, akm_oui=b"\x00\x0f\xac"):
         (_rsn([2], akm_oui=b"\x50\x6f\x9a"), 0x0011, "WPA2"),
         (_rsn([9]), 0x0011, "WPA3"),
         (_rsn([4, 9], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([12], pairwise=(9,), group=9, caps=0x00C0), 0x0011, "WPA3"),
+        (
+            _rsn([12], pairwise=(9,), group=9, caps=0x00C0, group_mgmt=11),
+            0x0011,
+            "WPA3",
+        ),
+        (
+            _rsn([12], pairwise=(9, 4), group=9, caps=0x00C0, group_mgmt=12),
+            0x0011,
+            "WPA3",
+        ),
+        (
+            _rsn([12, 5], pairwise=(9,), group=9, caps=0x00C0, group_mgmt=12),
+            0x0011,
+            "WPA3",
+        ),
+        (
+            _rsn([13], pairwise=(9,), group=9, caps=0x00C0, group_mgmt=12),
+            0x0011,
+            "WPA3",
+        ),
+        (
+            _rsn([12], pairwise=(9,), group=9, caps=0x0080, group_mgmt=12),
+            0x0011,
+            "WPA3",
+        ),
+        (_rsn([1], caps=0x00C0), 0x0011, "WPA2"),
+        (_rsn([3], caps=0x00C0), 0x0011, "WPA3"),
+        (_rsn([3], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([3]), 0x0011, "WPA2"),
+        (_rsn([5], caps=0x0080), 0x0011, "WPA2/WPA3"),
+        (_rsn([2, 6], caps=0x00C0), 0x0011, "WPA2"),
     ],
     ids=[
         "sae_mfpr",
@@ -72,6 +112,18 @@ def _rsn(akms, pairwise=(4,), group=4, caps=0x0000, akm_oui=b"\x00\x0f\xac"):
         "non_ac_oui_akm",
         "ft_sae",
         "ft_psk_ft_sae_mfpc",
+        "suite_b_192_default_group_mgmt",
+        "suite_b_192_bip_gmac128",
+        "suite_b_192_extra_pairwise",
+        "suite_b_192_extra_akm",
+        "ft_dot1x_sha384_mfpr",
+        "suite_b_192_mfpc_only",
+        "akm1_only_mfpr",
+        "ft_dot1x_mfpr",
+        "ft_dot1x_mfpc",
+        "ft_dot1x_no_mfpc",
+        "dot1x_sha256_mfpc",
+        "psk_sha256_mfpr",
     ],
 )
 def test_security_generation(ie_bytes, capability, expected):

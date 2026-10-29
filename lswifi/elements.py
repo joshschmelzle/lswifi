@@ -4191,6 +4191,13 @@ class WirelessNetworkBss:
         MFPC = get_bit(body[index], 7)
         JOINT_MULTIBAND_RSNA = get_bit(body[index + 1], 0)
         PEERKEY_ENABLED = get_bit(body[index + 1], 1)
+        group_mgmt_cipher_suite = 6
+        offset = index + 2
+        if len(body) >= offset + 2:
+            offset += 2 + 16 * (body[offset] | body[offset + 1] << 8)
+            suite = body[offset : offset + 4]
+            if len(suite) == 4 and suite[:3] == [0x00, 0x0F, 0xAC]:
+                group_mgmt_cipher_suite = suite[3]
         # out += "{}{}{}{}{}{}{}{}{}{}\n".format(
         #    int(PEERKEY_ENABLED),
         #    int(JOINT_MULTIBAND_RSNA),
@@ -4226,7 +4233,12 @@ class WirelessNetworkBss:
             else:
                 self.pmf.value = "Disabled"
             self.security_generation.record_rsn(
-                rsn_akms, pairwise_ids, group_cipher_suite, MFPC, MFPR
+                rsn_akms,
+                pairwise_ids,
+                group_cipher_suite,
+                group_mgmt_cipher_suite,
+                MFPC,
+                MFPR,
             )
             # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
         out += "RSN Capabilities: 0x{:02x}{:02x}, PMF Capable (MFPC): {}, PMF Required (MFPR): {}\n".format(
