@@ -15,20 +15,12 @@ lswifi.auth
 schema definition for auth
 """
 
+from lswifi.constants import AKM_SUITE_DICT
+
 from .out import *
 
-FT_TWINS = {
-    ".1X": "FT-.1X",
-    ".1X-SHA256": "FT-.1X",
-    "PSK": "FT-PSK",
-    "SAE": "FT-SAE",
-    ".1X-CNSA-SHA384": "FT-.1X-SHA384",
-    ".1X-SHA384": "FT-.1X-SHA384",
-    "FILS-SHA256": "FT-FILS-SHA256",
-    "FILS-SHA384": "FT-FILS-SHA384",
-    "PSK-SHA384": "FT-PSK-SHA384",
-    "SAE-GDH": "FT-SAE-GDH",
-}
+FT_PAIRS = {1: 3, 5: 3, 2: 4, 8: 9, 12: 13, 14: 16, 15: 17, 20: 19, 23: 22, 24: 25}
+FT_TWINS = {AKM_SUITE_DICT[base]: AKM_SUITE_DICT[ft] for base, ft in FT_PAIRS.items()}
 
 
 class Auth(OutObject):

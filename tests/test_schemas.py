@@ -192,9 +192,14 @@ def test_pmf_text_uses_short_label_and_json_keeps_full_value():
 @pytest.mark.parametrize(
     "value,shown",
     [
-        (".1X-CNSA-SHA384,FT-.1X-SHA384", ".1X-CNSA-SHA384+FT"),
+        (".1X-CNSA-SHA384,FT-.1X-CNSA-SHA384", ".1X-CNSA-SHA384+FT"),
         (".1X-SHA384,FT-.1X-SHA384", ".1X-SHA384+FT"),
-        (".1X-CNSA-SHA384,.1X-SHA384,FT-.1X-SHA384", ".1X-CNSA-SHA384+FT,.1X-SHA384"),
+        (".1X-SHA384,FT-.1X-CNSA-SHA384", ".1X-SHA384,FT-.1X-CNSA-SHA384"),
+        (".1X-CNSA-SHA384,FT-.1X-SHA384", ".1X-CNSA-SHA384,FT-.1X-SHA384"),
+        (
+            ".1X-CNSA-SHA384,FT-.1X-CNSA-SHA384,FT-.1X-SHA384,.1X-SHA384",
+            ".1X-CNSA-SHA384+FT,.1X-SHA384+FT",
+        ),
         (".1X-CNSA-SHA384", ".1X-CNSA-SHA384"),
         ("PSK,FT-PSK,SAE,FT-SAE", "PSK+FT,SAE+FT"),
         ("FT-.1X,.1X-SHA256", ".1X-SHA256+FT"),
