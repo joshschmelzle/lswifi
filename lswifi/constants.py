@@ -46,29 +46,29 @@ CIPHER_SUITE_DICT = {
 
 AKM_SUITE_DICT = {
     0: "Reserved",
-    1: ".1X-SHA-1",  # WPA2-Enterprise aka 802.1X with SHA1
+    1: ".1X",  # WPA2-Enterprise aka 802.1X with SHA1
     2: "PSK",
-    3: "FT-.1X-SHA-256",  # FT 802.1X with SHA256
+    3: "FT-.1X",  # FT 802.1X with SHA256
     4: "FT-PSK",
-    5: ".1X-SHA-256",  # WPA3 - Enterprise aka 802.1X with SHA256
-    6: "PSK-SHA-256",
-    7: "TDLS-SHA-256",
+    5: ".1X-SHA256",  # WPA3 - Enterprise aka 802.1X with SHA256
+    6: "PSK-SHA256",
+    7: "TDLS-SHA256",
     8: "SAE",  # SAE with p256 (HMAC-SHA-256)
     9: "FT-SAE",
     10: "APPeerKey",
-    11: ".1X-SuiteB-SHA-256",  # WPA3 - Enterprise SuiteB (pre-CNSA)
-    12: ".1X-CNSA-SHA-384",  # WPA3 - Enterprise 192-bit (CNSA) aka 802.1X with SHA384
-    13: "FT-.1X-SHA-384",
-    14: "FILS-SHA-256",
-    15: "FILS-SHA-384",
-    16: "FT-FILS-SHA-256",
-    17: "FT-FILS-SHA-384",
+    11: ".1X-SuiteB-SHA256",  # WPA3 - Enterprise SuiteB (pre-CNSA)
+    12: ".1X-CNSA-SHA384",  # WPA3 - Enterprise 192-bit (CNSA) aka 802.1X with SHA384
+    13: "FT-.1X-SHA384",
+    14: "FILS-SHA256",
+    15: "FILS-SHA384",
+    16: "FT-FILS-SHA256",
+    17: "FT-FILS-SHA384",
     18: "OWE",
-    19: "FT-PSK-SHA-384",
-    20: "PSK-SHA-384",
+    19: "FT-PSK-SHA384",
+    20: "PSK-SHA384",
     21: "PASN",
-    22: "FT-.1X-SHA-384",
-    23: ".1X-SHA-384",
+    22: "FT-.1X-SHA384",
+    23: ".1X-SHA384",
     24: "SAE-GDH",  # SAE with p256 (HMAC-SHA-256), p384 (HMAC-SHA-384), or p521 (HMAC-SHA-521) depending on DH group 19, 20, or 21 respectively
     25: "FT-SAE-GDH",  # see comment on 24
 }
