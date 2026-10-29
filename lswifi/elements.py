@@ -47,6 +47,7 @@ from lswifi.schemas.pmf import *
 from lswifi.schemas.rates import *
 from lswifi.schemas.rnr import *
 from lswifi.schemas.security import *
+from lswifi.schemas.security import SecurityGeneration
 from lswifi.schemas.signalquality import *
 
 DOT11_SSID_MAX_LENGTH = 32
@@ -4166,7 +4167,9 @@ class WirelessNetworkBss:
                 pairwise_list,
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
-        rsn_akms = [s for o, s in zip(akm_ouis, akm_ids) if o == "00:0f:ac"]
+        rsn_akms = [
+            s for o, s in zip(akm_ouis, akm_ids, strict=True) if o == "00:0f:ac"
+        ]
         akm_ids = "/".join(map(str, akm_ids))
         akm_ouis = "/".join(map(str, akm_ouis))
         out = "Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
