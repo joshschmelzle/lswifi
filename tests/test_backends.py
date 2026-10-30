@@ -5,8 +5,10 @@
 import asyncio
 import ctypes
 import json
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -512,7 +514,7 @@ class TestFakeBackend:
         backend = FakeBackend(fake_records())
         args = parse(["-all", "--json", str(tmp_path / "out.json")])
         clients = {0: backend.open_session(args, backend.list_interfaces()[0])}
-        asyncio.run(app.lswifi().scan(clients, False, "", args.json, args))
+        app.lswifi().scan(clients, False, "", args.json, args)
         printed = [l for l in capsys.readouterr().out.splitlines() if l.startswith("[")]
         rows = json.loads(printed[-1])
         assert [r["bssid"] for r in rows] == ["98:8f:00:9a:a4:80", "9a:2a:6f:42:d4:7a"]
@@ -581,16 +583,38 @@ class TestFakeBackend:
         assert exited.value.code == -1
         assert message in caplog.text
 
-    def test_run_interrupted_exits_nonzero(self):
-        backend = FakeBackend(fake_records())
+    @pytest.mark.skipif(sys.platform == "win32", reason="sends SIGINT")
+    def test_one_interrupt_during_scan_exits_130(self):
+        script = """
+import sys, time
+sys.path.insert(0, "tests")
+from test_backends import FakeBackend, fake_records, parse
+from lswifi import app
 
-        def interrupted(*_args, **_kwargs):
-            raise KeyboardInterrupt
+class Slow(FakeBackend):
+    def scan(self, iface):
+        time.sleep(60)
+        return list(self.records)
 
-        backend.list_interfaces = interrupted
-        with pytest.raises(SystemExit) as exited:
-            app.run(parse(["-all"]), backend=backend)
-        assert exited.value.code == -1
+print("ready", flush=True)
+app.run(parse(["-all"]), backend=Slow(fake_records()))
+"""
+        proc = subprocess.Popen(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).parent.parent,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        assert proc.stdout.readline().strip() == "ready"
+        time.sleep(1)
+        proc.send_signal(signal.SIGINT)
+        try:
+            _, err = proc.communicate(timeout=10)
+        finally:
+            proc.kill()
+        assert proc.returncode == 130
+        assert "Traceback" not in err
 
     @pytest.mark.parametrize("flag", ["-decode", "-decoderaw"])
     def test_decode_missing_file_exits_nonzero(self, tmp_path, flag, capsys):

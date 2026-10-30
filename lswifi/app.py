@@ -290,14 +290,12 @@ class lswifi:
                     timeout_start = time.time()
 
                     while time.time() < timeout_start + timeout:
-                        asyncio.run(
-                            self.scan(
-                                clients,
-                                is_caching_acknowledged,
-                                csv_file_name,
-                                json_file_name,
-                                args,
-                            )
+                        self.scan(
+                            clients,
+                            is_caching_acknowledged,
+                            csv_file_name,
+                            json_file_name,
+                            args,
                         )
                         loops_completed += 1
                         time.sleep(interval)
@@ -308,14 +306,12 @@ class lswifi:
                             _first = False
                         else:
                             time.sleep(interval)
-                        asyncio.run(
-                            self.scan(
-                                clients,
-                                is_caching_acknowledged,
-                                csv_file_name,
-                                json_file_name,
-                                args,
-                            )
+                        self.scan(
+                            clients,
+                            is_caching_acknowledged,
+                            csv_file_name,
+                            json_file_name,
+                            args,
                         )
                         loops_completed += 1
 
@@ -327,13 +323,16 @@ class lswifi:
                     f"total number of completed scans during this session is {loops_completed}"
                 )
             log.warning("keyboard interruption detected... stopping...")
-            sys.exit(-1)
+            logging.shutdown()
+            with contextlib.suppress(OSError):
+                sys.stdout.flush()
+            os._exit(130)
         except asyncio.CancelledError:
             raise
 
         sys.exit(0)
 
-    async def scan(
+    def scan(
         self, clients, is_caching_acknowledged, csv_file_name, json_file_name, args
     ):
         """
@@ -367,14 +366,17 @@ class lswifi:
                 log.debug(f"added background task for {client}")
 
             if len(clients.items()) > 0:
-                with concurrent.futures.ThreadPoolExecutor(
+                executor = concurrent.futures.ThreadPoolExecutor(
                     max_workers=len(clients.items())
-                ) as executor:
-                    futures = []
-                    for task in background_tasks:
-                        futures.append(executor.submit(asyncio.run, task))
-                    for _future in concurrent.futures.as_completed(futures):
-                        pass
+                )
+                pending = {
+                    executor.submit(asyncio.run, task) for task in background_tasks
+                }
+                try:
+                    while pending:
+                        _, pending = concurrent.futures.wait(pending, timeout=0.5)
+                finally:
+                    executor.shutdown(wait=not pending, cancel_futures=True)
             clients = {
                 k: clients[k] for k in sorted(clients)
             }  # sort by key (index) numerically
