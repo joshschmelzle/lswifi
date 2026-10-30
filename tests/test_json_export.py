@@ -98,7 +98,7 @@ def test_uptime_sorts_by_elapsed_time_and_keeps_unknown(tmp_path, monkeypatch):
         "--",
     ]
     assert [row["uptime"] for row in json_out] == expected
-    assert [row[11].value for row in out] == expected
+    assert [row[12].value for row in out] == expected
     assert [col.header.value for col in out[0]][-1] == "AP UPTIME"
 
 
@@ -319,3 +319,30 @@ def test_exportraw_missing_bssid_reports_once(tmp_path, capsys):
     assert out.splitlines() == [
         "No match for 02:00:00:00:00:99 found in scan results. Please try again ..."
     ]
+
+
+def test_json_security_nonconformant_only_on_flagged_6ghz(tmp_path):
+    records = [
+        BssRecord(
+            ssid=b"x",
+            bssid="02:00:00:00:00:61",
+            frequency_mhz=5975,
+            capability=0x0001,
+            ies=bytes([0, 1, ord("x")]),
+        ),
+        BssRecord(
+            ssid=b"x",
+            bssid="02:00:00:00:00:62",
+            frequency_mhz=2412,
+            capability=0x0001,
+            ies=bytes([0, 1, ord("x")]),
+        ),
+    ]
+    path = tmp_path / "nonconformant.json"
+    args = parse(["-all", "--json", str(path)])
+    _out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
+        Session([WirelessNetworkBss(r) for r in records]), False, "", str(path), args
+    )
+    rows = {row["bssid"]: row for row in json_out}
+    assert rows["02:00:00:00:00:61"]["security_nonconformant"] == ["6ghz-open"]
+    assert "security_nonconformant" not in rows["02:00:00:00:00:62"]

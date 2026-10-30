@@ -26,5 +26,9 @@ class PMF(OutObject):
         self.header = Header("PMF", Alignment.LEFT)
         self.subheader = SubHeader("[.11w]")
 
+    def out(self):
+        short = {"Required": "Req", "Capable": "Cap", "Disabled": "Off"}
+        return OUT_TUPLE(short.get(self.value, self.value), self.header, self.subheader)
+
     def __format__(self, fmt):
         return f"{self.value:{fmt}}"

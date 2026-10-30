@@ -33,6 +33,7 @@ from lswifi.constants import (
     _160MHZ_CHANNEL_LIST,
 )
 from lswifi.helpers import *
+from lswifi.helpers import is_six_band
 from lswifi.schemas.auth import Auth
 from lswifi.schemas.band import *
 from lswifi.schemas.beacon import *
@@ -47,6 +48,7 @@ from lswifi.schemas.pmf import *
 from lswifi.schemas.rates import *
 from lswifi.schemas.rnr import *
 from lswifi.schemas.security import *
+from lswifi.schemas.security import SecurityGeneration
 from lswifi.schemas.signalquality import *
 
 DOT11_SSID_MAX_LENGTH = 32
@@ -159,6 +161,7 @@ class WirelessNetworkBss:
             self.security = Security(self.capabilities)
             self.auth = Auth(self.capabilities)
             self.encryption = Encryption()
+            self.security_generation = SecurityGeneration()
             self.pmf = PMF()
             self.spatial_streams = OutObject(value=1, header="SS", subheader="#")
             self.stations = OutObject(header="QBSS", subheader="STA")
@@ -191,6 +194,10 @@ class WirelessNetworkBss:
                         )
                     )
                     self._derive_phy_from_ies()
+                    self.security_generation.resolve(
+                        self.capabilities.ci.bits.PRIVACY == 1,
+                        is_six_band(self.channel_frequency.value),
+                    )
 
                     ##########################################
                     # Do stuff now that IEs have been parsed #
@@ -4078,6 +4085,7 @@ class WirelessNetworkBss:
             akm_list.append(f"{AKM_SUITE_DICT[akm_suite]}")
         if self is not None:
             self.__record_security_suites(akm_list, pairwise_list, group_name)
+            self.security_generation.record_wpa()
         return (
             "Microsoft WPA Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}"
         ).format(
@@ -4113,6 +4121,7 @@ class WirelessNetworkBss:
         pairwise_cipher_suite = 0
         index = 8
         pairwise_list = []
+        pairwise_ids = []
         count = 0
         while count < pairwise_cipher_suite_count:
             # print("pairwise loop {} {}".format(count, self.bssid))
@@ -4120,6 +4129,7 @@ class WirelessNetworkBss:
                 [body[i] for i in [index, index + 1, index + 2]]
             )
             pairwise_cipher_suite = body[index + 3]
+            pairwise_ids.append(pairwise_cipher_suite)
             # print(pairwise_cipher_suite)
             try:
                 pairwise_list.append(f"{CIPHER_SUITE_DICT[pairwise_cipher_suite]}")
@@ -4159,6 +4169,9 @@ class WirelessNetworkBss:
                 pairwise_list,
                 CIPHER_SUITE_DICT[group_cipher_suite],
             )
+        rsn_akms = [
+            s for o, s in zip(akm_ouis, akm_ids, strict=True) if o == "00:0f:ac"
+        ]
         akm_ids = "/".join(map(str, akm_ids))
         akm_ouis = "/".join(map(str, akm_ouis))
         out = "Version: {} AKM: {} {}, Pairwise/Unicast: {} {}, Group: {} {}\n".format(
@@ -4180,6 +4193,13 @@ class WirelessNetworkBss:
         MFPC = get_bit(body[index], 7)
         JOINT_MULTIBAND_RSNA = get_bit(body[index + 1], 0)
         PEERKEY_ENABLED = get_bit(body[index + 1], 1)
+        group_mgmt_cipher_suite = 6
+        offset = index + 2
+        if len(body) >= offset + 2:
+            offset += 2 + 16 * (body[offset] | body[offset + 1] << 8)
+            suite = body[offset : offset + 4]
+            if len(suite) == 4 and suite[:3] == [0x00, 0x0F, 0xAC]:
+                group_mgmt_cipher_suite = suite[3]
         # out += "{}{}{}{}{}{}{}{}{}{}\n".format(
         #    int(PEERKEY_ENABLED),
         #    int(JOINT_MULTIBAND_RSNA),
@@ -4214,6 +4234,14 @@ class WirelessNetworkBss:
                 self.pmf.value = "{}".format("Required" if MFPR else "Capable")
             else:
                 self.pmf.value = "Disabled"
+            self.security_generation.record_rsn(
+                rsn_akms,
+                pairwise_ids,
+                group_cipher_suite,
+                group_mgmt_cipher_suite,
+                MFPC,
+                MFPR,
+            )
             # self.pmf.value = "{}/{}".format("Y" if MFPC else "N", "Y" if MFPR else "N")
         out += "RSN Capabilities: 0x{:02x}{:02x}, PMF Capable (MFPC): {}, PMF Required (MFPR): {}\n".format(
             int(RSN_CAP1),

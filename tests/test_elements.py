@@ -81,9 +81,9 @@ class TestElements:
             ),
             pytest.param(
                 "dd160050f20101000050f20401000050f20401000050f201",
-                ".1X-SHA-1",
+                ".1X",
                 "CCMP-128",
-                ".1X-SHA-1/CCMP-128/CCMP-128",
+                ".1X/CCMP-128/CCMP-128",
                 id="wpa-1x-ccmp",
             ),
         ],
@@ -109,6 +109,25 @@ class TestElements:
         assert str(bss.security) == "PSK/CCMP-128,TKIP/TKIP"
         decoded = next(ie.decoded for ie in bss.information_elements if ie.eid == 221)
         assert "TKIP" in decoded and "PSK" in decoded
+
+    @pytest.mark.parametrize(
+        "akm, auth",
+        [
+            (1, ".1X"),
+            (3, "FT-.1X"),
+            (5, ".1X-SHA256"),
+            (6, "PSK-SHA256"),
+            (12, ".1X-CNSA-SHA384"),
+            (13, "FT-.1X-CNSA-SHA384"),
+        ],
+    )
+    def test_rsn_akm_names(self, akm, auth):
+        rsn = bytes.fromhex("30140100000fac040100000fac040100000fac") + bytes(
+            [akm, 0, 0]
+        )
+        bss = _bss_with_ies(b"rsn", rsn)
+        assert str(bss.auth) == auth
+        assert str(bss.security) == f"{auth}/CCMP-128/CCMP-128"
 
     def test_short_extended_capabilities_does_not_crash(self):
         bss = _bss_with_ies(b"short", bytes([127, 2, 0x00, 0x00]))

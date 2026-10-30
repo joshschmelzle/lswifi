@@ -851,6 +851,20 @@ class lswifi:
                             "rates_data": rate_list(bss.wlanrateset.data),
                             "rssi": str(bss.rssi),
                             "security": str(bss.security).strip(),
+                            **(
+                                {"security_generation": str(bss.security_generation)}
+                                if bss.security_generation.value
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "security_nonconformant": list(
+                                        bss.security_generation.nonconformant
+                                    )
+                                }
+                                if bss.security_generation.nonconformant
+                                else {}
+                            ),
                             "spatial_streams": str(bss.spatial_streams),
                             "ssid": str(bss.ssid),
                             "stations": str(bss.stations),
@@ -905,6 +919,7 @@ class lswifi:
                     bss.spatial_streams.out(),
                     bss.amendments.out(),
                     # bss.security.out(),
+                    bss.security_generation.out(),
                     bss.auth.out(),
                     bss.encryption.out(),
                     bss.pmf.out(),
@@ -1426,8 +1441,6 @@ class lswifi:
             border: tuple[str, ...] = ()
             rnr_results_len = len(rnr_results[0]) - 1
             for index, _item in enumerate(rnr_results[0]):
-                if index == rnr_results_len:
-                    max_len = len(_item)
                 max_len = max(len(x) for x in [y[index] for y in rnr_results])
                 border = border + (
                     generate_pretty_separator(
@@ -1506,10 +1519,7 @@ class lswifi:
             border = ()
             for index, _item in enumerate(scan_results[0]):
                 # print(index, item)
-                if index == scan_results_len:
-                    max_len = len(_item)
-                else:
-                    max_len = max(len(x) for x in [y[index] for y in scan_results])
+                max_len = max(len(x) for x in [y[index] for y in scan_results])
                 border = border + (
                     generate_pretty_separator(
                         max_len, DECORS, DECORS_START, DECORS_END

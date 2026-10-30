@@ -429,6 +429,9 @@ class MacOSScanSession(RecordScanSession):
             # profile could join, not what the BSS advertises (#101)
             for attr in ("security", "auth", "encryption"):
                 getattr(bss, attr).value = "NONE?"
+        if not (bss.security_generation.rsn or bss.security_generation.wpa):
+            bss.security_generation.value = ""
+            bss.security_generation.nonconformant = []
         return bss
 
     async def scan(self) -> None:
