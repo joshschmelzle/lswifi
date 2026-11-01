@@ -155,7 +155,7 @@ When the run ends, each matched interface, BSSID and band gets one line with the
 
 `-bssid` matches link BSSIDs, not the AP MLD address. It matches the text anywhere in the BSSID, not only at the start, so a partial value can match several BSSIDs, and each gets its own summary. Readings are kept per interface, BSSID and band. If an AP uses the same BSSID on two bands, each band gets its own summary line, and lswifi logs a warning that names the BSSID and the bands. With `--json`, each of those entries also gets `bssid_bands`, the list of bands that BSSID was seen on. Add `-a` (5 GHz), `-g` (2.4 GHz) or `-six` (6 GHz) to measure one band.
 
-`--rssi-stats` bypasses the signal threshold automatically, so weak readings are kept and the spread is not skewed. You don't need `-all`. Passing `-threshold` or `-t` with `--rssi-stats` is an error.
+`--rssi-stats` bypasses the signal threshold automatically, so weak readings are kept and the spread is not skewed. Passing `-threshold` or `-t` with `--rssi-stats` is an error.
 
 Export scan results to pcap:
 
