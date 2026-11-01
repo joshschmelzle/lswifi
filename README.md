@@ -145,15 +145,17 @@ Add `--json` to get one JSON object per event on stdout (NDJSON) instead of log 
 
 Every object has `timestamp` (local time with UTC offset, like the scan export), `interface_mac` and `event`, then `bssid`, `freq_mhz`, `ssid` and `rssi` when known, then event-specific keys such as `channel`, `width_mhz`, `band`, `noise`, `tx_rate_mbps`, `scan_bssid_count`, `scan_frequency_count`, `old_*` values, `reason_code`/`reason_text`, `roam`, `roam_type` and `*_ms` join timing. Keys that are unknown or do not apply are left out rather than set to `null`. Numbers are numbers. If the SSID is not valid UTF-8, `ssid` uses replacement characters and `ssid_hex` has the raw octets.
 
-Measure the settled RSSI and spread of one link while the device and AP stay still, for baselining a link, comparing AP placements or adapters, or checking that a link is stable. Use `-all` and at least 30 scans:
+Measure the settled RSSI and spread of one link while the device and AP stay still, for baselining a link, comparing AP placements or adapters, or checking that a link is stable. Run at least 30 scans:
 
 ``` {.sourceCode .bash}
-> lswifi --rssi-stats -bssid 00:00:00:00:00:00 -all -n 60 -i 5 --json run.json
+> lswifi --rssi-stats -bssid 00:00:00:00:00:00 -n 60 -i 5 --json run.json
 ```
 
-When the run ends, each matched interface and BSSID pair gets one line with the mean, sample standard deviation, min, max and spread, and `--json` adds the same values to an `rssi_stats` list. It is not meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
+When the run ends, each matched interface, BSSID and band gets one line with the mean, sample standard deviation, min, max and spread, and `--json` adds the same values to an `rssi_stats` list, with `band` for 2.4, 5 and 6 GHz readings. It is not meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
 
-`-bssid` matches link BSSIDs, not the AP MLD address. It matches the text anywhere in the BSSID, not only at the start, so a partial value can match several BSSIDs, and each gets its own summary. Readings are grouped by interface and BSSID, not by band, so if an AP uses the same BSSID on two bands, both bands land in one summary. Add `-a` (5 GHz), `-g` (2.4 GHz) or `-six` (6 GHz) to measure one band.
+`-bssid` matches link BSSIDs, not the AP MLD address. It matches the text anywhere in the BSSID, not only at the start, so a partial value can match several BSSIDs, and each gets its own summary. Readings are kept per interface, BSSID and band. If an AP uses the same BSSID on two bands, each band gets its own summary line, and lswifi logs a warning that names the BSSID and the bands. With `--json`, each of those entries also gets `bssid_bands`, the list of bands that BSSID was seen on. Add `-a` (5 GHz), `-g` (2.4 GHz) or `-six` (6 GHz) to measure one band.
+
+`--rssi-stats` bypasses the signal threshold automatically, so weak readings are kept and the spread is not skewed. You don't need `-all`. Passing `-threshold` or `-t` with `--rssi-stats` is an error.
 
 Export scan results to pcap:
 
@@ -213,7 +215,7 @@ options:
   -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
   -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
   -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
-  --rssi-stats          measure one link's settled RSSI and spread while the device and AP stay still: with -bssid and -all, log the RSSI mean, sample stdev, min, max and spread per interface and BSSID when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. -bssid matches link BSSIDs, not the MLD address, and matches the text anywhere in the address, not only at the start. readings are grouped by interface and BSSID, not band, so an AP that uses one BSSID on two bands gives one merged summary; add -a, -g, or -six to measure one band
+  --rssi-stats          measure one link's settled RSSI and spread while the device and AP stay still: with -bssid, log the RSSI mean, sample stdev, min, max and spread per interface, BSSID and band when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. -bssid matches link BSSIDs, not the MLD address, and matches the text anywhere in the address, not only at the start. readings are kept per interface, BSSID and band; if one BSSID is seen on two bands, lswifi warns and gives each band its own summary. add -a, -g, or -six to measure one band. the signal threshold is bypassed automatically in this mode, so weak readings are kept; -threshold (-t) is rejected
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h

@@ -449,7 +449,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--rssi-stats",
         dest="rssi_stats",
         action="store_true",
-        help="measure one link's settled RSSI and spread while the device and AP stay still: with -bssid and -all, log the RSSI mean, sample stdev, min, max and spread per interface and BSSID when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. -bssid matches link BSSIDs, not the MLD address, and matches the text anywhere in the address, not only at the start. readings are grouped by interface and BSSID, not band, so an AP that uses one BSSID on two bands gives one merged summary; add -a, -g, or -six to measure one band",
+        help="measure one link's settled RSSI and spread while the device and AP stay still: with -bssid, log the RSSI mean, sample stdev, min, max and spread per interface, BSSID and band when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. -bssid matches link BSSIDs, not the MLD address, and matches the text anywhere in the address, not only at the start. readings are kept per interface, BSSID and band; if one BSSID is seen on two bands, lswifi warns and gives each band its own summary. add -a, -g, or -six to measure one band. the signal threshold is bypassed automatically in this mode, so weak readings are kept; -threshold (-t) is rejected",
     )
     parser.add_argument(
         "--ap-names",

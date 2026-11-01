@@ -468,8 +468,16 @@ class lswifi:
         if not summaries:
             log.warning("no samples matched -bssid %s", args.bssid)
         else:
-            for summary in summaries:
+            repeated = rssistats.repeated_bssids(summaries)
+            for index, summary in enumerate(summaries):
                 log.info(rssistats.format_summary(summary))
+                key = (summary.interface_mac, summary.bssid)
+                is_last_of_group = index + 1 == len(summaries) or key != (
+                    summaries[index + 1].interface_mac,
+                    summaries[index + 1].bssid,
+                )
+                if key in repeated and is_last_of_group:
+                    log.warning(rssistats.format_band_warning(*key, repeated[key]))
         return summaries
 
     def displayEthers(self):
@@ -827,6 +835,7 @@ class lswifi:
                         self.rssi_samples,
                         client.mac,
                         str(bss.bssid).strip(),
+                        rssistats.band_of(str(bss.channel_frequency.value)),
                         client.last_scan_time_iso,
                         bss.rssi.value,
                     )

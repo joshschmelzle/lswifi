@@ -15,6 +15,7 @@ lswifi.lswifi
 a CLI Wi-Fi scanning utility for Windows that leverages Microsofts Native Wifi wlanapi.h
 """
 
+import argparse
 import logging
 import os
 import platform
@@ -56,10 +57,13 @@ def main():
     args = parser.parse_args()
     if args.rssi_stats and args.bssid is None:
         parser.error("--rssi-stats needs -bssid")
-    if args.rssi_stats and not args.all:
-        parser.error(
-            "--rssi-stats needs -all: the default -82 dBm threshold drops weak readings and skews the stats"
-        )
+    if args.rssi_stats:
+        probe = parser.parse_args(namespace=argparse.Namespace(sensitivity=None))
+        if probe.sensitivity is not None:
+            parser.error(
+                "-threshold (-t) is incompatible with --rssi-stats: this mode never filters readings, so the spread is not skewed"
+            )
+        args.all = True
     if args.exportraw and args.export_path:
         target = app.exportraw_dir(args.export_path)
         if os.path.isfile(target):
