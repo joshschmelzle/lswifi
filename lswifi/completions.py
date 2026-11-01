@@ -25,6 +25,7 @@ GLOBAL_OPTIONS = [
     "-include",
     "-exclude",
     "-bssid",
+    "--rssi-stats",
     "--ap-names",
     "--qbss",
     "--tpc",

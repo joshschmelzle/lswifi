@@ -54,6 +54,12 @@ def main():
         return
 
     args = parser.parse_args()
+    if args.rssi_stats and args.bssid is None:
+        parser.error("--rssi-stats needs -bssid")
+    if args.rssi_stats and not args.all:
+        parser.error(
+            "--rssi-stats needs -all: the default -82 dBm threshold drops weak readings and skews the stats"
+        )
     if args.exportraw and args.export_path:
         target = app.exportraw_dir(args.export_path)
         if os.path.isfile(target):

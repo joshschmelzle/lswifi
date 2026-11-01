@@ -148,6 +148,7 @@ options:
   -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
   -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
   -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
+  --rssi-stats          with -bssid and -all, log RSSI mean and sample stdev per interface and BSSID when the run ends, and add rssi_stats to the --json file. if the AP uses one BSSID on two bands, add -a, -g, or -six
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h

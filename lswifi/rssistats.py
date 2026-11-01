@@ -1,0 +1,120 @@
+#
+# lswifi - a CLI-centric Wi-Fi scanning tool for Windows
+# Copyright (c) 2025 Josh Schmelzle
+# SPDX-License-Identifier: BSD-3-Clause
+
+"""
+lswifi.rssistats
+~~~~~~~~~~~~~~~~
+
+Pure helpers for collecting and summarizing RSSI samples matched by -bssid.
+"""
+
+import contextlib
+import json
+import os
+import statistics
+import tempfile
+from dataclasses import dataclass
+
+RssiSamples = dict[tuple[str, str], list[tuple[str, int]]]
+
+
+@dataclass(frozen=True)
+class RssiSummary:
+    interface_mac: str
+    bssid: str
+    first_timestamp: str
+    last_timestamp: str
+    completed_scans: int
+    samples: int
+    mean_dbm: float
+    stdev_db: float | None
+
+
+def add_sample(
+    samples: RssiSamples,
+    interface_mac: str,
+    bssid: str,
+    timestamp: str,
+    rssi_dbm: object,
+) -> None:
+    if not isinstance(rssi_dbm, int):
+        return
+    samples.setdefault((interface_mac, bssid), []).append((timestamp, rssi_dbm))
+
+
+def summarize(samples: RssiSamples, completed_scans: int) -> list[RssiSummary]:
+    summaries = []
+    for (interface_mac, bssid), entries in sorted(samples.items()):
+        values = [rssi for _timestamp, rssi in entries]
+        mean_dbm = round(statistics.fmean(values), 1)
+        stdev_db = round(statistics.stdev(values), 1) if len(values) >= 2 else None
+        summaries.append(
+            RssiSummary(
+                interface_mac=interface_mac,
+                bssid=bssid,
+                first_timestamp=entries[0][0],
+                last_timestamp=entries[-1][0],
+                completed_scans=completed_scans,
+                samples=len(values),
+                mean_dbm=mean_dbm,
+                stdev_db=stdev_db,
+            )
+        )
+    return summaries
+
+
+def format_summary(summary: RssiSummary) -> str:
+    text = (
+        f"{summary.interface_mac} {summary.bssid}: "
+        f"{summary.samples}/{summary.completed_scans} scans, "
+        f"mean {summary.mean_dbm:.1f} dBm"
+    )
+    if summary.stdev_db is not None:
+        text += f", stdev {summary.stdev_db:.1f} dB"
+    return text
+
+
+def summary_to_json(summary: RssiSummary) -> dict[str, str | int | float]:
+    result: dict[str, str | int | float] = {
+        "interface_mac": summary.interface_mac,
+        "bssid": summary.bssid,
+        "first_timestamp": summary.first_timestamp,
+        "last_timestamp": summary.last_timestamp,
+        "completed_scans": summary.completed_scans,
+        "samples": summary.samples,
+        "mean_dbm": summary.mean_dbm,
+    }
+    if summary.stdev_db is not None:
+        result["stdev_db"] = summary.stdev_db
+    return result
+
+
+def append_to_json_file(
+    path: str, summaries: list[RssiSummary], indent: int | None
+) -> bool:
+    if not os.path.exists(path):
+        return False
+
+    with open(path) as file:
+        document = json.load(file)
+
+    document.setdefault("rssi_stats", []).extend(
+        summary_to_json(summary) for summary in summaries
+    )
+
+    directory = os.path.dirname(os.path.abspath(path))
+    fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
+    file = os.fdopen(fd, "w")
+    try:
+        json.dump(document, file, indent=indent)
+        file.close()
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            file.close()
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+        raise
+    return True

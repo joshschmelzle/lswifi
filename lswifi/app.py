@@ -32,7 +32,7 @@ from ctypes import POINTER, cast, create_string_buffer
 from time import sleep
 
 # app imports
-from lswifi import helpers
+from lswifi import helpers, rssistats
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
 from lswifi.constants import APNAMEJSONFILE, DECORS, DECORS_END, DECORS_START
@@ -91,6 +91,9 @@ def exportraw_dir(path: str) -> str:
 
 
 class lswifi:
+    def __init__(self) -> None:
+        self.rssi_samples: rssistats.RssiSamples = {}
+
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
         loops_completed = 0
@@ -317,11 +320,24 @@ class lswifi:
 
                 if loops_completed > 1:
                     log.info(f"total number of completed scans is {loops_completed}")
+
+                if args.rssi_stats:
+                    summaries = self.report_rssi_stats(loops_completed, args)
+                    if (
+                        args.json
+                        and summaries
+                        and rssistats.append_to_json_file(
+                            args.json, summaries, args.json_indent
+                        )
+                    ):
+                        log.info(f"exporting rssi_stats as JSON to {args.json}")
         except KeyboardInterrupt:
             if not args.event_watcher and loops_completed > 1:
                 log.info(
                     f"total number of completed scans during this session is {loops_completed}"
                 )
+            if args.rssi_stats and not args.event_watcher:
+                self.report_rssi_stats(loops_completed, args)
             log.warning("keyboard interruption detected... stopping...")
             logging.shutdown()
             with contextlib.suppress(OSError):
@@ -443,6 +459,18 @@ class lswifi:
 
         except KeyboardInterrupt:
             raise
+
+    def report_rssi_stats(
+        self, completed_scans: int, args
+    ) -> list[rssistats.RssiSummary]:
+        log = logging.getLogger(__name__)
+        summaries = rssistats.summarize(self.rssi_samples, completed_scans)
+        if not summaries:
+            log.warning("no samples matched -bssid %s", args.bssid)
+        else:
+            for summary in summaries:
+                log.info(rssistats.format_summary(summary))
+        return summaries
 
     def displayEthers(self):
         log = logging.getLogger(__name__)
@@ -793,6 +821,15 @@ class lswifi:
 
                 # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
                 bssid_list.append(str(bss.bssid))
+
+                if args.rssi_stats:
+                    rssistats.add_sample(
+                        self.rssi_samples,
+                        client.mac,
+                        str(bss.bssid).strip(),
+                        client.last_scan_time_iso,
+                        bss.rssi.value,
+                    )
 
                 if args.ethers:
                     if bss.bssid.value in ethers:

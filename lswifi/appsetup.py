@@ -446,6 +446,12 @@ def setup_parser() -> argparse.ArgumentParser:
         help="display filter to limit results by specified BSSIDs (partial matching supported)",
     )
     parser.add_argument(
+        "--rssi-stats",
+        dest="rssi_stats",
+        action="store_true",
+        help="with -bssid and -all, log RSSI mean and sample stdev per interface and BSSID when the run ends, and add rssi_stats to the --json file. if the AP uses one BSSID on two bands, add -a, -g, or -six",
+    )
+    parser.add_argument(
         "--ap-names",
         dest="apnames",
         action="store_true",
