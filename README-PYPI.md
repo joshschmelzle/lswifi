@@ -90,6 +90,8 @@ Measure the settled RSSI and spread of one link while the device and AP stay sti
 
 When the run ends, each matched interface and BSSID pair gets one line with the mean, sample standard deviation, min, max and spread, and `--json` adds the same values to an `rssi_stats` list. It is not meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
 
+`-bssid` matches link BSSIDs, not the AP MLD address. It matches the text anywhere in the BSSID, not only at the start, so a partial value can match several BSSIDs, and each gets its own summary. Readings are grouped by interface and BSSID, not by band, so if an AP uses the same BSSID on two bands, both bands land in one summary. Add `-a` (5 GHz), `-g` (2.4 GHz) or `-six` (6 GHz) to measure one band.
+
 Export scan results to pcap:
 
 ``` {.sourceCode .bash}
@@ -156,7 +158,7 @@ options:
   -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
   -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
   -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
-  --rssi-stats          measure one link's settled RSSI and spread while the device and AP stay still: with -bssid and -all, log the RSSI mean, sample stdev, min, max and spread per interface and BSSID when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. if the AP uses one BSSID on two bands, add -a, -g, or -six
+  --rssi-stats          measure one link's settled RSSI and spread while the device and AP stay still: with -bssid and -all, log the RSSI mean, sample stdev, min, max and spread per interface and BSSID when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. -bssid matches link BSSIDs, not the MLD address, and matches the text anywhere in the address, not only at the start. readings are grouped by interface and BSSID, not band, so an AP that uses one BSSID on two bands gives one merged summary; add -a, -g, or -six to measure one band
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h
