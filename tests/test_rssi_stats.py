@@ -62,6 +62,9 @@ class TestRssiStatsUnit:
         assert s.samples == 3
         assert s.mean_dbm == -62.0
         assert s.stdev_db == 2.0
+        assert s.min_dbm == -64
+        assert s.max_dbm == -60
+        assert s.spread_db == 4
         assert s.first_timestamp == "2026-01-01T00:00:00"
         assert s.last_timestamp == "2026-01-01T00:00:02"
 
@@ -71,7 +74,13 @@ class TestRssiStatsUnit:
         assert summaries[0].samples == 1
         assert summaries[0].mean_dbm == -60.0
         assert summaries[0].stdev_db is None
+        assert summaries[0].min_dbm == -60
+        assert summaries[0].max_dbm == -60
+        assert summaries[0].spread_db == 0
         assert "stdev_db" not in rssistats.summary_to_json(summaries[0])
+        assert "min_dbm" in rssistats.summary_to_json(summaries[0])
+        assert "max_dbm" in rssistats.summary_to_json(summaries[0])
+        assert "spread_db" in rssistats.summary_to_json(summaries[0])
         assert "stdev" not in rssistats.format_summary(summaries[0])
 
     def test_summarize_sorts_by_interface_mac_then_bssid(self):
@@ -102,6 +111,9 @@ class TestRssiStatsUnit:
             samples=2,
             mean_dbm=-61.0,
             stdev_db=1.0,
+            min_dbm=-62,
+            max_dbm=-60,
+            spread_db=2,
         )
         obj = rssistats.summary_to_json(summary)
         assert set(obj) == {
@@ -113,6 +125,9 @@ class TestRssiStatsUnit:
             "samples",
             "mean_dbm",
             "stdev_db",
+            "min_dbm",
+            "max_dbm",
+            "spread_db",
         }
         assert isinstance(obj["interface_mac"], str)
         assert isinstance(obj["bssid"], str)
@@ -122,11 +137,14 @@ class TestRssiStatsUnit:
         assert isinstance(obj["samples"], int)
         assert isinstance(obj["mean_dbm"], float)
         assert isinstance(obj["stdev_db"], float)
+        assert isinstance(obj["min_dbm"], int)
+        assert isinstance(obj["max_dbm"], int)
+        assert isinstance(obj["spread_db"], int)
 
     def test_append_to_json_file_missing_path_returns_false(self, tmp_path):
         path = tmp_path / "missing.json"
         summary = rssistats.RssiSummary(
-            IFACE_MAC, BSSID_A, "t1", "t1", 1, 1, -60.0, None
+            IFACE_MAC, BSSID_A, "t1", "t1", 1, 1, -60.0, None, -60, -60, 0
         )
         assert rssistats.append_to_json_file(str(path), [summary], 4) is False
         assert not path.exists()
@@ -140,7 +158,7 @@ class TestRssiStatsUnit:
         }
         path.write_text(json.dumps(existing))
         summary = rssistats.RssiSummary(
-            IFACE_MAC, BSSID_A, "t1", "t2", 2, 2, -61.0, 1.0
+            IFACE_MAC, BSSID_A, "t1", "t2", 2, 2, -61.0, 1.0, -62, -60, 2
         )
         assert rssistats.append_to_json_file(str(path), [summary], 4) is True
         document = json.loads(path.read_text())
@@ -154,7 +172,7 @@ class TestRssiStatsUnit:
         original = {"lswifi": {"version": "lswifi 0.5.0"}, "scan_data": []}
         path.write_text(json.dumps(original))
         summary = rssistats.RssiSummary(
-            IFACE_MAC, BSSID_A, "t1", "t1", 1, 1, -60.0, None
+            IFACE_MAC, BSSID_A, "t1", "t1", 1, 1, -60.0, None, -60, -60, 0
         )
 
         real_dump = json.dump
@@ -177,7 +195,7 @@ class TestRssiStatsUnit:
         original = {"lswifi": {"version": "lswifi 0.5.0"}, "scan_data": []}
         path.write_text(json.dumps(original))
         summary = rssistats.RssiSummary(
-            IFACE_MAC, BSSID_A, "t1", "t1", 1, 1, -60.0, None
+            IFACE_MAC, BSSID_A, "t1", "t1", 1, 1, -60.0, None, -60, -60, 0
         )
 
         real_dump = json.dump
@@ -262,8 +280,8 @@ class TestAppRun:
             )
         assert exited.value.code == 0
         assert (
-            f"{IFACE_MAC} {BSSID_A}: 3/3 scans, mean -62.0 dBm, stdev 2.0 dB"
-            in caplog.text
+            f"{IFACE_MAC} {BSSID_A}: 3/3 scans, mean -62.0 dBm, stdev 2.0 dB, "
+            "min -64 dBm, max -60 dBm, spread 4 dB" in caplog.text
         )
 
         document = json.loads(path.read_text())
@@ -278,7 +296,13 @@ class TestAppRun:
             "samples",
             "mean_dbm",
             "stdev_db",
+            "min_dbm",
+            "max_dbm",
+            "spread_db",
         }
+        assert isinstance(stats["min_dbm"], int)
+        assert isinstance(stats["max_dbm"], int)
+        assert isinstance(stats["spread_db"], int)
         timestamps = [row["timestamp"] for row in document["scan_data"]]
         assert stats["first_timestamp"] == timestamps[0]
         assert stats["last_timestamp"] == timestamps[-1]
@@ -329,6 +353,7 @@ class TestAppRun:
             )
         assert exited.value.code == 0
         assert "mean -60.0 dBm" in caplog.text
+        assert "min -60 dBm, max -60 dBm, spread 0 dB" in caplog.text
         assert "stdev" not in caplog.text
 
     def test_no_match_logs_warning_and_creates_no_json(self, tmp_path, caplog):
@@ -413,6 +438,6 @@ app.run(args, backend=backend)
     finally:
         proc.kill()
     assert proc.returncode == 130
-    assert "1/1 scans, mean -57.0 dBm" in err
+    assert "1/1 scans, mean -57.0 dBm, min -57 dBm, max -57 dBm, spread 0 dB" in err
     assert "Traceback" not in err
     assert "rssi_stats" not in json.loads(path.read_text())

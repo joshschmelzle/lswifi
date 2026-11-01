@@ -449,7 +449,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--rssi-stats",
         dest="rssi_stats",
         action="store_true",
-        help="with -bssid and -all, log RSSI mean and sample stdev per interface and BSSID when the run ends, and add rssi_stats to the --json file. if the AP uses one BSSID on two bands, add -a, -g, or -six",
+        help="measure one link's settled RSSI and spread while the device and AP stay still: with -bssid and -all, log the RSSI mean, sample stdev, min, max and spread per interface and BSSID when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. if the AP uses one BSSID on two bands, add -a, -g, or -six",
     )
     parser.add_argument(
         "--ap-names",

@@ -145,6 +145,14 @@ Add `--json` to get one JSON object per event on stdout (NDJSON) instead of log 
 
 Every object has `timestamp` (local time with UTC offset, like the scan export), `interface_mac` and `event`, then `bssid`, `freq_mhz`, `ssid` and `rssi` when known, then event-specific keys such as `channel`, `width_mhz`, `band`, `noise`, `tx_rate_mbps`, `scan_bssid_count`, `scan_frequency_count`, `old_*` values, `reason_code`/`reason_text`, `roam`, `roam_type` and `*_ms` join timing. Keys that are unknown or do not apply are left out rather than set to `null`. Numbers are numbers. If the SSID is not valid UTF-8, `ssid` uses replacement characters and `ssid_hex` has the raw octets.
 
+Measure the settled RSSI and spread of one link while the device and AP stay still, for baselining a link, comparing AP placements or adapters, or checking that a link is stable. Use `-all` and at least 30 scans:
+
+``` {.sourceCode .bash}
+> lswifi --rssi-stats -bssid 00:00:00:00:00:00 -all -n 60 -i 5 --json run.json
+```
+
+When the run ends, each matched interface and BSSID pair gets one line with the mean, sample standard deviation, min, max and spread, and `--json` adds the same values to an `rssi_stats` list. It is not meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
+
 Export scan results to pcap:
 
 ``` {.sourceCode .bash}
@@ -203,7 +211,7 @@ options:
   -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
   -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
   -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
-  --rssi-stats          with -bssid and -all, log RSSI mean and sample stdev per interface and BSSID when the run ends, and add rssi_stats to the --json file. if the AP uses one BSSID on two bands, add -a, -g, or -six
+  --rssi-stats          measure one link's settled RSSI and spread while the device and AP stay still: with -bssid and -all, log the RSSI mean, sample stdev, min, max and spread per interface and BSSID when the run ends, and add rssi_stats to the --json file. movement or roaming does not stop the run but can mean fewer samples and a wider spread. if the AP uses one BSSID on two bands, add -a, -g, or -six
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h

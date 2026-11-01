@@ -30,6 +30,9 @@ class RssiSummary:
     samples: int
     mean_dbm: float
     stdev_db: float | None
+    min_dbm: int
+    max_dbm: int
+    spread_db: int
 
 
 def add_sample(
@@ -50,6 +53,9 @@ def summarize(samples: RssiSamples, completed_scans: int) -> list[RssiSummary]:
         values = [rssi for _timestamp, rssi in entries]
         mean_dbm = round(statistics.fmean(values), 1)
         stdev_db = round(statistics.stdev(values), 1) if len(values) >= 2 else None
+        min_dbm = min(values)
+        max_dbm = max(values)
+        spread_db = max_dbm - min_dbm
         summaries.append(
             RssiSummary(
                 interface_mac=interface_mac,
@@ -60,6 +66,9 @@ def summarize(samples: RssiSamples, completed_scans: int) -> list[RssiSummary]:
                 samples=len(values),
                 mean_dbm=mean_dbm,
                 stdev_db=stdev_db,
+                min_dbm=min_dbm,
+                max_dbm=max_dbm,
+                spread_db=spread_db,
             )
         )
     return summaries
@@ -73,6 +82,10 @@ def format_summary(summary: RssiSummary) -> str:
     )
     if summary.stdev_db is not None:
         text += f", stdev {summary.stdev_db:.1f} dB"
+    text += (
+        f", min {summary.min_dbm} dBm, max {summary.max_dbm} dBm, "
+        f"spread {summary.spread_db} dB"
+    )
     return text
 
 
@@ -88,6 +101,9 @@ def summary_to_json(summary: RssiSummary) -> dict[str, str | int | float]:
     }
     if summary.stdev_db is not None:
         result["stdev_db"] = summary.stdev_db
+    result["min_dbm"] = summary.min_dbm
+    result["max_dbm"] = summary.max_dbm
+    result["spread_db"] = summary.spread_db
     return result
 
 
