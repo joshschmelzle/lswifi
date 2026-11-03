@@ -90,7 +90,7 @@ pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
-pytest==9.0.3
+pytest==9.2.0
     # via -r tests.in
 python-discovery==1.6.4
     # via
