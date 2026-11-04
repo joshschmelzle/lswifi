@@ -421,9 +421,9 @@ def format_table(
         "band",
         "ch",
         "samples",
-        "mean",
-        "stdev",
-        "range",
+        "mean dBm",
+        "stdev dB",
+        "range dB",
     )
     rows = [header]
     for summary in sorted(summaries, key=strength_key):
@@ -442,7 +442,7 @@ def format_table(
             )
         )
     widths = [max(len(row[i]) for row in rows) for i in range(len(header))]
-    lines = ["RSSI stats (strongest first; dBm, stdev and range in dB)"]
+    lines = ["RSSI stats"]
     lines.extend(
         "  ".join(
             cell.ljust(width) for cell, width in zip(row, widths, strict=True)

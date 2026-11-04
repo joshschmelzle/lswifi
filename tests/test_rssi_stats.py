@@ -78,7 +78,7 @@ def progress(text):
 
 
 def table_rows(text):
-    lines = text[text.index("RSSI stats (") :].splitlines()[1:]
+    lines = text[text.index("RSSI stats\nSSID ") :].splitlines()[1:]
     header = lines[0]
     names = [
         "SSID",
@@ -91,7 +91,8 @@ def table_rows(text):
         "stdev",
         "range",
     ]
-    starts = [header.index(name) for name in names]
+    headings = [*names[:6], "mean dBm", "stdev dB", "range dB"]
+    starts = [header.index(name) for name in headings]
     rows = []
     for line in lines[1:]:
         if line.startswith(("  ", "* ")):
@@ -897,9 +898,12 @@ class TestPrefixMatch:
         assert "CV" not in rows[-2]
         assert rows[2]["range"] == "20 (-80..-60)"
         assert rows[1]["range"] == "0 (-70..-70)"
-        assert text.splitlines()[0] == (
-            "RSSI stats (strongest first; dBm, stdev and range in dB)"
-        )
+        assert text.splitlines()[0] == "RSSI stats"
+        assert text.splitlines()[1].split("  ")[-3:] == [
+            "mean dBm",
+            "stdev dB",
+            "range dB",
+        ]
         assert "stead" not in text
         assert (
             "* possibly stale: heard in fewer than 2 samples, or the same reading "
@@ -982,7 +986,7 @@ class TestPrefixMatch:
         ]
         footer = {
             line[2:12].strip(): line[13:]
-            for line in out[out.index("RSSI stats (") :].splitlines()
+            for line in out[out.index("RSSI stats\nSSID ") :].splitlines()
             if line.startswith("  ")
         }
         assert footer["samples"] == "3 of 3 scans"
