@@ -90,7 +90,7 @@ class TestRssiStatsUnit:
         assert "min_dbm" in rssistats.summary_to_json(summaries[0])
         assert "max_dbm" in rssistats.summary_to_json(summaries[0])
         assert "spread_db" in rssistats.summary_to_json(summaries[0])
-        assert "cv_power_pct" not in rssistats.summary_to_json(summaries[0])
+        assert "cv" not in rssistats.summary_to_json(summaries[0])
         assert "stdev" not in rssistats.format_summary(summaries[0])
         assert "CV" not in rssistats.format_summary(summaries[0])
 
@@ -107,23 +107,20 @@ class TestRssiStatsUnit:
             ("00:00:5e:00:53:bb", BSSID_A),
         ]
 
-    def test_power_cv_is_zero_for_a_flat_link(self):
-        assert rssistats.power_cv_pct([-60, -60, -60]) == 0.0
+    def test_cv_is_zero_for_a_flat_link(self):
+        assert rssistats.cv_pct([-60, -60, -60]) == 0.0
 
-    def test_power_cv_ignores_a_constant_gain_offset(self):
-        weak = rssistats.power_cv_pct([-80, -82, -84])
-        strong = rssistats.power_cv_pct([-50, -52, -54])
-        assert weak == strong
-        assert weak is not None and weak > 0
+    def test_cv_is_stdev_over_absolute_mean_dbm(self):
+        assert rssistats.cv_pct([-60, -62, -64]) == 3.2
 
-    def test_power_cv_grows_with_the_spread(self):
-        steady = rssistats.power_cv_pct([-60, -61, -60, -61])
-        jumpy = rssistats.power_cv_pct([-60, -66, -60, -66])
+    def test_cv_grows_with_the_spread(self):
+        steady = rssistats.cv_pct([-60, -61, -60, -61])
+        jumpy = rssistats.cv_pct([-60, -66, -60, -66])
         assert steady is not None and jumpy is not None
         assert jumpy > steady
 
-    def test_power_cv_needs_two_samples(self):
-        assert rssistats.power_cv_pct([-60]) is None
+    def test_cv_needs_two_samples(self):
+        assert rssistats.cv_pct([-60]) is None
 
     @pytest.mark.parametrize(
         "text",
@@ -157,7 +154,7 @@ class TestRssiStatsUnit:
             min_dbm=-62,
             max_dbm=-60,
             spread_db=2,
-            cv_power_pct=23.1,
+            cv=1.6,
             label=rssistats.RssiLabel(
                 ssid="ExampleNet", ap_name="AP-12", channel="36", channel_width="20"
             ),
@@ -177,14 +174,14 @@ class TestRssiStatsUnit:
             "samples",
             "mean_dbm",
             "stdev_db",
-            "cv_power_pct",
+            "cv",
             "min_dbm",
             "max_dbm",
             "spread_db",
         }
         assert None not in obj.values()
         assert (obj["channel"], obj["channel_width"]) == (36, 20)
-        assert obj["cv_power_pct"] == 23.1
+        assert obj["cv"] == 1.6
         assert isinstance(obj["interface_mac"], str)
         assert isinstance(obj["bssid"], str)
         assert obj["band"] == "5 GHz"
@@ -459,9 +456,7 @@ class TestConnectedTarget:
             "interface",
         ]
         assert rows["stdev"] == "2.0 dB"
-        assert rows["CV"] == (
-            f"{rssistats.power_cv_pct([-60, -62, -64]):.1f}% of linear power (mW)"
-        )
+        assert rows["CV"] == "3.2%"
         assert (rows["min"], rows["max"], rows["spread"]) == (
             "-64 dBm",
             "-60 dBm",
@@ -469,14 +464,14 @@ class TestConnectedTarget:
         )
         assert rows["interface"] == IFACE_MAC
 
-    def test_band_flag_that_excludes_the_link_errors_after_one_scan(
+    def test_band_flag_that_excludes_the_link_exits_2_after_one_scan(
         self, capsys, caplog
     ):
         backend = SequenceBackend([[record(-60, connected=True)]] * 3)
         args = parse(["--rssi-stats", "-i", "0", "-n", "3", "-six"])
         with pytest.raises(SystemExit) as exited:
             app.run(args, backend=backend)
-        assert exited.value.code == -1
+        assert exited.value.code == 2
         assert backend.calls == 1
         assert (
             f"the connected BSSID on {IFACE_MAC} is on 5 GHz, which -six leaves out"
@@ -572,7 +567,7 @@ class TestAppRun:
             "samples",
             "mean_dbm",
             "stdev_db",
-            "cv_power_pct",
+            "cv",
             "min_dbm",
             "max_dbm",
             "spread_db",
@@ -580,7 +575,7 @@ class TestAppRun:
         assert isinstance(stats["min_dbm"], int)
         assert isinstance(stats["max_dbm"], int)
         assert isinstance(stats["spread_db"], int)
-        assert isinstance(stats["cv_power_pct"], float)
+        assert isinstance(stats["cv"], float)
         timestamps = [row["timestamp"] for row in document["scan_data"]]
         assert stats["first_timestamp"] == timestamps[0]
         assert stats["last_timestamp"] == timestamps[-1]

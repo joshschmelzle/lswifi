@@ -53,7 +53,7 @@ class RssiSummary:
     min_dbm: int
     max_dbm: int
     spread_db: int
-    cv_power_pct: float | None = None
+    cv: float | None = None
     label: RssiLabel = RssiLabel()
 
 
@@ -101,11 +101,13 @@ def add_label(
     )
 
 
-def power_cv_pct(values: list[int]) -> float | None:
+def cv_pct(values: list[int]) -> float | None:
     if len(values) < 2:
         return None
-    milliwatts = [10 ** (value / 10) for value in values]
-    return round(100 * statistics.stdev(milliwatts) / statistics.fmean(milliwatts), 1)
+    mean = statistics.fmean(values)
+    if mean == 0:
+        return None
+    return round(100 * statistics.stdev(values) / abs(mean), 1)
 
 
 def summarize(
@@ -132,7 +134,7 @@ def summarize(
                 min_dbm=min_dbm,
                 max_dbm=max_dbm,
                 spread_db=max_dbm - min_dbm,
-                cv_power_pct=power_cv_pct(values),
+                cv=cv_pct(values),
                 label=(labels or {}).get((interface_mac, bssid, band), RssiLabel()),
             )
         )
@@ -187,9 +189,7 @@ def format_summary(summary: RssiSummary) -> str:
         ),
         (
             "CV",
-            f"{summary.cv_power_pct:.1f}% of linear power (mW)"
-            if summary.cv_power_pct is not None
-            else "",
+            f"{summary.cv:.1f}%" if summary.cv is not None else "",
         ),
         ("min", f"{summary.min_dbm} dBm"),
         ("max", f"{summary.max_dbm} dBm"),
@@ -233,8 +233,8 @@ def summary_to_json(
     }
     if summary.stdev_db is not None:
         result["stdev_db"] = summary.stdev_db
-    if summary.cv_power_pct is not None:
-        result["cv_power_pct"] = summary.cv_power_pct
+    if summary.cv is not None:
+        result["cv"] = summary.cv
     result["min_dbm"] = summary.min_dbm
     result["max_dbm"] = summary.max_dbm
     result["spread_db"] = summary.spread_db

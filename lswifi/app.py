@@ -533,7 +533,7 @@ class lswifi:
                 log.warning(message)
             else:
                 log.error(message)
-                sys.exit(-1)
+                sys.exit(2)
 
     def report_rssi_stats(
         self, completed_scans: int, args

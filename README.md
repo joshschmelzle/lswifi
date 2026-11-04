@@ -162,14 +162,14 @@ RSSI stats
   samples    30/30 scans
   mean       -65.2 dBm
   stdev      0.9 dB
-  CV         19.5% of linear power (mW)
+  CV         1.4%
   min        -67 dBm
   max        -64 dBm
   spread     3 dB
   interface  00:00:5e:00:53:aa
 ```
 
-`stdev` is the sample standard deviation of the dBm readings. `CV` is the coefficient of variation of the readings converted to milliwatts, so a constant gain change doesn't move it. The AP name comes from the beacon, from the cache with `--ap-names`, or from your ethers file with `-ethers`. Rows with no value are left out. Use `-n` or `--time` to change the run length and `-i` to change the gap between scans. If no interface is connected, lswifi exits with an error.
+`stdev` is the sample standard deviation of the dBm readings. `CV` is the coefficient of variation: stdev divided by the absolute value of the mean dBm, as a percentage. The AP name comes from the beacon, from the cache with `--ap-names`, or from your ethers file with `-ethers`. Rows with no value are left out. Use `-n` or `--time` to change the run length and `-i` to change the gap between scans. If no interface is connected, lswifi exits with an error.
 
 To compare antennas, adapters or placements, run the same command once per setup, change one thing between runs, and compare the summaries. Add `--json` to keep each run:
 
@@ -178,7 +178,7 @@ To compare antennas, adapters or placements, run the same command once per setup
 > lswifi --rssi-stats -n 60 --json antenna-b.json
 ```
 
-`--json` writes the per-scan rows to `scan_data` as usual and adds an `rssi_stats` list with the summary values, including `ssid`, `ap_name`, `band`, `channel`, `channel_width` and `cv_power_pct` when known. Keys with no value are left out, never set to `null`. If you stop the run with Ctrl-C, lswifi still prints the summary but doesn't add `rssi_stats` to the file. It isn't meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
+`--json` writes the per-scan rows to `scan_data` as usual and adds an `rssi_stats` list with the summary values, including `ssid`, `ap_name`, `band`, `channel`, `channel_width` and `cv` when known. Keys with no value are left out, never set to `null`. If you stop the run with Ctrl-C, lswifi still prints the summary but doesn't add `rssi_stats` to the file. It isn't meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
 
 To measure a BSSID you aren't connected to, add `-bssid` with the full address:
 
@@ -248,7 +248,7 @@ options:
   -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
   -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
   -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
-  --rssi-stats          measure how strong and how steady one link is while the device and AP stay still. by default it measures the connected BSSID on the band it is connected on, runs 30 scans 2 seconds apart, prints one progress line per scan instead of the table, then prints a summary with the SSID, AP name (when known), BSSID, band, channel and width, samples, mean, stdev, CV of linear power, min, max and spread, and adds rssi_stats to the --json file. example: lswifi --rssi-stats. -n, --time and -i override the defaults. to compare antennas, adapters or placements, run once per setup and compare the summaries, for example lswifi --rssi-stats -n 60 --json antenna-a.json. -bssid measures that BSSID instead and needs the full address; it matches link BSSIDs, not the MLD address. readings are kept per interface, BSSID and band; if one BSSID is seen on two bands, lswifi warns and gives each band its own summary. without -bssid, a band flag (-a, -g, -six) that leaves out the connected link is an error. the signal threshold is bypassed in this mode, so weak readings are kept; -threshold (-t) is rejected. movement or roaming does not stop the run but can mean fewer samples and a wider spread
+  --rssi-stats          measure how strong and how steady one link is while the device and AP stay still. by default it measures the connected BSSID on the band it is connected on, runs 30 scans 2 seconds apart, prints one progress line per scan instead of the table, then prints a summary with the SSID, AP name (when known), BSSID, band, channel and width, samples, mean, stdev, CV (stdev / |mean|), min, max and spread, and adds rssi_stats to the --json file. example: lswifi --rssi-stats. -n, --time and -i override the defaults. to compare antennas, adapters or placements, run once per setup and compare the summaries, for example lswifi --rssi-stats -n 60 --json antenna-a.json. -bssid measures that BSSID instead and needs the full address; it matches link BSSIDs, not the MLD address. readings are kept per interface, BSSID and band; if one BSSID is seen on two bands, lswifi warns and gives each band its own summary. without -bssid, a band flag (-a, -g, -six) that leaves out the connected link is an error. the signal threshold is bypassed in this mode, so weak readings are kept; -threshold (-t) is rejected. movement or roaming does not stop the run but can mean fewer samples and a wider spread
   --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
   --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
   --tpc                 adds TPC column to output using information from AP beacon 802.11h
