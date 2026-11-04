@@ -36,6 +36,34 @@ jobs:
       - name: Run tests
         run: python -m pytest
 
+  macos:
+    name: macOS Python ${{ matrix.python-version }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.15"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+          python -m pip install -r requirements/tests.txt
+
+      - name: Import lswifi with CoreWLAN and CoreLocation
+        run: python -c "import CoreWLAN, CoreLocation, lswifi.backends.macos, lswifi.backends.macos_events, lswifi.backends.macos_location"
+
+      - name: Run tests
+        run: python -m pytest --deselect tests/test_macos_backend.py::TestRealScan
+
   typing:
     name: Type check (mypy)
     runs-on: windows-latest
