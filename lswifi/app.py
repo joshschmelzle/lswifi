@@ -104,6 +104,7 @@ class lswifi:
         self.rssi_call_fresh: dict[str, bool] = {}
         self.rssi_json_out: list = []
         self.rssi_targets_printed: set[str] = set()
+        self.rssi_iface_names: dict[str, str] = {}
         self.rssi_every_scan_noted = False
 
     def run(self, args, **kwargs):
@@ -333,6 +334,7 @@ class lswifi:
                         loops_completed += 1
                         time.sleep(interval)
                 elif args.rssi_stats:
+                    print(rssistats.format_waiting(self.rssi_multi), flush=True)
                     while not self.rssi_done(clients, scans):
                         if loops_completed:
                             time.sleep(interval)
@@ -565,6 +567,9 @@ class lswifi:
                 )
 
     def observe_rssi_scan(self, client) -> None:
+        self.rssi_iface_names[client.mac] = str(
+            getattr(getattr(client, "iface", None), "connection_name", "") or ""
+        )
         markers = {
             (str(bss.bssid).strip(), str(bss.channel_frequency.value)): getattr(
                 bss, "last_seen", None
@@ -613,7 +618,14 @@ class lswifi:
             )
             return
         for key in targets:
-            print(rssistats.format_target(*key, self.rssi_labels[key]), flush=True)
+            print(
+                rssistats.format_target(
+                    *key,
+                    self.rssi_labels[key],
+                    self.rssi_iface_names.get(client_mac, ""),
+                ),
+                flush=True,
+            )
         print(rssistats.format_measuring(self.scan_total, duration), flush=True)
 
     def report_rssi_progress(self, client, args) -> None:

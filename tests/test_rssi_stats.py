@@ -526,21 +526,16 @@ class TestConnectedTarget:
             "interface",
             "samples",
             "time",
+            "interval",
             "mean",
             "stdev",
             "CV",
-            "min",
-            "max",
-            "spread",
+            "range",
         ]
-        assert rows["stdev"] == "2.0 dB"
+        assert rows["stdev"] == "2.0 dB (sample, n-1)"
         assert rows["CV"] == "3.2%"
-        assert (rows["min"], rows["max"], rows["spread"]) == (
-            "-64 dBm",
-            "-60 dBm",
-            "4 dB",
-        )
-        assert rows["interface"] == IFACE_MAC
+        assert rows["range"] == "4 dB (min -64, max -60 dBm)"
+        assert rows["interface"] == f"Wi-Fi ({IFACE_MAC})"
 
     def test_band_flag_that_excludes_the_link_exits_2_after_one_scan(
         self, capsys, caplog
@@ -626,7 +621,7 @@ class TestAppRun:
         assert (rows["samples"], rows["mean"], rows["stdev"]) == (
             "3 of 3 scans",
             "-62.0 dBm",
-            "2.0 dB",
+            "2.0 dB (sample, n-1)",
         )
 
         document = json.loads(path.read_text())
@@ -653,6 +648,7 @@ class TestAppRun:
             "duration_s",
             "started",
             "ended",
+            "interval_s",
             "readings",
             "every_scan_counted",
         }
@@ -737,7 +733,10 @@ class TestAppRun:
             app.run(stats_args("-n", "1", "-i", "0"), backend=backend)
         assert exited.value.code == 0
         rows = summary_rows(capsys.readouterr().out)
-        assert (rows["mean"], rows["spread"]) == ("-60.0 dBm", "0 dB")
+        assert (rows["mean"], rows["range"]) == (
+            "-60.0 dBm",
+            "0 dB (min -60, max -60 dBm)",
+        )
         assert "stdev" not in rows
         assert "CV" not in rows
 
@@ -812,10 +811,10 @@ app.run(args, backend=backend)
         proc.kill()
     assert proc.returncode == 130
     rows = summary_rows(out)
-    assert (rows["samples"], rows["mean"], rows["spread"]) == (
+    assert (rows["samples"], rows["mean"], rows["range"]) == (
         "1 of 1 scan",
         "-57.0 dBm",
-        "0 dB",
+        "0 dB (min -57, max -57 dBm)",
     )
     assert "Traceback" not in err
     assert "rssi_stats" not in json.loads(path.read_text())
@@ -970,6 +969,9 @@ class TestPrefixMatch:
         assert exited.value.code == 0
         out = capsys.readouterr().out
         lines = out.splitlines()
+        assert lines.pop(0) == (
+            "waiting for the first scan to find the matching BSSIDs..."
+        )
         assert lines[0] == "matched 3 BSSIDs on 2 bands; 3 scans, Ctrl-C to stop"
         assert progress(out)[:3] == [
             "scan 1/3  seen 3/3",
@@ -1012,6 +1014,9 @@ class TestPrefixMatch:
             app.run(args, backend=SequenceBackend(scans))
         assert exited.value.code == 0
         lines = capsys.readouterr().out.splitlines()
+        assert lines.pop(0) == (
+            "waiting for the first scan to find the matching BSSIDs..."
+        )
         assert lines[0] == "matched 1 BSSID on 1 band; 2 scans, Ctrl-C to stop"
         assert lines[1][9:].startswith("scan 1/2  seen 1/1")
         assert lines[2][9:].startswith("scan 2/2  seen 1/1")
@@ -1025,6 +1030,9 @@ class TestPrefixMatch:
         with pytest.raises(SystemExit):
             app.run(args, backend=SequenceBackend(scans))
         lines = capsys.readouterr().out.splitlines()
+        assert lines.pop(0) == (
+            "waiting for the first scan to find the matching BSSIDs..."
+        )
         assert lines[0].startswith("matched 1 BSSID on 1 band;")
         assert lines[1][9:].startswith("scan 1/2  seen 1/1")
         assert lines[2][9:].startswith("scan 2/2  seen 2/2")
@@ -1040,7 +1048,6 @@ class TestPrefixMatch:
         with pytest.raises(SystemExit):
             app.run(stats_args("-n", "2"), backend=SequenceBackend(scans))
         out = capsys.readouterr().out
-        assert out.startswith("target\n")
         assert re.search(r"^measuring 2 samples, Ctrl-C to stop$", out, re.M)
         assert re.search(r"^\d\d:\d\d:\d\d sample 1/2: -60 dBm$", out, re.M)
         assert "matched" not in out
@@ -1111,15 +1118,56 @@ class TestFreshReadings:
         assert not tracker.has_markers
         assert tracker.is_fresh_reading(("a", "5 GHz"), None)
 
-    def test_gap_is_measured_between_samples(self):
+    def test_gaps_and_span_agree_with_the_printed_clock(self):
         tracker = rssistats.Freshness()
+        times = [
+            ("00:01:15.900", True),
+            ("00:01:39.100", False),
+            ("00:02:04.950", True),
+            ("00:02:29.020", True),
+        ]
         gaps = []
-        for now, measured in ((0.0, True), (24.0, False), (49.0, True), (73.0, True)):
-            tracker.observe({("a", "5180"): int(now)}, now, real=True)
+        for index, (at, measured) in enumerate(times):
+            iso = f"2026-11-04T{at}-05:00"
+            tracker.observe({("a", "5180"): index}, float(index), real=True, at=iso)
             tracker.record(measured)
-            gaps.append(tracker.sample_gap if measured else "miss")
-        assert gaps == [None, "miss", 49.0, 24.0]
-        assert tracker.duration_s() == 73.0
+            if measured:
+                gaps.append(tracker.sample_gap)
+        assert gaps == [None, 49, 25]
+        run = rssistats.RunInfo(
+            started_at=tracker.started_at, ended_at=tracker.ended_at
+        )
+        assert rssistats.format_span(run) == "00:01:15 to 00:02:29 (74 s)"
+        assert sum(gap for gap in gaps if gap) == 74
+
+    def test_interval_is_the_mean_gap_between_samples(self):
+        def summary(*clocks):
+            entries = [(f"2026-11-04T{c}-05:00", -60) for c in clocks]
+            return rssistats.summarize({("m", "b", "5 GHz"): entries}, len(entries))[0]
+
+        two = summary("00:01:15.900", "00:02:04.950", "00:02:29.020")
+        assert rssistats.format_interval(two) == "about 37 s between samples"
+        assert rssistats.summary_to_json(two)["interval_s"] == 37.0
+        one = summary("00:01:15.900")
+        assert rssistats.format_interval(one) == ""
+        assert "interval_s" not in rssistats.summary_to_json(one)
+        assert "interval" not in rssistats.format_summary(one)
+
+    def test_waiting_line_comes_first(self, capsys):
+        scans = [[record(-60)], [record(-62)]]
+        with pytest.raises(SystemExit):
+            app.run(stats_args("-n", "2"), backend=SequenceBackend(scans))
+        out = capsys.readouterr().out
+        assert out.startswith(
+            "waiting for the first scan to identify the AP...\ntarget\n"
+        )
+        assert "steady" not in out.lower()
+
+    def test_interface_row_names_the_interface(self):
+        label = rssistats.RssiLabel(ssid="ExampleNet")
+        text = rssistats.format_target(IFACE_MAC, BSSID_A, "5 GHz", label, "en0")
+        assert f"  interface  en0 ({IFACE_MAC})" in text.splitlines()
+        assert rssistats.format_interface("", IFACE_MAC) == IFACE_MAC
 
     def test_progress_shows_the_gap_after_the_first_sample(self):
         at = "2026-11-04T00:01:39.000-05:00"

@@ -11,6 +11,7 @@ Pure helpers for collecting and summarizing RSSI samples for --rssi-stats.
 """
 
 import contextlib
+import datetime
 import json
 import os
 import re
@@ -51,6 +52,15 @@ def clock(iso: str) -> str:
     return iso[11:19] if len(iso) >= 19 else iso
 
 
+def seconds_between(start: str, end: str) -> int | None:
+    try:
+        first = datetime.datetime.fromisoformat(start).replace(microsecond=0)
+        last = datetime.datetime.fromisoformat(end).replace(microsecond=0)
+    except ValueError:
+        return None
+    return int((last - first).total_seconds())
+
+
 @dataclass
 class Freshness:
     scan_calls: int = 0
@@ -61,8 +71,8 @@ class Freshness:
     idle_streak: int = 0
     has_markers: bool = True
     started: float | None = None
-    last_sample: float | None = None
-    sample_gap: float | None = None
+    last_sample_at: str = ""
+    sample_gap: int | None = None
     last_call: float | None = None
     started_at: str = ""
     ended_at: str = ""
@@ -112,13 +122,12 @@ class Freshness:
 
     def record(self, measured: bool) -> None:
         if measured:
-            now = self.last_call
             self.sample_gap = (
-                now - self.last_sample
-                if now is not None and self.last_sample is not None
+                seconds_between(self.last_sample_at, self.ended_at)
+                if self.last_sample_at and self.ended_at
                 else None
             )
-            self.last_sample = now
+            self.last_sample_at = self.ended_at
             self.samples += 1
             self.miss_streak = 0
         else:
@@ -338,10 +347,14 @@ EVERY_SCAN_NOTE = (
 
 
 def format_span(run: RunInfo) -> str:
-    text = f"{run.duration_s:.0f} s"
-    if run.started_at and run.ended_at:
-        text = f"{clock(run.started_at)} to {clock(run.ended_at)} ({text})"
-    return text
+    seconds = (
+        seconds_between(run.started_at, run.ended_at)
+        if run.started_at and run.ended_at
+        else None
+    )
+    if seconds is None:
+        return f"{run.duration_s:.0f} s"
+    return f"{clock(run.started_at)} to {clock(run.ended_at)} ({seconds} s)"
 
 
 def format_samples(summary: "RssiSummary") -> str:
@@ -350,6 +363,21 @@ def format_samples(summary: "RssiSummary") -> str:
     if missed > 0:
         text += f", {missed} missed"
     return text
+
+
+def format_waiting(multi: bool) -> str:
+    if multi:
+        return "waiting for the first scan to find the matching BSSIDs..."
+    return "waiting for the first scan to identify the AP..."
+
+
+def interval_s(summary: "RssiSummary") -> float | None:
+    if len(summary.readings) < 2:
+        return None
+    seconds = seconds_between(summary.readings[0][0], summary.readings[-1][0])
+    if seconds is None:
+        return None
+    return seconds / (len(summary.readings) - 1)
 
 
 def format_measuring(scans: int | None, duration: int | None) -> str:
@@ -436,7 +464,17 @@ def format_rows(rows: list[tuple[str, str]]) -> list[str]:
     return [f"  {name:<10} {value}" for name, value in rows if value]
 
 
-def format_target(interface_mac: str, bssid: str, band: str, label: RssiLabel) -> str:
+def format_interface(name: str, mac: str) -> str:
+    return f"{name} ({mac})" if name and name != mac else mac
+
+
+def format_target(
+    interface_mac: str,
+    bssid: str,
+    band: str,
+    label: RssiLabel,
+    interface_name: str = "",
+) -> str:
     probe = RssiSummary(
         interface_mac, bssid, band, "", "", 0, 0, 0.0, None, 0, 0, 0, label=label
     )
@@ -445,9 +483,14 @@ def format_target(interface_mac: str, bssid: str, band: str, label: RssiLabel) -
         ("AP name", label.ap_name),
         ("BSSID", bssid),
         ("band", format_channel(probe)),
-        ("interface", interface_mac),
+        ("interface", format_interface(interface_name, interface_mac)),
     ]
     return "\n".join(["target", *format_rows(rows)])
+
+
+def format_interval(summary: RssiSummary) -> str:
+    seconds = interval_s(summary)
+    return "" if seconds is None else f"about {seconds:.0f} s between samples"
 
 
 def format_summary(summary: RssiSummary) -> str:
@@ -456,18 +499,24 @@ def format_summary(summary: RssiSummary) -> str:
         ("band", format_channel(summary)),
         ("samples", format_samples(summary)),
         ("time", format_span(summary.run)),
+        ("interval", format_interval(summary)),
         ("mean", f"{summary.mean_dbm:.1f} dBm"),
         (
             "stdev",
-            f"{summary.stdev_db:.1f} dB" if summary.stdev_db is not None else "",
+            (
+                f"{summary.stdev_db:.1f} dB (sample, n-1)"
+                if summary.stdev_db is not None
+                else ""
+            ),
         ),
         (
             "CV",
             f"{summary.cv:.1f}%" if summary.cv is not None else "",
         ),
-        ("min", f"{summary.min_dbm} dBm"),
-        ("max", f"{summary.max_dbm} dBm"),
-        ("spread", f"{summary.spread_db} dB"),
+        (
+            "range",
+            f"{summary.spread_db} dB (min {summary.min_dbm}, max {summary.max_dbm} dBm)",
+        ),
     ]
     return "\n".join(["RSSI stats", *format_rows(rows)])
 
@@ -516,6 +565,9 @@ def summary_to_json(
         result["duration_s"] = round(summary.run.duration_s, 1)
     if summary.completed_scans > summary.samples:
         result["missed"] = summary.completed_scans - summary.samples
+    interval = interval_s(summary)
+    if interval is not None:
+        result["interval_s"] = round(interval, 1)
     if summary.run.started_at:
         result["started"] = summary.run.started_at
     if summary.run.ended_at:
