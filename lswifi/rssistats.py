@@ -13,6 +13,7 @@ Pure helpers for collecting and summarizing RSSI samples for --rssi-stats.
 import contextlib
 import datetime
 import json
+import math
 import os
 import re
 import statistics
@@ -163,7 +164,6 @@ class RssiSummary:
     min_dbm: int
     max_dbm: int
     spread_db: int
-    cv: float | None = None
     label: RssiLabel = RssiLabel()
     possibly_stale: bool = False
     run: RunInfo = RunInfo()
@@ -230,15 +230,6 @@ def add_label(
     )
 
 
-def cv_pct(values: list[int]) -> float | None:
-    if len(values) < 2:
-        return None
-    mean = statistics.fmean(values)
-    if mean == 0:
-        return None
-    return round(100 * statistics.stdev(values) / abs(mean), 1)
-
-
 def is_possibly_stale(values: list[int], completed_scans: int) -> bool:
     if len(values) < 2:
         return True
@@ -277,7 +268,6 @@ def summarize(
                 min_dbm=min_dbm,
                 max_dbm=max_dbm,
                 spread_db=max_dbm - min_dbm,
-                cv=cv_pct(values),
                 label=(labels or {}).get((interface_mac, bssid, band), RssiLabel()),
                 possibly_stale=is_possibly_stale(values, scans),
                 run=(runs or {}).get(interface_mac, RunInfo()),
@@ -325,10 +315,18 @@ def format_miss(at: str, misses: int) -> str:
 
 
 def format_multi_progress(
-    at: str, index: int, total: int | None, seen: int, matched: int
+    at: str,
+    index: int,
+    total: int | None,
+    seen: int,
+    matched: int,
+    gap_s: float | None = None,
 ) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    return f"{clock(at)} scan {position}  seen {seen}/{matched}"
+    text = f"{clock(at)} sample {position}  seen {seen}/{matched}"
+    if gap_s is not None:
+        text += f" (+{gap_s:.0f} s)"
+    return text
 
 
 def format_plan(
@@ -336,8 +334,9 @@ def format_plan(
 ) -> str:
     noun = "BSSID" if matched == 1 else "BSSIDs"
     band_noun = "band" if bands == 1 else "bands"
-    run = plural(scans, "scan") if scans else f"scans for {duration} s"
-    return f"matched {matched} {noun} on {bands} {band_noun}; {run}, Ctrl-C to stop"
+    return f"matched {matched} {noun} on {bands} {band_noun}; " + format_measuring(
+        scans, duration
+    )
 
 
 EVERY_SCAN_NOTE = (
@@ -385,11 +384,23 @@ def format_measuring(scans: int | None, duration: int | None) -> str:
     return f"measuring {run}, Ctrl-C to stop"
 
 
-def steadiness_key(summary: "RssiSummary") -> tuple[bool, float, float]:
-    return (summary.possibly_stale, summary.stdev_db or 0.0, -summary.mean_dbm)
+def strength_key(summary: "RssiSummary") -> tuple[bool, float, float]:
+    return (summary.possibly_stale, -summary.mean_dbm, summary.stdev_db or 0.0)
 
 
-def format_table(summaries: list["RssiSummary"]) -> str:
+def format_range_cell(summary: "RssiSummary") -> str:
+    return f"{summary.spread_db} ({summary.min_dbm}..{summary.max_dbm})"
+
+
+def format_run_interval(seconds: int | None, samples: int) -> str:
+    if samples < 2 or seconds is None:
+        return ""
+    return f"about {math.floor(seconds / (samples - 1) + 0.5)} s between samples"
+
+
+def format_table(
+    summaries: list["RssiSummary"], names: dict[str, str] | None = None
+) -> str:
     header = (
         "SSID",
         "AP name",
@@ -399,13 +410,10 @@ def format_table(summaries: list["RssiSummary"]) -> str:
         "samples",
         "mean",
         "stdev",
-        "CV",
-        "min",
-        "max",
-        "spread",
+        "range",
     )
     rows = [header]
-    for summary in sorted(summaries, key=steadiness_key):
+    for summary in sorted(summaries, key=strength_key):
         rows.append(
             (
                 summary.label.ssid or "-",
@@ -417,14 +425,11 @@ def format_table(summaries: list["RssiSummary"]) -> str:
                 + ("*" if summary.possibly_stale else ""),
                 f"{summary.mean_dbm:.1f}",
                 f"{summary.stdev_db:.1f}" if summary.stdev_db is not None else "-",
-                f"{summary.cv:.1f}%" if summary.cv is not None else "-",
-                str(summary.min_dbm),
-                str(summary.max_dbm),
-                str(summary.spread_db),
+                format_range_cell(summary),
             )
         )
     widths = [max(len(row[i]) for row in rows) for i in range(len(header))]
-    lines = ["RSSI stats (steadiest first; dBm, stdev and spread in dB)"]
+    lines = ["RSSI stats (strongest first; dBm, stdev and range in dB)"]
     lines.extend(
         "  ".join(
             cell.ljust(width) for cell, width in zip(row, widths, strict=True)
@@ -433,17 +438,37 @@ def format_table(summaries: list["RssiSummary"]) -> str:
     )
     if any(summary.possibly_stale for summary in summaries):
         lines.append(
-            "* possibly stale: heard in fewer than 2 scans, or the same "
-            "reading every time in fewer than half the scans"
+            "* possibly stale: heard in fewer than 2 samples, or the same "
+            "reading in every sample while heard in fewer than half the samples"
         )
-    runs = {
-        summary.interface_mac: (
-            f"{plural(summary.completed_scans, 'scan')}, {format_span(summary.run)}"
-        )
-        for summary in summaries
-    }
+    runs = {summary.interface_mac: summary for summary in summaries}
     for interface_mac in sorted(runs):
-        lines.append(f"interface {interface_mac}: {runs[interface_mac]}")
+        summary = runs[interface_mac]
+        scans = summary.completed_scans
+        own = [entry for entry in summaries if entry.interface_mac == interface_mac]
+        first = min(entry.first_timestamp for entry in own)
+        last = max(entry.last_timestamp for entry in own)
+        seconds = seconds_between(first, last)
+        span = (
+            f"{clock(first)} to {clock(last)} ({seconds} s)"
+            if seconds is not None
+            else format_span(summary.run)
+        )
+        lines.extend(
+            format_rows(
+                [
+                    ("samples", f"{scans} of {plural(scans, 'scan')}"),
+                    ("time", span),
+                    ("interval", format_run_interval(seconds, scans)),
+                    (
+                        "interface",
+                        format_interface(
+                            (names or {}).get(interface_mac, ""), interface_mac
+                        ),
+                    ),
+                ]
+            )
+        )
     return "\n".join(lines)
 
 
@@ -490,7 +515,9 @@ def format_target(
 
 def format_interval(summary: RssiSummary) -> str:
     seconds = interval_s(summary)
-    return "" if seconds is None else f"about {seconds:.0f} s between samples"
+    if seconds is None:
+        return ""
+    return f"about {math.floor(seconds + 0.5)} s between samples"
 
 
 def format_summary(summary: RssiSummary) -> str:
@@ -508,10 +535,6 @@ def format_summary(summary: RssiSummary) -> str:
                 if summary.stdev_db is not None
                 else ""
             ),
-        ),
-        (
-            "CV",
-            f"{summary.cv:.1f}%" if summary.cv is not None else "",
         ),
         (
             "range",
@@ -553,8 +576,6 @@ def summary_to_json(
     }
     if summary.stdev_db is not None:
         result["stdev_db"] = summary.stdev_db
-    if summary.cv is not None:
-        result["cv"] = summary.cv
     result["min_dbm"] = summary.min_dbm
     result["max_dbm"] = summary.max_dbm
     result["spread_db"] = summary.spread_db

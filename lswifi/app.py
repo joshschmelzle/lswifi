@@ -638,8 +638,14 @@ class lswifi:
         readings = self.rssi_readings.get(client_mac, [])
         if self.rssi_multi:
             matched = {key for key in self.rssi_labels if key[0] == client_mac}
+            tracker.record(True)
             text = rssistats.format_multi_progress(
-                at, tracker.real_scans, self.scan_total, len(readings), len(matched)
+                at,
+                tracker.real_scans,
+                self.scan_total,
+                len(readings),
+                len(matched),
+                tracker.sample_gap,
             )
         else:
             tracker.record(bool(readings))
@@ -727,7 +733,7 @@ class lswifi:
             repeated = rssistats.repeated_bssids(summaries)
             print(
                 (
-                    rssistats.format_table(summaries)
+                    rssistats.format_table(summaries, self.rssi_iface_names)
                     if self.rssi_multi
                     else "\n\n".join(
                         rssistats.format_summary(summary) for summary in summaries

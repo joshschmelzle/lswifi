@@ -84,15 +84,12 @@ def table_rows(text):
         "samples",
         "mean",
         "stdev",
-        "CV",
-        "min",
-        "max",
-        "spread",
+        "range",
     ]
     starts = [header.index(name) for name in names]
     rows = []
     for line in lines[1:]:
-        if line.startswith(("interface ", "* ")):
+        if line.startswith(("  ", "* ")):
             break
         cells = [
             line[a:b].strip() for a, b in zip(starts, [*starts[1:], None], strict=True)
@@ -162,21 +159,6 @@ class TestRssiStatsUnit:
             ("00:00:5e:00:53:bb", BSSID_A),
         ]
 
-    def test_cv_is_zero_for_a_flat_link(self):
-        assert rssistats.cv_pct([-60, -60, -60]) == 0.0
-
-    def test_cv_is_stdev_over_absolute_mean_dbm(self):
-        assert rssistats.cv_pct([-60, -62, -64]) == 3.2
-
-    def test_cv_grows_with_the_spread(self):
-        steady = rssistats.cv_pct([-60, -61, -60, -61])
-        jumpy = rssistats.cv_pct([-60, -66, -60, -66])
-        assert steady is not None and jumpy is not None
-        assert jumpy > steady
-
-    def test_cv_needs_two_samples(self):
-        assert rssistats.cv_pct([-60]) is None
-
     @pytest.mark.parametrize(
         "text",
         [BSSID_A, BSSID_A.upper(), BSSID_A.replace(":", "-"), "00005e005301"],
@@ -209,7 +191,6 @@ class TestRssiStatsUnit:
             min_dbm=-62,
             max_dbm=-60,
             spread_db=2,
-            cv=1.6,
             label=rssistats.RssiLabel(
                 ssid="ExampleNet", ap_name="AP-12", channel="36", channel_width="20"
             ),
@@ -229,14 +210,13 @@ class TestRssiStatsUnit:
             "samples",
             "mean_dbm",
             "stdev_db",
-            "cv",
             "min_dbm",
             "max_dbm",
             "spread_db",
         }
         assert None not in obj.values()
         assert (obj["channel"], obj["channel_width"]) == (36, 20)
-        assert obj["cv"] == 1.6
+        assert "cv" not in obj
         assert isinstance(obj["interface_mac"], str)
         assert isinstance(obj["bssid"], str)
         assert obj["band"] == "5 GHz"
@@ -529,11 +509,10 @@ class TestConnectedTarget:
             "interval",
             "mean",
             "stdev",
-            "CV",
             "range",
         ]
         assert rows["stdev"] == "2.0 dB (sample, n-1)"
-        assert rows["CV"] == "3.2%"
+        assert "CV" not in rows
         assert rows["range"] == "4 dB (min -64, max -60 dBm)"
         assert rows["interface"] == f"Wi-Fi ({IFACE_MAC})"
 
@@ -640,7 +619,6 @@ class TestAppRun:
             "samples",
             "mean_dbm",
             "stdev_db",
-            "cv",
             "min_dbm",
             "max_dbm",
             "spread_db",
@@ -655,7 +633,7 @@ class TestAppRun:
         assert isinstance(stats["min_dbm"], int)
         assert isinstance(stats["max_dbm"], int)
         assert isinstance(stats["spread_db"], int)
-        assert isinstance(stats["cv"], float)
+        assert "cv" not in stats
         timestamps = [row["timestamp"] for row in document["scan_data"]]
         assert stats["first_timestamp"] == timestamps[0]
         assert stats["last_timestamp"] == timestamps[-1]
@@ -886,7 +864,7 @@ class TestPrefixMatch:
         assert not rssistats.matches_bssid("00:00:5e", BSSID_OTHER)
         assert not rssistats.matches_bssid(BSSID_A, "00:00:5e:00:53:011")
 
-    def test_table_sorts_steadiest_first_then_by_mean_then_stale(self):
+    def test_table_sorts_strongest_first_then_by_stdev_then_stale(self):
         def summary(bssid, values, scans=4, band="5 GHz"):
             samples = {(IFACE_MAC, bssid, band): [("t", v) for v in values]}
             return rssistats.summarize(samples, scans)[0]
@@ -910,11 +888,18 @@ class TestPrefixMatch:
             "00:00:5e:00:53:05",
         ]
         assert [row["samples"] for row in rows[-2:]] == ["1/4*", "2/6*"]
-        assert (rows[-2]["stdev"], rows[-2]["CV"], rows[-2]["AP name"]) == (
-            "-",
-            "-",
-            "-",
+        assert (rows[-2]["stdev"], rows[-2]["AP name"]) == ("-", "-")
+        assert "CV" not in rows[-2]
+        assert rows[2]["range"] == "20 (-80..-60)"
+        assert rows[1]["range"] == "0 (-70..-70)"
+        assert text.splitlines()[0] == (
+            "RSSI stats (strongest first; dBm, stdev and range in dB)"
         )
+        assert "stead" not in text
+        assert (
+            "* possibly stale: heard in fewer than 2 samples, or the same reading "
+            "in every sample while heard in fewer than half the samples"
+        ) in text
         assert "* possibly stale:" in text
         assert "possibly stale" not in rssistats.format_table(summaries[:1])
 
@@ -972,19 +957,34 @@ class TestPrefixMatch:
         assert lines.pop(0) == (
             "waiting for the first scan to find the matching BSSIDs..."
         )
-        assert lines[0] == "matched 3 BSSIDs on 2 bands; 3 scans, Ctrl-C to stop"
+        assert lines[0] == (
+            "matched 3 BSSIDs on 2 bands; measuring 3 samples, Ctrl-C to stop"
+        )
         assert progress(out)[:3] == [
-            "scan 1/3  seen 3/3",
-            "scan 2/3  seen 2/3",
-            "scan 3/3  seen 3/3",
+            "sample 1/3  seen 3/3",
+            "sample 2/3  seen 2/3",
+            "sample 3/3  seen 3/3",
         ]
+        timed = [line for line in lines if re.match(r"\d\d:\d\d:\d\d ", line)]
+        assert "(+" not in timed[0]
+        assert all(re.search(r" \(\+\d+ s\)$", line) for line in timed[1:3])
         assert BSSID_OTHER not in out
         rows = table_rows(out)
         assert [(row["BSSID"], row["band"], row["samples"]) for row in rows] == [
-            (BSSID_B, "5 GHz", "3/3"),
             (BSSID_C, "2.4 GHz", "2/3"),
             (BSSID_A, "5 GHz", "3/3"),
+            (BSSID_B, "5 GHz", "3/3"),
         ]
+        footer = {
+            line[2:12].strip(): line[13:]
+            for line in out[out.index("RSSI stats (") :].splitlines()
+            if line.startswith("  ")
+        }
+        assert footer["samples"] == "3 of 3 scans"
+        clocks = [line[:8] for line in timed[:3]]
+        assert footer["time"].startswith(f"{clocks[0]} to {clocks[2]} (")
+        assert re.fullmatch(r"about \d+ s between samples", footer["interval"])
+        assert IFACE_MAC in footer["interface"]
         assert "total number of completed scans" not in caplog.text
         stats = json.loads(path.read_text())["rssi_stats"]
         assert sorted((e["bssid"], e["band"], e["samples"]) for e in stats) == [
@@ -993,6 +993,7 @@ class TestPrefixMatch:
             (BSSID_C, "2.4 GHz", 2),
         ]
         assert all(None not in e.values() for e in stats)
+        assert all("cv" not in e for e in stats)
 
     def test_prefix_with_one_match_uses_the_table_from_scan_1(self, tmp_path, capsys):
         scans = [[record(-60), record(-40, bssid=BSSID_OTHER)], [record(-62)]]
@@ -1017,9 +1018,11 @@ class TestPrefixMatch:
         assert lines.pop(0) == (
             "waiting for the first scan to find the matching BSSIDs..."
         )
-        assert lines[0] == "matched 1 BSSID on 1 band; 2 scans, Ctrl-C to stop"
-        assert lines[1][9:].startswith("scan 1/2  seen 1/1")
-        assert lines[2][9:].startswith("scan 2/2  seen 1/1")
+        assert lines[0] == (
+            "matched 1 BSSID on 1 band; measuring 2 samples, Ctrl-C to stop"
+        )
+        assert lines[1][9:].startswith("sample 1/2  seen 1/1")
+        assert lines[2][9:].startswith("sample 2/2  seen 1/1")
         assert [row["BSSID"] for row in table_rows("\n".join(lines))] == [BSSID_A]
         stats = json.loads(path.read_text())["rssi_stats"]
         assert "possibly_stale" not in stats[0]
@@ -1034,8 +1037,8 @@ class TestPrefixMatch:
             "waiting for the first scan to find the matching BSSIDs..."
         )
         assert lines[0].startswith("matched 1 BSSID on 1 band;")
-        assert lines[1][9:].startswith("scan 1/2  seen 1/1")
-        assert lines[2][9:].startswith("scan 2/2  seen 2/2")
+        assert lines[1][9:].startswith("sample 1/2  seen 1/1")
+        assert lines[2][9:].startswith("sample 2/2  seen 2/2")
         assert sum(line.startswith("matched") for line in lines) == 1
         rows = table_rows("\n".join(lines))
         assert [(row["BSSID"], row["samples"]) for row in rows] == [
@@ -1152,6 +1155,9 @@ class TestFreshReadings:
         assert rssistats.format_interval(one) == ""
         assert "interval_s" not in rssistats.summary_to_json(one)
         assert "interval" not in rssistats.format_summary(one)
+        half = summary("00:00:00", "00:00:24", "00:00:49")
+        assert rssistats.format_interval(half) == "about 25 s between samples"
+        assert rssistats.summary_to_json(half)["interval_s"] == 24.5
 
     def test_waiting_line_comes_first(self, capsys):
         scans = [[record(-60)], [record(-62)]]
