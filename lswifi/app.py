@@ -102,6 +102,8 @@ class lswifi:
         self.scan_interval = 0
         self.scan_deadline: float | None = None
         self.rssi_multi = False
+        self.rssi_started: float | None = None
+        self.rssi_plan_printed = False
 
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -313,6 +315,10 @@ class lswifi:
 
                 self.scan_total = None if timeout > 0 else scans
                 self.scan_interval = interval
+                self.rssi_multi = (
+                    args.bssid is not None and not rssistats.is_full_bssid(args.bssid)
+                )
+                self.rssi_started = time.perf_counter()
                 if timeout > 0:  # we're scanning during a given time period
                     timeout_start = time.time()
                     self.scan_deadline = timeout_start + timeout
@@ -503,19 +509,26 @@ class lswifi:
         except KeyboardInterrupt:
             raise
 
-    def rssi_seconds_left(self) -> int | None:
+    def rssi_time_left(self) -> str:
+        if self.rssi_started is None or self.scan_index < 1:
+            return ""
+        elapsed = time.perf_counter() - self.rssi_started
+        cycle = (elapsed + self.scan_interval) / self.scan_index
         if self.scan_total:
-            return max(self.scan_total - self.scan_index, 0) * int(self.scan_interval)
+            remaining = max(self.scan_total - self.scan_index, 0)
+            return rssistats.format_time_left(round(remaining * cycle), None)
         if self.scan_deadline is not None:
-            return max(int(self.scan_deadline - time.time()), 0)
-        return None
+            seconds_left = max(int(self.scan_deadline - time.time()), 0)
+            scans_left = int(seconds_left / cycle) if cycle > 0 else None
+            return rssistats.format_time_left(seconds_left, scans_left)
+        return ""
 
     def report_rssi_progress(self, client_mac: str, args) -> None:
         readings = self.rssi_readings.get(client_mac, [])
-        if args.bssid is not None and not rssistats.is_full_bssid(args.bssid):
+        if self.rssi_multi:
             matched = {key for key in self.rssi_samples if key[0] == client_mac}
-            if not self.rssi_multi and len(matched) > 1:
-                self.rssi_multi = True
+            if self.scan_index == 1 and not self.rssi_plan_printed:
+                self.rssi_plan_printed = True
                 print(
                     rssistats.format_plan(
                         len(matched),
@@ -526,18 +539,17 @@ class lswifi:
                     ),
                     flush=True,
                 )
-            if self.rssi_multi:
-                text = rssistats.format_multi_progress(
-                    self.scan_index,
-                    self.scan_total,
-                    len(readings),
-                    len(matched),
-                    self.rssi_seconds_left(),
-                )
-                if len(self.rssi_readings) > 1:
-                    text += f" on {client_mac}"
-                print(text, flush=True)
-                return
+            text = rssistats.format_multi_progress(
+                self.scan_index,
+                self.scan_total,
+                len(readings),
+                len(matched),
+                self.rssi_time_left(),
+            )
+            if len(self.rssi_readings) > 1:
+                text += f" on {client_mac}"
+            print(text, flush=True)
+            return
         show_band = len({band for band, _rssi in readings}) > 1
         text = rssistats.format_progress(
             self.scan_index,
@@ -546,6 +558,7 @@ class lswifi:
                 rssistats.format_reading(band, rssi, show_band)
                 for band, rssi in readings
             ],
+            self.rssi_time_left(),
         )
         if len(self.rssi_readings) > 1:
             text += f" on {client_mac}"
@@ -597,9 +610,11 @@ class lswifi:
             repeated = rssistats.repeated_bssids(summaries)
             print(
                 (
-                    rssistats.format_summary(summaries[0])
-                    if len(summaries) == 1
-                    else rssistats.format_table(summaries)
+                    rssistats.format_table(summaries)
+                    if self.rssi_multi
+                    else "\n\n".join(
+                        rssistats.format_summary(summary) for summary in summaries
+                    )
                 ),
                 flush=True,
             )
@@ -608,7 +623,11 @@ class lswifi:
                 key = (summary.interface_mac, summary.bssid)
                 if key in repeated and key not in warned:
                     warned.add(key)
-                    log.warning(rssistats.format_band_warning(*key, repeated[key]))
+                    log.warning(
+                        rssistats.format_band_warning(
+                            *key, repeated[key], self.rssi_multi
+                        )
+                    )
         return summaries
 
     def displayEthers(self):

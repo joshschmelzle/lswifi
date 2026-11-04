@@ -55,6 +55,7 @@ class RssiSummary:
     spread_db: int
     cv: float | None = None
     label: RssiLabel = RssiLabel()
+    possibly_stale: bool = False
 
 
 def band_of(frequency: str) -> str:
@@ -126,6 +127,12 @@ def cv_pct(values: list[int]) -> float | None:
     return round(100 * statistics.stdev(values) / abs(mean), 1)
 
 
+def is_possibly_stale(values: list[int], completed_scans: int) -> bool:
+    if len(values) < 2:
+        return True
+    return len(set(values)) == 1 and 2 * len(values) < completed_scans
+
+
 def summarize(
     samples: RssiSamples, completed_scans: int, labels: RssiLabels | None = None
 ) -> list[RssiSummary]:
@@ -152,6 +159,7 @@ def summarize(
                 spread_db=max_dbm - min_dbm,
                 cv=cv_pct(values),
                 label=(labels or {}).get((interface_mac, bssid, band), RssiLabel()),
+                possibly_stale=is_possibly_stale(values, completed_scans),
             )
         )
     return summaries
@@ -166,26 +174,39 @@ def repeated_bssids(summaries: list[RssiSummary]) -> dict[tuple[str, str], list[
     return {key: value for key, value in bands.items() if len(value) > 1}
 
 
-def format_band_warning(interface_mac: str, bssid: str, bands: list[str]) -> str:
+def format_band_warning(
+    interface_mac: str, bssid: str, bands: list[str], table: bool = False
+) -> str:
+    unit = "row" if table else "summary"
     return (
         f"{interface_mac} {bssid} was seen on {' and '.join(bands)}. "
-        "each band has its own summary. add -a, -g or -six to measure one band"
+        f"each band has its own {unit}. add -a, -g or -six to measure one band"
     )
 
 
-def format_progress(index: int, total: int | None, readings: list[str]) -> str:
+def format_time_left(seconds_left: int | None, scans_left: int | None) -> str:
+    if seconds_left is None:
+        return ""
+    text = f"{seconds_left} s left"
+    if scans_left is not None:
+        text += f", about {scans_left} scans"
+    return text
+
+
+def format_progress(
+    index: int, total: int | None, readings: list[str], time_left: str = ""
+) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    return f"scan {position}: {', '.join(readings) if readings else 'not seen'}"
+    text = f"scan {position}: {', '.join(readings) if readings else 'not seen'}"
+    return f"{text}  {time_left}" if time_left else text
 
 
 def format_multi_progress(
-    index: int, total: int | None, seen: int, matched: int, seconds_left: int | None
+    index: int, total: int | None, seen: int, matched: int, time_left: str = ""
 ) -> str:
     position = f"{index}/{total}" if total else f"{index}"
     text = f"scan {position}  seen {seen}/{matched}"
-    if seconds_left is not None:
-        text += f"  {seconds_left} s left"
-    return text
+    return f"{text}  {time_left}" if time_left else text
 
 
 def format_plan(
@@ -194,16 +215,14 @@ def format_plan(
     noun = "BSSID" if matched == 1 else "BSSIDs"
     band_noun = "band" if bands == 1 else "bands"
     if scans:
-        run = f"{scans} scans every {interval} s (about {scans * interval} s)"
+        run = f"{scans} scans every {interval} s"
     else:
         run = f"scans every {interval} s for {duration} s"
     return f"matched {matched} {noun} on {bands} {band_noun}; {run}, Ctrl-C to stop"
 
 
-def steadiness_key(summary: "RssiSummary") -> tuple[int, float, float]:
-    if summary.stdev_db is None:
-        return (1, 0.0, -summary.mean_dbm)
-    return (0, summary.stdev_db, -summary.mean_dbm)
+def steadiness_key(summary: "RssiSummary") -> tuple[bool, float, float]:
+    return (summary.possibly_stale, summary.stdev_db or 0.0, -summary.mean_dbm)
 
 
 def format_table(summaries: list["RssiSummary"]) -> str:
@@ -230,7 +249,8 @@ def format_table(summaries: list["RssiSummary"]) -> str:
                 summary.bssid,
                 summary.band or "-",
                 summary.label.channel or "-",
-                f"{summary.samples}/{summary.completed_scans}",
+                f"{summary.samples}/{summary.completed_scans}"
+                + ("*" if summary.possibly_stale else ""),
                 f"{summary.mean_dbm:.1f}",
                 f"{summary.stdev_db:.1f}" if summary.stdev_db is not None else "-",
                 f"{summary.cv:.1f}%" if summary.cv is not None else "-",
@@ -242,9 +262,16 @@ def format_table(summaries: list["RssiSummary"]) -> str:
     widths = [max(len(row[i]) for row in rows) for i in range(len(header))]
     lines = ["RSSI stats (steadiest first; dBm, stdev and spread in dB)"]
     lines.extend(
-        "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
+        "  ".join(
+            cell.ljust(width) for cell, width in zip(row, widths, strict=True)
+        ).rstrip()
         for row in rows
     )
+    if any(summary.possibly_stale for summary in summaries):
+        lines.append(
+            "* possibly stale: seen in fewer than 2 scans, or the same reading "
+            "every time in fewer than half the scans"
+        )
     interfaces = sorted({summary.interface_mac for summary in summaries})
     lines.append(f"interface {', '.join(interfaces)}")
     return "\n".join(lines)
@@ -326,6 +353,8 @@ def summary_to_json(
     result["min_dbm"] = summary.min_dbm
     result["max_dbm"] = summary.max_dbm
     result["spread_db"] = summary.spread_db
+    if summary.possibly_stale:
+        result["possibly_stale"] = True
     return result
 
 

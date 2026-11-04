@@ -192,7 +192,7 @@ With a static client, `-bssid` also takes a prefix of 1 to 6 octets, such as an 
 > lswifi --rssi-stats -bssid 00:00:5e
 ```
 
-lswifi prints one plan line (`matched 12 BSSIDs on 2 bands; 30 scans every 2 s (about 60 s), Ctrl-C to stop`), one line per scan (`scan 6/30  seen 11/12  48 s left`), then one table with a row per BSSID and band, steadiest first by stdev. A BSSID seen only once has no stdev and sorts last. If only one BSSID matches, you get the summary above instead. A malformed prefix is an error.
+lswifi prints one plan line (`matched 12 BSSIDs on 2 bands; 30 scans every 2 s, Ctrl-C to stop`), one line per scan (`scan 6/30  seen 11/12  72 s left`), then one table with a row per BSSID and band, steadiest first by stdev. Time left comes from how long scans have taken so far. A row is marked `*` (possibly stale) when it was seen in fewer than 2 scans, or gave the same reading every time while seen in fewer than half the scans; those rows sort last and get `"possibly_stale": true` in `--json`. A prefix always gives the table, even with one match. A malformed prefix is an error.
 
 `-bssid` matches link BSSIDs, not the AP MLD address. Readings are kept per interface, BSSID and band. If an AP uses the same BSSID on two bands, each band gets its own row, and lswifi logs a warning that names the BSSID and the bands. With `--json`, each of those entries also gets `bssid_bands`, the list of bands that BSSID was seen on. Add `-a` (5 GHz), `-g` (2.4 GHz) or `-six` (6 GHz) to measure one band. Without `-bssid`, a band flag that leaves out the connected link is an error.
 

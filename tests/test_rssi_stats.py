@@ -73,11 +73,19 @@ def table_rows(text):
     starts = [header.index(name) for name in names]
     rows = []
     for line in lines[1:]:
-        if line.startswith("interface "):
+        if line.startswith(("interface ", "* ")):
             break
-        cells = [line[a:b].strip() for a, b in zip(starts, [*starts[1:], None], strict=True)]
+        cells = [
+            line[a:b].strip() for a, b in zip(starts, [*starts[1:], None], strict=True)
+        ]
         rows.append(dict(zip(names, cells, strict=True)))
     return rows
+
+
+def fake_clock(monkeypatch, step):
+    ticks = iter(range(0, 10_000 * step, step))
+    monkeypatch.setattr(app.time, "perf_counter", lambda: next(ticks))
+    monkeypatch.setattr(app.time, "sleep", lambda _seconds: None)
 
 
 def stats_args(*extra):
@@ -467,16 +475,17 @@ class TestConnectedTarget:
         ]
         assert {row["bssid"] for row in document["scan_data"]} == {BSSID_A}
 
-    def test_progress_replaces_the_table(self, capsys):
+    def test_progress_replaces_the_table(self, capsys, monkeypatch):
+        fake_clock(monkeypatch, 3)
         scans = [[record(-60, connected=True)], [], [record(-64, connected=True)]]
         args = parse(["--rssi-stats", "-i", "0", "-n", "3"])
         with pytest.raises(SystemExit):
             app.run(args, backend=SequenceBackend(scans))
         out = capsys.readouterr().out
         assert out.splitlines()[:3] == [
-            "scan 1/3: -60 dBm",
-            "scan 2/3: not seen",
-            "scan 3/3: -64 dBm",
+            "scan 1/3: -60 dBm  6 s left",
+            "scan 2/3: not seen  3 s left",
+            "scan 3/3: -64 dBm  0 s left",
         ]
         assert "AMENDMENTS" not in out
 
@@ -640,10 +649,10 @@ class TestAppRun:
 
         out = capsys.readouterr().out
         assert "scan 1/2: -40 dBm (2.4 GHz), -60 dBm (5 GHz)" in out
-        rows = table_rows(out)
-        assert [(row["BSSID"], row["band"], row["mean"]) for row in rows] == [
-            (BSSID_A, "2.4 GHz", "-41.0"),
-            (BSSID_A, "5 GHz", "-62.0"),
+        blocks = out[out.index("RSSI stats") :].split("\n\n")
+        assert [summary_rows(block)["mean"] for block in blocks] == [
+            "-41.0 dBm",
+            "-62.0 dBm",
         ]
         band_warnings = [
             r.getMessage()
@@ -839,35 +848,56 @@ class TestPrefixMatch:
         assert not rssistats.matches_bssid("00:00:5e", BSSID_OTHER)
         assert not rssistats.matches_bssid(BSSID_A, "00:00:5e:00:53:011")
 
-    def test_table_sorts_steadiest_first_then_by_mean(self):
-        def summary(bssid, values, band="5 GHz"):
+    def test_table_sorts_steadiest_first_then_by_mean_then_stale(self):
+        def summary(bssid, values, scans=4, band="5 GHz"):
             samples = {(IFACE_MAC, bssid, band): [("t", v) for v in values]}
-            return rssistats.summarize(samples, 3)[0]
+            return rssistats.summarize(samples, scans)[0]
 
+        stale_once = summary(BSSID_C, [-50])
+        stale_flat = summary("00:00:5e:00:53:05", [-58, -58], scans=6)
         summaries = [
             summary(BSSID_A, [-60, -70, -80]),
+            stale_once,
             summary(BSSID_B, [-70, -70, -70]),
-            summary(BSSID_C, [-50]),
+            stale_flat,
             summary(BSSID_OTHER, [-60, -60, -60]),
         ]
-        rows = table_rows(rssistats.format_table(summaries))
+        text = rssistats.format_table(summaries)
+        rows = table_rows(text)
         assert [row["BSSID"] for row in rows] == [
             BSSID_OTHER,
             BSSID_B,
             BSSID_A,
             BSSID_C,
+            "00:00:5e:00:53:05",
         ]
-        assert (rows[-1]["stdev"], rows[-1]["CV"], rows[-1]["AP name"]) == (
+        assert [row["samples"] for row in rows[-2:]] == ["1/4*", "2/6*"]
+        assert (rows[-2]["stdev"], rows[-2]["CV"], rows[-2]["AP name"]) == (
             "-",
             "-",
             "-",
         )
+        assert "* possibly stale:" in text
+        assert "possibly stale" not in rssistats.format_table(summaries[:1])
+
+    @pytest.mark.parametrize(
+        ("values", "scans", "stale"),
+        [
+            ([-60], 1, True),
+            ([-58] * 6, 30, True),
+            ([-58] * 15, 30, False),
+            ([-58, -59], 30, False),
+            ([-58] * 30, 30, False),
+        ],
+    )
+    def test_possibly_stale_rule(self, values, scans, stale):
+        assert rssistats.is_possibly_stale(values, scans) is stale
 
     def test_prefix_run_prints_plan_compact_progress_and_table(
         self, tmp_path, capsys, caplog, monkeypatch
     ):
         caplog.set_level(logging.INFO)
-        monkeypatch.setattr(app.time, "sleep", lambda _seconds: None)
+        fake_clock(monkeypatch, 3)
         scans = [
             [
                 record(-60),
@@ -902,12 +932,11 @@ class TestPrefixMatch:
         out = capsys.readouterr().out
         lines = out.splitlines()
         assert (
-            lines[0]
-            == "matched 3 BSSIDs on 2 bands; 3 scans every 2 s (about 6 s), Ctrl-C to stop"
+            lines[0] == "matched 3 BSSIDs on 2 bands; 3 scans every 2 s, Ctrl-C to stop"
         )
         assert lines[1:4] == [
-            "scan 1/3  seen 3/3  4 s left",
-            "scan 2/3  seen 2/3  2 s left",
+            "scan 1/3  seen 3/3  10 s left",
+            "scan 2/3  seen 2/3  4 s left",
             "scan 3/3  seen 3/3  0 s left",
         ]
         assert BSSID_OTHER not in out
@@ -926,13 +955,100 @@ class TestPrefixMatch:
         ]
         assert all(None not in e.values() for e in stats)
 
-    def test_prefix_with_one_match_keeps_the_summary_block(self, capsys):
+    def test_prefix_with_one_match_uses_the_table_from_scan_1(self, tmp_path, capsys):
         scans = [[record(-60), record(-40, bssid=BSSID_OTHER)], [record(-62)]]
-        args = parse(["--rssi-stats", "-bssid", "00:00:5e", "-n", "2", "-i", "0"])
+        path = tmp_path / "out.json"
+        args = parse(
+            [
+                "--rssi-stats",
+                "-bssid",
+                "00:00:5e",
+                "-n",
+                "2",
+                "-i",
+                "0",
+                "--json",
+                str(path),
+            ]
+        )
         with pytest.raises(SystemExit) as exited:
             app.run(args, backend=SequenceBackend(scans))
         assert exited.value.code == 0
+        lines = capsys.readouterr().out.splitlines()
+        assert (
+            lines[0] == "matched 1 BSSID on 1 band; 2 scans every 0 s, Ctrl-C to stop"
+        )
+        assert lines[1].startswith("scan 1/2  seen 1/1")
+        assert lines[2].startswith("scan 2/2  seen 1/1")
+        assert [row["BSSID"] for row in table_rows("\n".join(lines))] == [BSSID_A]
+        stats = json.loads(path.read_text())["rssi_stats"]
+        assert "possibly_stale" not in stats[0]
+
+    def test_second_bssid_appearing_later_keeps_the_table_layout(self, capsys):
+        scans = [[record(-60)], [record(-62), record(-70, bssid=BSSID_B)]]
+        args = parse(["--rssi-stats", "-bssid", "00:00:5e", "-n", "2", "-i", "0"])
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend(scans))
+        lines = capsys.readouterr().out.splitlines()
+        assert lines[0].startswith("matched 1 BSSID on 1 band;")
+        assert lines[1].startswith("scan 1/2  seen 1/1")
+        assert lines[2].startswith("scan 2/2  seen 2/2")
+        assert sum(line.startswith("matched") for line in lines) == 1
+        rows = table_rows("\n".join(lines))
+        assert [(row["BSSID"], row["samples"]) for row in rows] == [
+            (BSSID_A, "2/2"),
+            (BSSID_B, "1/2*"),
+        ]
+
+    def test_exact_bssid_keeps_the_single_layout_from_scan_1(self, capsys):
+        scans = [[record(-60)], [record(-62)]]
+        with pytest.raises(SystemExit):
+            app.run(stats_args("-n", "2"), backend=SequenceBackend(scans))
         out = capsys.readouterr().out
-        assert "scan 1/2: -60 dBm" in out
+        assert out.startswith("scan 1/2: -60 dBm")
         assert "matched" not in out
         assert summary_rows(out)["BSSID"] == BSSID_A
+
+    def test_stale_row_sets_possibly_stale_in_json(self, tmp_path):
+        scans = [[record(-60), record(-58, bssid=BSSID_B)]] + [
+            [record(v)] for v in (-61, -62, -60, -63)
+        ]
+        path = tmp_path / "out.json"
+        args = parse(
+            [
+                "--rssi-stats",
+                "-bssid",
+                "00:00:5e",
+                "-n",
+                "5",
+                "-i",
+                "0",
+                "--json",
+                str(path),
+            ]
+        )
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend(scans))
+        stats = {e["bssid"]: e for e in json.loads(path.read_text())["rssi_stats"]}
+        assert stats[BSSID_B]["possibly_stale"] is True
+        assert "possibly_stale" not in stats[BSSID_A]
+
+    def test_band_warning_says_row_in_table_mode(self, caplog):
+        scans = [
+            [record(-40, frequency_mhz=2412), record(-60)],
+            [record(-42, frequency_mhz=2412), record(-62)],
+        ]
+        args = parse(["--rssi-stats", "-bssid", "00:00:5e", "-n", "2", "-i", "0"])
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend(scans))
+        assert "each band has its own row." in caplog.text
+
+    def test_time_mode_shows_clock_time_and_estimated_scans(self, monkeypatch):
+        scanner = app.lswifi()
+        scanner.scan_index = 1
+        scanner.scan_interval = 1
+        scanner.rssi_started = 0
+        scanner.scan_deadline = 112.0
+        monkeypatch.setattr(app.time, "perf_counter", lambda: 2)
+        monkeypatch.setattr(app.time, "time", lambda: 103.0)
+        assert scanner.rssi_time_left() == "9 s left, about 3 scans"
