@@ -8,7 +8,7 @@ ast-serialize==0.13.1
     # via mypy
 librt==0.16.0
     # via mypy
-mypy==2.4.0
+mypy==2.4.1
     # via -r typing.in
 mypy-extensions==1.1.0
     # via mypy
