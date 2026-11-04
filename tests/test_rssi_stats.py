@@ -10,6 +10,7 @@ import pytest
 
 from lswifi import __main__ as lswifi_main
 from lswifi import app, rssistats
+from lswifi.backends import macos, macos_location
 from lswifi.backends.base import BssRecord
 from lswifi.elements import WirelessNetworkBss
 from tests.test_backends import FakeBackend, Session, parse
@@ -492,7 +493,7 @@ class TestConnectedTarget:
         backend.iface.state_string = "disconnected"
         with pytest.raises(SystemExit) as exited:
             app.run(parse(["--rssi-stats", "-i", "0"]), backend=backend)
-        assert exited.value.code == -1
+        assert exited.value.code == 2
         assert "no Wi-Fi interface is connected" in caplog.text
         assert backend.calls == 0
 
@@ -655,7 +656,7 @@ class TestAppRun:
         assert "stdev" not in rows
         assert "CV" not in rows
 
-    def test_no_match_logs_warning_and_creates_no_json(self, tmp_path, caplog):
+    def test_no_match_exits_2_and_creates_no_json(self, tmp_path, caplog):
         caplog.set_level(logging.INFO)
         backend = SequenceBackend([[]])
         path = tmp_path / "out.json"
@@ -664,8 +665,8 @@ class TestAppRun:
                 stats_args("--json", str(path), "-n", "1", "-i", "0"),
                 backend=backend,
             )
-        assert exited.value.code == 0
-        assert f"no samples matched -bssid {BSSID_A}" in caplog.text
+        assert exited.value.code == 2
+        assert f"no samples matched -bssid {BSSID_A} in 1 scans" in caplog.text
         assert not path.exists()
 
     def test_without_rssi_stats_no_summary_or_key(self, tmp_path, capsys):
@@ -730,3 +731,56 @@ app.run(args, backend=backend)
     )
     assert "Traceback" not in err
     assert "rssi_stats" not in json.loads(path.read_text())
+
+
+HIDDEN = "--rssi-stats stopped: macOS returned scan results without BSSIDs"
+
+
+def hidden_record(rssi_dbm=-60):
+    return BssRecord(ssid=b"", bssid="", frequency_mhz=5180, rssi_dbm=rssi_dbm)
+
+
+class HiddenBackend(SequenceBackend):
+    def open_session(self, args, iface):
+        return macos.MacOSScanSession(self, iface, args)
+
+
+@pytest.fixture
+def hidden_message(monkeypatch):
+    monkeypatch.setattr(macos_location, "bssid_hidden_message", lambda: HIDDEN)
+
+
+class TestRssiStatsCannotMatch:
+    def test_hidden_bssid_without_bssid_exits_2_after_one_scan(
+        self, hidden_message, capsys, caplog
+    ):
+        backend = HiddenBackend([[hidden_record()]] * 3)
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse(["--rssi-stats", "-i", "0", "-n", "3"]), backend=backend)
+        assert exited.value.code == 2
+        assert backend.calls == 1
+        assert HIDDEN in caplog.text
+        assert "scan 1/3" not in capsys.readouterr().out
+
+    def test_hidden_bssid_with_bssid_exits_2_after_one_scan(
+        self, hidden_message, tmp_path, caplog
+    ):
+        backend = HiddenBackend([[hidden_record()]] * 3)
+        path = tmp_path / "out.json"
+        with pytest.raises(SystemExit) as exited:
+            app.run(stats_args("-n", "3", "--json", str(path)), backend=backend)
+        assert exited.value.code == 2
+        assert backend.calls == 1
+        assert HIDDEN in caplog.text
+        assert not path.exists() or "rssi_stats" not in path.read_text()
+
+    def test_connected_ap_never_seen_exits_2(self, tmp_path, caplog):
+        backend = SequenceBackend([[record(-50, bssid=BSSID_B)]] * 3)
+        path = tmp_path / "out.json"
+        args = parse(["--rssi-stats", "-i", "0", "-n", "3", "--json", str(path)])
+        with pytest.raises(SystemExit) as exited:
+            app.run(args, backend=backend)
+        assert exited.value.code == 2
+        assert backend.calls == 3
+        assert "the connected BSSID was not seen in 3 scans" in caplog.text
+        assert not path.exists() or "rssi_stats" not in path.read_text()

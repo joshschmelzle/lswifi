@@ -284,7 +284,7 @@ class lswifi:
                 log.error(
                     "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid to pick a BSSID"
                 )
-                sys.exit(-1)
+                sys.exit(2)
 
             if scanning:
                 scans = 1
@@ -345,6 +345,8 @@ class lswifi:
 
                 if args.rssi_stats:
                     summaries = self.report_rssi_stats(loops_completed, args)
+                    if not summaries:
+                        sys.exit(2)
                     if (
                         args.json
                         and summaries
@@ -418,6 +420,11 @@ class lswifi:
             clients = {
                 k: clients[k] for k in sorted(clients)
             }  # sort by key (index) numerically
+            if args.rssi_stats:
+                for client in clients.values():
+                    if getattr(client, "redacted", False):
+                        log.error(client.hidden_bssid_message())
+                        sys.exit(2)
             for _idx, client in clients.items():
                 if client.data is None:
                     log.warning(f"no scan data for {client.mac}")
@@ -543,9 +550,11 @@ class lswifi:
             self.rssi_samples, completed_scans, self.rssi_labels
         )
         if not summaries and args.bssid is not None:
-            log.warning("no samples matched -bssid %s", args.bssid)
+            log.error(
+                "no samples matched -bssid %s in %s scans", args.bssid, completed_scans
+            )
         elif not summaries:
-            log.warning("the connected BSSID was not seen in the scan results")
+            log.error("the connected BSSID was not seen in %s scans", completed_scans)
         else:
             repeated = rssistats.repeated_bssids(summaries)
             print(

@@ -335,7 +335,7 @@ class TestBackend:
             asyncio.run(session.scan())
         warnings = [r for r in caplog.records if "Location Services" in r.getMessage()]
         assert len(warnings) == 1
-        assert "authorized for this Python" in warnings[0].getMessage()
+        assert "reported authorized for" in warnings[0].getMessage()
         assert session.data is not None and len(session.data) == 2
         for bss in session.data:
             assert str(bss.security) == "--"

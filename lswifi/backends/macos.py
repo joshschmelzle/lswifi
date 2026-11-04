@@ -437,8 +437,11 @@ class MacOSScanSession(RecordScanSession):
     async def scan(self) -> None:
         self.redacted = False
         await super().scan()
-        if self.redacted:
+        if self.redacted and not getattr(self.args, "rssi_stats", False):
             warn_location_once()
+
+    def hidden_bssid_message(self) -> str:
+        return macos_location.bssid_hidden_message()
 
 
 class MacOSBackend:

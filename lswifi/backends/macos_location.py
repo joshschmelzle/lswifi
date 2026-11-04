@@ -96,8 +96,11 @@ CORELOCATION_MISSING = (
     "Reinstall lswifi, or run: pip install pyobjc-framework-CoreLocation"
 )
 REDACTED_WHILE_AUTHORIZED = (
-    f"{_HIDE} even though Location Services is authorized for this Python; "
-    "showing RSSI and channel only."
+    "macOS returned scan results without SSID, BSSID, or information "
+    "elements, although Location Services reported authorized for "
+    f"{os.path.realpath(sys.executable)}; showing RSSI and channel only. "
+    "This can be temporary, so run lswifi again. If it keeps happening, "
+    f"check that this Python is turned on in {_SETTINGS}."
 )
 
 _LABELS = {
@@ -413,3 +416,23 @@ def prepare_location_services() -> LocationAuthorization:
     log.debug("Location Services status: %s", state.status)
     _cached = state
     return state
+
+
+def bssid_hidden_message() -> str:
+    current = current_location_authorization() or prepare_location_services()
+    path = os.path.realpath(sys.executable)
+    if current.granted:
+        why = (
+            f"Location Services reported authorized for {path}, but "
+            "this can be temporary, so run lswifi again. If it keeps "
+            f"happening, check that this Python is turned on in {_SETTINGS}."
+        )
+    else:
+        why = (
+            f"Location Services is {location_label(current)} for {path}. "
+            f"{SIGNED_PYTHON_HELP}"
+        )
+    return (
+        "--rssi-stats stopped: macOS returned scan results without BSSIDs, "
+        f"so nothing can match. {why}"
+    )
