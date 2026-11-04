@@ -23,10 +23,15 @@ SSID = b"ExampleNet"
 
 
 def record(
-    rssi_dbm, bssid=BSSID_A, connected=False, frequency_mhz=5180, last_seen=None
+    rssi_dbm,
+    bssid=BSSID_A,
+    connected=False,
+    frequency_mhz=5180,
+    last_seen=None,
+    ssid=SSID,
 ):
     return BssRecord(
-        ssid=SSID,
+        ssid=ssid,
         bssid=bssid,
         frequency_mhz=frequency_mhz,
         rssi_dbm=rssi_dbm,
@@ -1282,3 +1287,62 @@ class TestRealScan:
     def test_short_call_is_a_cached_answer(self):
         assert not macos.is_real_scan(0.06)
         assert macos.is_real_scan(13.8)
+
+
+class TestIncludeTargets:
+    def scans(self):
+        return [
+            [
+                record(-60, ssid=b"Lab"),
+                record(-50, bssid=BSSID_B, ssid=b"Lab-IoT", frequency_mhz=2412),
+                record(-55, bssid=BSSID_B, ssid=b"Lab-IoT"),
+                record(-40, bssid=BSSID_OTHER, ssid=b"Other", connected=True),
+            ],
+            [
+                record(-62, ssid=b"Lab"),
+                record(-52, bssid=BSSID_B, ssid=b"Lab-IoT", frequency_mhz=2412),
+                record(-57, bssid=BSSID_B, ssid=b"Lab-IoT"),
+                record(-41, bssid=BSSID_OTHER, ssid=b"Other", connected=True),
+            ],
+        ]
+
+    def run(self, capsys, *extra, scans=None):
+        args = parse(["--rssi-stats", "-n", "2", "-i", "0", *extra])
+        with pytest.raises(SystemExit) as exited:
+            app.run(args, backend=SequenceBackend(scans or self.scans()))
+        return exited.value.code, capsys.readouterr().out
+
+    def test_include_tracks_every_matching_ssid_per_band_in_the_table(self, capsys):
+        code, out = self.run(capsys, "-include", "Lab")
+        assert code == 0
+        lines = out.splitlines()
+        assert lines[0] == "waiting for the first scan to find the matching BSSIDs..."
+        assert lines[1] == (
+            "matched 3 BSSIDs on 2 bands; measuring 2 samples, Ctrl-C to stop"
+        )
+        rows = table_rows(out)
+        assert [(row["SSID"], row["BSSID"], row["band"]) for row in rows] == [
+            ("Lab-IoT", BSSID_B, "2.4 GHz"),
+            ("Lab-IoT", BSSID_B, "5 GHz"),
+            ("Lab", BSSID_A, "5 GHz"),
+        ]
+        assert BSSID_OTHER not in out
+        assert "  samples    2 of 2 scans" in lines
+
+    def test_include_and_bssid_narrow_together(self, capsys):
+        code, out = self.run(capsys, "-include", "Lab", "-bssid", BSSID_A)
+        assert code == 0
+        assert [row["BSSID"] for row in table_rows(out)] == [BSSID_A]
+
+    def test_exclude_still_applies(self, capsys):
+        code, out = self.run(capsys, "-include", "Lab", "-exclude", "IoT")
+        assert code == 0
+        assert [row["SSID"] for row in table_rows(out)] == ["Lab"]
+
+    def test_include_with_no_match_exits_2(self, capsys, caplog):
+        scans = [[record(-40, ssid=b"Other", connected=True)]] * rssistats.MISS_LIMIT
+        args = parse(["--rssi-stats", "-n", "2", "-i", "0", "-include", "Nope"])
+        with pytest.raises(SystemExit) as exited:
+            app.run(args, backend=SequenceBackend(scans))
+        assert exited.value.code == 2
+        assert "no samples matched -include Nope" in caplog.text

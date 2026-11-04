@@ -194,6 +194,19 @@ def is_bssid_prefix(text: str) -> bool:
     )
 
 
+def picks_targets(args) -> bool:
+    return args.bssid is not None or args.include is not None
+
+
+def describe_targets(args) -> str:
+    parts = []
+    if args.bssid is not None:
+        parts.append(f"-bssid {args.bssid}")
+    if args.include is not None:
+        parts.append(f"-include {args.include}")
+    return " and ".join(parts)
+
+
 def matches_bssid(wanted: str, bssid: str) -> bool:
     want = strip_mac_address_format(wanted)
     have = strip_mac_address_format(bssid)

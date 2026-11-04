@@ -283,13 +283,13 @@ class lswifi:
             if (
                 scanning
                 and args.rssi_stats
-                and args.bssid is None
+                and not rssistats.picks_targets(args)
                 and not any(
                     iface.state_string == "connected" for iface in iface_infos.values()
                 )
             ):
                 log.error(
-                    "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid to pick a BSSID"
+                    "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid or -include to pick BSSIDs"
                 )
                 sys.exit(2)
 
@@ -316,7 +316,7 @@ class lswifi:
                     json_file_name = args.json
 
                 self.scan_total = None if timeout > 0 else scans
-                self.rssi_multi = (
+                self.rssi_multi = args.include is not None or (
                     args.bssid is not None and not rssistats.is_full_bssid(args.bssid)
                 )
                 if timeout > 0:  # we're scanning during a given time period
@@ -723,9 +723,11 @@ class lswifi:
                 for mac, tracker in self.rssi_fresh.items()
             },
         )
-        if not summaries and args.bssid is not None:
+        if not summaries and rssistats.picks_targets(args):
             log.error(
-                "no samples matched -bssid %s in %s scans", args.bssid, completed_scans
+                "no samples matched %s in %s scans",
+                rssistats.describe_targets(args),
+                completed_scans,
             )
         elif not summaries:
             log.error("the connected BSSID was not seen in %s scans", completed_scans)
@@ -1045,7 +1047,7 @@ class lswifi:
 
                 if (
                     args.rssi_stats
-                    and args.bssid is None
+                    and not rssistats.picks_targets(args)
                     and bss.bssid.connected
                     and (args.a or args.g or args.six)
                     and not self._bss_matches_band_filter(bss, args)
@@ -1132,7 +1134,11 @@ class lswifi:
                 ):
                     continue
 
-                if args.rssi_stats and args.bssid is None and not bss.bssid.connected:
+                if (
+                    args.rssi_stats
+                    and not rssistats.picks_targets(args)
+                    and not bss.bssid.connected
+                ):
                     continue
 
                 if args.rnr:
