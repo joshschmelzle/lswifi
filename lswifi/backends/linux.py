@@ -154,6 +154,26 @@ def bss_to_record(attrs: dict[int, bytes]) -> BssRecord:
     )
 
 
+HEARD_TOLERANCE_NS = 1_000_000_000
+
+
+def stamp_last_seen(
+    records: list[BssRecord], now_ns: int, heard: dict[tuple[str, int], int]
+) -> list[BssRecord]:
+    """last_seen from seen_ms_ago when the driver sends no boottime"""
+    for record in records:
+        if record.last_seen is not None or record.seen_ms_ago is None:
+            continue
+        key = (record.bssid, record.frequency_mhz)
+        stamp = now_ns - record.seen_ms_ago * 1_000_000
+        known = heard.get(key)
+        if known is not None and abs(stamp - known) < HEARD_TOLERANCE_NS:
+            stamp = known
+        heard[key] = stamp
+        record.last_seen = stamp
+    return records
+
+
 @dataclass
 class LinuxInterface:
     """What NL80211_CMD_GET_INTERFACE says about one netdev"""
@@ -1184,6 +1204,7 @@ class LinuxBackend:
         self.scan_timeout = scan_timeout
         self.proc_net = proc_net
         self._six_ghz: dict[int, bool] = {}
+        self._heard: dict[tuple[str, int], int] = {}
         try:
             self.netlink().close()
         except OSError as error:
@@ -1527,11 +1548,12 @@ class LinuxBackend:
             raise BackendError(
                 f"reading scan results failed on {native.name}: {error.strerror or error}"
             ) from error
-        return [
+        records = [
             bss_to_record(nl.parse_attrs(reply.attrs[nl.ATTR_BSS]))
             for reply in replies
             if nl.ATTR_BSS in reply.attrs
         ]
+        return stamp_last_seen(records, time.monotonic_ns(), self._heard)
 
     def scan(self, iface: InterfaceInfo) -> list[BssRecord]:
         """Fresh scan when permitted, else the cached results"""

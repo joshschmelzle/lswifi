@@ -10,9 +10,14 @@ import sys
 
 import pytest
 
-from lswifi import appsetup, watchjson
+from lswifi import appsetup, rssistats, watchjson
 from lswifi.backends import nl80211 as nl
-from lswifi.backends.base import BackendError, BackendUnavailableError, InterfaceInfo
+from lswifi.backends.base import (
+    BackendError,
+    BackendUnavailableError,
+    BssRecord,
+    InterfaceInfo,
+)
 from lswifi.backends.linux import (
     PERMISSION_HELP,
     LinkInfo,
@@ -23,6 +28,7 @@ from lswifi.backends.linux import (
     bss_to_record,
     interface_from_attrs,
     ssid_from_ies,
+    stamp_last_seen,
     station_to_link,
 )
 from lswifi.backends.linux_events import (
@@ -3584,3 +3590,37 @@ class TestUnknownSignal:
         assert by_bssid["02:00:00:00:00:31"] == "--"
         assert by_bssid["02:00:00:00:00:32"] == "-40"
         assert len(out) == 2
+
+
+class TestStampLastSeen:
+    def record(self, seen_ms_ago, last_seen=None, bssid="02:00:00:00:00:01"):
+        return BssRecord(
+            ssid=b"ExampleNet",
+            bssid=bssid,
+            frequency_mhz=5180,
+            seen_ms_ago=seen_ms_ago,
+            last_seen=last_seen,
+        )
+
+    def test_kept_entry_keeps_its_stamp_and_rehearing_gets_a_new_one(self):
+        heard = {}
+        first = stamp_last_seen([self.record(200)], 100_000_000_000, heard)[0]
+        kept = stamp_last_seen([self.record(13_700)], 113_503_000_000, heard)[0]
+        reheard = stamp_last_seen([self.record(150)], 127_000_000_000, heard)[0]
+        assert kept.last_seen == first.last_seen
+        assert reheard.last_seen != first.last_seen
+
+    def test_cached_repeat_is_not_a_fresh_reading(self):
+        heard = {}
+        tracker = rssistats.Freshness()
+        key = ("02:00:00:00:00:01", "5180")
+        for now_ns, age in ((100_000_000_000, 200), (113_503_000_000, 13_700)):
+            stamp = stamp_last_seen([self.record(age)], now_ns, heard)[0].last_seen
+            tracker.observe({key: stamp}, now_ns / 1e9, True)
+            fresh = tracker.is_fresh_reading(key, stamp)
+        assert tracker.has_markers
+        assert fresh is False
+
+    def test_driver_boottime_wins(self):
+        record = stamp_last_seen([self.record(200, last_seen=42)], 5_000_000_000, {})
+        assert record[0].last_seen == 42
