@@ -7,19 +7,36 @@
 lswifi.rssistats
 ~~~~~~~~~~~~~~~~
 
-Pure helpers for collecting and summarizing RSSI samples matched by -bssid.
+Pure helpers for collecting and summarizing RSSI samples for --rssi-stats.
 """
 
 import contextlib
 import json
 import os
+import re
 import statistics
 import tempfile
 from dataclasses import dataclass
 
-from lswifi.helpers import is_five_band, is_six_band, is_two_four_band
+from lswifi.helpers import (
+    is_five_band,
+    is_six_band,
+    is_two_four_band,
+    strip_mac_address_format,
+)
 
 RssiSamples = dict[tuple[str, str, str], list[tuple[str, int]]]
+
+
+@dataclass(frozen=True)
+class RssiLabel:
+    ssid: str = ""
+    ap_name: str = ""
+    channel: str = ""
+    channel_width: str = ""
+
+
+RssiLabels = dict[tuple[str, str, str], RssiLabel]
 
 
 @dataclass(frozen=True)
@@ -36,6 +53,8 @@ class RssiSummary:
     min_dbm: int
     max_dbm: int
     spread_db: int
+    cv_power_pct: float | None = None
+    label: RssiLabel = RssiLabel()
 
 
 def band_of(frequency: str) -> str:
@@ -46,6 +65,10 @@ def band_of(frequency: str) -> str:
     if is_six_band(frequency):
         return "6 GHz"
     return ""
+
+
+def is_full_bssid(text: str) -> bool:
+    return re.fullmatch(r"[0-9a-f]{12}", strip_mac_address_format(text)) is not None
 
 
 def add_sample(
@@ -61,15 +84,38 @@ def add_sample(
     samples.setdefault((interface_mac, bssid, band), []).append((timestamp, rssi_dbm))
 
 
-def summarize(samples: RssiSamples, completed_scans: int) -> list[RssiSummary]:
+def add_label(
+    labels: RssiLabels,
+    interface_mac: str,
+    bssid: str,
+    band: str,
+    label: RssiLabel,
+) -> None:
+    key = (interface_mac, bssid, band)
+    old = labels.get(key, RssiLabel())
+    labels[key] = RssiLabel(
+        ssid=label.ssid or old.ssid,
+        ap_name=label.ap_name or old.ap_name,
+        channel=label.channel or old.channel,
+        channel_width=label.channel_width or old.channel_width,
+    )
+
+
+def power_cv_pct(values: list[int]) -> float | None:
+    if len(values) < 2:
+        return None
+    milliwatts = [10 ** (value / 10) for value in values]
+    return round(100 * statistics.stdev(milliwatts) / statistics.fmean(milliwatts), 1)
+
+
+def summarize(
+    samples: RssiSamples, completed_scans: int, labels: RssiLabels | None = None
+) -> list[RssiSummary]:
     summaries = []
     for (interface_mac, bssid, band), entries in sorted(samples.items()):
         values = [rssi for _timestamp, rssi in entries]
-        mean_dbm = round(statistics.fmean(values), 1)
-        stdev_db = round(statistics.stdev(values), 1) if len(values) >= 2 else None
         min_dbm = min(values)
         max_dbm = max(values)
-        spread_db = max_dbm - min_dbm
         summaries.append(
             RssiSummary(
                 interface_mac=interface_mac,
@@ -79,11 +125,15 @@ def summarize(samples: RssiSamples, completed_scans: int) -> list[RssiSummary]:
                 last_timestamp=entries[-1][0],
                 completed_scans=completed_scans,
                 samples=len(values),
-                mean_dbm=mean_dbm,
-                stdev_db=stdev_db,
+                mean_dbm=round(statistics.fmean(values), 1),
+                stdev_db=(
+                    round(statistics.stdev(values), 1) if len(values) >= 2 else None
+                ),
                 min_dbm=min_dbm,
                 max_dbm=max_dbm,
-                spread_db=spread_db,
+                spread_db=max_dbm - min_dbm,
+                cv_power_pct=power_cv_pct(values),
+                label=(labels or {}).get((interface_mac, bssid, band), RssiLabel()),
             )
         )
     return summaries
@@ -105,20 +155,54 @@ def format_band_warning(interface_mac: str, bssid: str, bands: list[str]) -> str
     )
 
 
+def format_progress(index: int, total: int | None, readings: list[str]) -> str:
+    position = f"{index}/{total}" if total else f"{index}"
+    return f"scan {position}: {', '.join(readings) if readings else 'not seen'}"
+
+
+def format_reading(band: str, rssi_dbm: int, show_band: bool) -> str:
+    return f"{rssi_dbm} dBm ({band})" if show_band and band else f"{rssi_dbm} dBm"
+
+
+def format_channel(summary: RssiSummary) -> str:
+    parts = [summary.band]
+    if summary.label.channel:
+        parts.append(f"channel {summary.label.channel}")
+    if summary.label.channel_width:
+        parts.append(f"{summary.label.channel_width} MHz")
+    return ", ".join(part for part in parts if part)
+
+
 def format_summary(summary: RssiSummary) -> str:
-    band = f" {summary.band}" if summary.band else ""
-    text = (
-        f"{summary.interface_mac} {summary.bssid}{band}: "
-        f"{summary.samples}/{summary.completed_scans} scans, "
-        f"mean {summary.mean_dbm:.1f} dBm"
-    )
-    if summary.stdev_db is not None:
-        text += f", stdev {summary.stdev_db:.1f} dB"
-    text += (
-        f", min {summary.min_dbm} dBm, max {summary.max_dbm} dBm, "
-        f"spread {summary.spread_db} dB"
-    )
-    return text
+    rows = [
+        ("SSID", summary.label.ssid),
+        ("AP name", summary.label.ap_name),
+        ("BSSID", summary.bssid),
+        ("band", format_channel(summary)),
+        ("samples", f"{summary.samples}/{summary.completed_scans} scans"),
+        ("mean", f"{summary.mean_dbm:.1f} dBm"),
+        (
+            "stdev",
+            f"{summary.stdev_db:.1f} dB" if summary.stdev_db is not None else "",
+        ),
+        (
+            "CV",
+            f"{summary.cv_power_pct:.1f}% of linear power (mW)"
+            if summary.cv_power_pct is not None
+            else "",
+        ),
+        ("min", f"{summary.min_dbm} dBm"),
+        ("max", f"{summary.max_dbm} dBm"),
+        ("spread", f"{summary.spread_db} dB"),
+        ("interface", summary.interface_mac),
+    ]
+    lines = ["RSSI stats"]
+    lines.extend(f"  {name:<10} {value}" for name, value in rows if value)
+    return "\n".join(lines)
+
+
+def as_number(text: str) -> int | str:
+    return int(text) if text.isdigit() else text
 
 
 def summary_to_json(
@@ -128,8 +212,16 @@ def summary_to_json(
         "interface_mac": summary.interface_mac,
         "bssid": summary.bssid,
     }
+    if summary.label.ssid:
+        result["ssid"] = summary.label.ssid
+    if summary.label.ap_name:
+        result["ap_name"] = summary.label.ap_name
     if summary.band:
         result["band"] = summary.band
+    if summary.label.channel:
+        result["channel"] = as_number(summary.label.channel)
+    if summary.label.channel_width:
+        result["channel_width"] = as_number(summary.label.channel_width)
     if bssid_bands:
         result["bssid_bands"] = bssid_bands
     result |= {
@@ -141,6 +233,8 @@ def summary_to_json(
     }
     if summary.stdev_db is not None:
         result["stdev_db"] = summary.stdev_db
+    if summary.cv_power_pct is not None:
+        result["cv_power_pct"] = summary.cv_power_pct
     result["min_dbm"] = summary.min_dbm
     result["max_dbm"] = summary.max_dbm
     result["spread_db"] = summary.spread_db

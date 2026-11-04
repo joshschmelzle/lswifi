@@ -43,6 +43,15 @@ class SequenceBackend(FakeBackend):
         return result
 
 
+def summary_rows(text):
+    block = text[text.index("RSSI stats") :].split("\n\n")[0]
+    rows = {}
+    for line in block.splitlines()[1:]:
+        name, _, value = line.strip().partition("  ")
+        rows.setdefault(name, value.strip())
+    return rows
+
+
 def stats_args(*extra):
     return parse(["-bssid", BSSID_A, "-all", "--rssi-stats", "-i", "0", *extra])
 
@@ -81,7 +90,9 @@ class TestRssiStatsUnit:
         assert "min_dbm" in rssistats.summary_to_json(summaries[0])
         assert "max_dbm" in rssistats.summary_to_json(summaries[0])
         assert "spread_db" in rssistats.summary_to_json(summaries[0])
+        assert "cv_power_pct" not in rssistats.summary_to_json(summaries[0])
         assert "stdev" not in rssistats.format_summary(summaries[0])
+        assert "CV" not in rssistats.format_summary(summaries[0])
 
     def test_summarize_sorts_by_interface_mac_then_bssid(self):
         samples = {
@@ -95,6 +106,37 @@ class TestRssiStatsUnit:
             (IFACE_MAC, BSSID_B),
             ("00:00:5e:00:53:bb", BSSID_A),
         ]
+
+    def test_power_cv_is_zero_for_a_flat_link(self):
+        assert rssistats.power_cv_pct([-60, -60, -60]) == 0.0
+
+    def test_power_cv_ignores_a_constant_gain_offset(self):
+        weak = rssistats.power_cv_pct([-80, -82, -84])
+        strong = rssistats.power_cv_pct([-50, -52, -54])
+        assert weak == strong
+        assert weak is not None and weak > 0
+
+    def test_power_cv_grows_with_the_spread(self):
+        steady = rssistats.power_cv_pct([-60, -61, -60, -61])
+        jumpy = rssistats.power_cv_pct([-60, -66, -60, -66])
+        assert steady is not None and jumpy is not None
+        assert jumpy > steady
+
+    def test_power_cv_needs_two_samples(self):
+        assert rssistats.power_cv_pct([-60]) is None
+
+    @pytest.mark.parametrize(
+        "text",
+        [BSSID_A, BSSID_A.upper(), BSSID_A.replace(":", "-"), "00005e005301"],
+    )
+    def test_full_bssid_forms_are_accepted(self, text):
+        assert rssistats.is_full_bssid(text)
+
+    @pytest.mark.parametrize(
+        "text", ["00:00:5e", "00:00:5e:00:53", "00:00:5e:00:53:0g"]
+    )
+    def test_partial_bssid_is_not_full(self, text):
+        assert not rssistats.is_full_bssid(text)
 
     def test_add_sample_with_none_rssi_is_ignored(self):
         samples = {}
@@ -115,22 +157,34 @@ class TestRssiStatsUnit:
             min_dbm=-62,
             max_dbm=-60,
             spread_db=2,
+            cv_power_pct=23.1,
+            label=rssistats.RssiLabel(
+                ssid="ExampleNet", ap_name="AP-12", channel="36", channel_width="20"
+            ),
         )
         obj = rssistats.summary_to_json(summary)
         assert set(obj) == {
             "interface_mac",
             "bssid",
+            "ssid",
+            "ap_name",
             "band",
+            "channel",
+            "channel_width",
             "first_timestamp",
             "last_timestamp",
             "completed_scans",
             "samples",
             "mean_dbm",
             "stdev_db",
+            "cv_power_pct",
             "min_dbm",
             "max_dbm",
             "spread_db",
         }
+        assert None not in obj.values()
+        assert (obj["channel"], obj["channel_width"]) == (36, 20)
+        assert obj["cv_power_pct"] == 23.1
         assert isinstance(obj["interface_mac"], str)
         assert isinstance(obj["bssid"], str)
         assert obj["band"] == "5 GHz"
@@ -244,37 +298,84 @@ class TestParseBssListSampling:
         scanner.parse_bss_list(session, False, "", "", args)
         assert scanner.rssi_samples == {}
 
-    def test_partial_bssid_match_creates_two_groups(self):
+    def test_bssid_matches_exactly_and_ignores_case(self):
         scanner = app.lswifi()
-        args = parse(["-bssid", "00:00:5e:00:53", "-all", "--rssi-stats"])
-        records = [
-            record(-60, bssid=BSSID_A),
-            record(-62, bssid=BSSID_B),
-        ]
+        args = parse(["-bssid", BSSID_A.upper(), "-all", "--rssi-stats"])
+        records = [record(-60, bssid=BSSID_A), record(-62, bssid="00:00:5e:00:53:011")]
         scanner.parse_bss_list(self._session(records), False, "", "", args)
-        assert set(scanner.rssi_samples) == {
-            (IFACE_MAC, BSSID_A, "5 GHz"),
-            (IFACE_MAC, BSSID_B, "5 GHz"),
-        }
+        assert set(scanner.rssi_samples) == {(IFACE_MAC, BSSID_A, "5 GHz")}
+
+    def test_label_keeps_channel_and_width(self):
+        scanner = app.lswifi()
+        session = self._session([record(-60, connected=True)])
+        scanner.parse_bss_list(session, False, "", "", stats_args())
+        label = scanner.rssi_labels[(IFACE_MAC, BSSID_A, "5 GHz")]
+        assert (label.ssid, label.channel, label.channel_width) == (
+            "ExampleNet",
+            "36",
+            "20",
+        )
+
+
+def run_main(monkeypatch, backend, argv):
+    monkeypatch.setattr(lswifi_main, "get_backend", lambda: backend)
+    monkeypatch.setattr(sys, "argv", ["lswifi", *argv])
+    with pytest.raises(SystemExit) as exited:
+        lswifi_main.main()
+    return exited.value.code
 
 
 class TestCliValidation:
-    def test_rssi_stats_without_bssid(self, monkeypatch, capsys):
-        monkeypatch.setattr(sys, "argv", ["lswifi", "-all", "--rssi-stats"])
-        with pytest.raises(SystemExit) as exited:
-            lswifi_main.main()
-        assert exited.value.code == 2
-        assert "--rssi-stats needs -bssid" in capsys.readouterr().err
+    def test_rssi_stats_without_bssid_measures_connected(self, monkeypatch, capsys):
+        backend = SequenceBackend(
+            [[record(-60, connected=True), record(-50, bssid=BSSID_B)]]
+        )
+        code = run_main(monkeypatch, backend, ["--rssi-stats", "-n", "1", "-i", "0"])
+        assert code == 0
+        out = capsys.readouterr().out
+        rows = summary_rows(out)
+        assert (rows["SSID"], rows["BSSID"], rows["samples"]) == (
+            "ExampleNet",
+            BSSID_A,
+            "1/1 scans",
+        )
+        assert BSSID_B not in out
 
     def test_rssi_stats_without_all_keeps_weak_readings(self, monkeypatch, capsys):
         backend = SequenceBackend([[record(-60)], [record(-90)]])
-        monkeypatch.setattr(lswifi_main, "get_backend", lambda: backend)
-        argv = ["lswifi", "-bssid", BSSID_A, "--rssi-stats", "-n", "2", "-i", "0"]
-        monkeypatch.setattr(sys, "argv", argv)
-        with pytest.raises(SystemExit) as exited:
-            lswifi_main.main()
-        assert exited.value.code == 0
-        assert "2/2 scans, mean -75.0 dBm" in capsys.readouterr().err
+        argv = ["-bssid", BSSID_A, "--rssi-stats", "-n", "2", "-i", "0"]
+        assert run_main(monkeypatch, backend, argv) == 0
+        rows = summary_rows(capsys.readouterr().out)
+        assert (rows["samples"], rows["mean"]) == ("2/2 scans", "-75.0 dBm")
+
+    def test_defaults_to_30_scans_two_seconds_apart(self, monkeypatch, capsys):
+        sleeps = []
+        monkeypatch.setattr(app.time, "sleep", sleeps.append)
+        backend = SequenceBackend([[record(-60, connected=True)]] * 30)
+        assert run_main(monkeypatch, backend, ["--rssi-stats"]) == 0
+        assert backend.calls == 30
+        assert sleeps.count(2) == 29
+        assert summary_rows(capsys.readouterr().out)["samples"] == "30/30 scans"
+
+    def test_explicit_scans_and_interval_override_the_defaults(
+        self, monkeypatch, capsys
+    ):
+        sleeps = []
+        monkeypatch.setattr(app.time, "sleep", sleeps.append)
+        backend = SequenceBackend([[record(-60, connected=True)]] * 3)
+        argv = ["--rssi-stats", "-n", "3", "-i", "5"]
+        assert run_main(monkeypatch, backend, argv) == 0
+        assert backend.calls == 3
+        assert sleeps.count(5) == 2
+        assert 2 not in sleeps
+
+    @pytest.mark.parametrize("value", ["00:00:5e", "00:00:5e:00:53"])
+    def test_partial_bssid_is_rejected(self, monkeypatch, capsys, value):
+        backend = SequenceBackend([[record(-60)]])
+        argv = ["--rssi-stats", "-bssid", value]
+        assert run_main(monkeypatch, backend, argv) == 2
+        assert "--rssi-stats needs a full BSSID for -bssid" in capsys.readouterr().err
+        assert backend.calls == 0
 
     @pytest.mark.parametrize("flag", ["-threshold", "-t"])
     @pytest.mark.parametrize("value", ["-82", "-70"])
@@ -282,21 +383,164 @@ class TestCliValidation:
         self, monkeypatch, capsys, flag, value
     ):
         backend = SequenceBackend([[record(-60)]])
-        monkeypatch.setattr(lswifi_main, "get_backend", lambda: backend)
-        argv = ["lswifi", "-bssid", BSSID_A, "--rssi-stats", flag, value]
-        monkeypatch.setattr(sys, "argv", argv)
-        with pytest.raises(SystemExit) as exited:
-            lswifi_main.main()
-        assert exited.value.code == 2
+        argv = ["-bssid", BSSID_A, "--rssi-stats", flag, value]
+        assert run_main(monkeypatch, backend, argv) == 2
         assert "-threshold (-t) is incompatible with --rssi-stats" in (
             capsys.readouterr().err
         )
         assert backend.calls == 0
 
+    def test_all_is_accepted_and_left_out_of_help(self, monkeypatch, capsys):
+        backend = SequenceBackend([[record(-60, connected=True)]])
+        argv = ["--rssi-stats", "-all", "-n", "1", "-i", "0"]
+        assert run_main(monkeypatch, backend, argv) == 0
+        help_text = lswifi_main.appsetup.setup_parser().format_help()
+        rssi_help = help_text[help_text.index("--rssi-stats  ") :].split("--ap-names")[
+            0
+        ]
+        assert "-all" not in rssi_help
+
+
+class TestConnectedTarget:
+    def test_summarizes_only_the_connected_bssid(self, tmp_path, capsys):
+        scans = [
+            [record(-60, connected=True), record(-50, bssid=BSSID_B)],
+            [record(-64, connected=True), record(-52, bssid=BSSID_B)],
+        ]
+        path = tmp_path / "out.json"
+        args = parse(["--rssi-stats", "-i", "0", "-n", "2", "--json", str(path)])
+        with pytest.raises(SystemExit) as exited:
+            app.run(args, backend=SequenceBackend(scans))
+        assert exited.value.code == 0
+        out = capsys.readouterr().out
+        rows = summary_rows(out)
+        assert (rows["BSSID"], rows["band"], rows["mean"]) == (
+            BSSID_A,
+            "5 GHz, channel 36, 20 MHz",
+            "-62.0 dBm",
+        )
+        assert BSSID_B not in out
+        document = json.loads(path.read_text())
+        assert [(e["bssid"], e["ssid"]) for e in document["rssi_stats"]] == [
+            (BSSID_A, "ExampleNet")
+        ]
+        assert {row["bssid"] for row in document["scan_data"]} == {BSSID_A}
+
+    def test_progress_replaces_the_table(self, capsys):
+        scans = [[record(-60, connected=True)], [], [record(-64, connected=True)]]
+        args = parse(["--rssi-stats", "-i", "0", "-n", "3"])
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend(scans))
+        out = capsys.readouterr().out
+        assert out.splitlines()[:3] == [
+            "scan 1/3: -60 dBm",
+            "scan 2/3: not seen",
+            "scan 3/3: -64 dBm",
+        ]
+        assert "AMENDMENTS" not in out
+
+    def test_summary_lists_every_field_with_interface_last(self, capsys):
+        scans = [[record(v, connected=True)] for v in (-60, -62, -64)]
+        args = parse(["--rssi-stats", "-i", "0", "-n", "3"])
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend(scans))
+        rows = summary_rows(capsys.readouterr().out)
+        assert list(rows) == [
+            "SSID",
+            "BSSID",
+            "band",
+            "samples",
+            "mean",
+            "stdev",
+            "CV",
+            "min",
+            "max",
+            "spread",
+            "interface",
+        ]
+        assert rows["stdev"] == "2.0 dB"
+        assert rows["CV"] == (
+            f"{rssistats.power_cv_pct([-60, -62, -64]):.1f}% of linear power (mW)"
+        )
+        assert (rows["min"], rows["max"], rows["spread"]) == (
+            "-64 dBm",
+            "-60 dBm",
+            "4 dB",
+        )
+        assert rows["interface"] == IFACE_MAC
+
+    def test_band_flag_that_excludes_the_link_errors_after_one_scan(
+        self, capsys, caplog
+    ):
+        backend = SequenceBackend([[record(-60, connected=True)]] * 3)
+        args = parse(["--rssi-stats", "-i", "0", "-n", "3", "-six"])
+        with pytest.raises(SystemExit) as exited:
+            app.run(args, backend=backend)
+        assert exited.value.code == -1
+        assert backend.calls == 1
+        assert (
+            f"the connected BSSID on {IFACE_MAC} is on 5 GHz, which -six leaves out"
+            in caplog.text
+        )
+        assert "RSSI stats" not in capsys.readouterr().out
+
+    def test_band_flag_that_keeps_the_link_measures_it(self, capsys):
+        backend = SequenceBackend([[record(-60, connected=True)]])
+        args = parse(["--rssi-stats", "-i", "0", "-n", "1", "-a"])
+        with pytest.raises(SystemExit) as exited:
+            app.run(args, backend=backend)
+        assert exited.value.code == 0
+        assert summary_rows(capsys.readouterr().out)["BSSID"] == BSSID_A
+
+    def test_not_connected_exits_before_scanning(self, caplog):
+        backend = SequenceBackend([[record(-60)]])
+        backend.iface.state_string = "disconnected"
+        with pytest.raises(SystemExit) as exited:
+            app.run(parse(["--rssi-stats", "-i", "0"]), backend=backend)
+        assert exited.value.code == -1
+        assert "no Wi-Fi interface is connected" in caplog.text
+        assert backend.calls == 0
+
+    def test_explicit_bssid_works_when_not_connected(self, capsys):
+        backend = SequenceBackend([[record(-60)]])
+        backend.iface.state_string = "disconnected"
+        with pytest.raises(SystemExit) as exited:
+            app.run(stats_args("-n", "1"), backend=backend)
+        assert exited.value.code == 0
+        assert summary_rows(capsys.readouterr().out)["samples"] == "1/1 scans"
+
+    def test_ethers_name_labels_the_summary_and_json(
+        self, tmp_path, capsys, monkeypatch
+    ):
+        monkeypatch.setattr(app.lswifi, "loadEthers", lambda self: {BSSID_A: "AP-12"})
+        path = tmp_path / "out.json"
+        args = parse(["--rssi-stats", "-ethers", "-i", "0", "--json", str(path)])
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend([[record(-60, connected=True)]]))
+        assert summary_rows(capsys.readouterr().out)["AP name"] == "AP-12"
+        stats = json.loads(path.read_text())["rssi_stats"][0]
+        assert (stats["ssid"], stats["ap_name"]) == ("ExampleNet", "AP-12")
+        assert (stats["channel"], stats["channel_width"]) == (36, 20)
+
+    def test_hidden_ssid_and_no_name_leave_labels_out(self, tmp_path, capsys):
+        hidden = BssRecord(
+            ssid=b"", bssid=BSSID_A, frequency_mhz=5180, rssi_dbm=-60, connected=True
+        )
+        path = tmp_path / "out.json"
+        args = parse(["--rssi-stats", "-i", "0", "--json", str(path)])
+        with pytest.raises(SystemExit):
+            app.run(args, backend=SequenceBackend([[hidden]]))
+        rows = summary_rows(capsys.readouterr().out)
+        assert "SSID" not in rows
+        assert "AP name" not in rows
+        stats = json.loads(path.read_text())["rssi_stats"][0]
+        assert "ssid" not in stats
+        assert "ap_name" not in stats
+        assert None not in stats.values()
+
 
 class TestAppRun:
-    def test_three_scans_json_summary_and_keys(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
+    def test_three_scans_json_summary_and_keys(self, tmp_path, capsys):
         backend = SequenceBackend([[record(-60)], [record(-62)], [record(-64)]])
         path = tmp_path / "out.json"
         with pytest.raises(SystemExit) as exited:
@@ -305,9 +549,11 @@ class TestAppRun:
                 backend=backend,
             )
         assert exited.value.code == 0
-        assert (
-            f"{IFACE_MAC} {BSSID_A} 5 GHz: 3/3 scans, mean -62.0 dBm, stdev 2.0 dB, "
-            "min -64 dBm, max -60 dBm, spread 4 dB" in caplog.text
+        rows = summary_rows(capsys.readouterr().out)
+        assert (rows["samples"], rows["mean"], rows["stdev"]) == (
+            "3/3 scans",
+            "-62.0 dBm",
+            "2.0 dB",
         )
 
         document = json.loads(path.read_text())
@@ -316,13 +562,17 @@ class TestAppRun:
         assert set(stats) == {
             "interface_mac",
             "bssid",
+            "ssid",
             "band",
+            "channel",
+            "channel_width",
             "first_timestamp",
             "last_timestamp",
             "completed_scans",
             "samples",
             "mean_dbm",
             "stdev_db",
+            "cv_power_pct",
             "min_dbm",
             "max_dbm",
             "spread_db",
@@ -330,12 +580,13 @@ class TestAppRun:
         assert isinstance(stats["min_dbm"], int)
         assert isinstance(stats["max_dbm"], int)
         assert isinstance(stats["spread_db"], int)
+        assert isinstance(stats["cv_power_pct"], float)
         timestamps = [row["timestamp"] for row in document["scan_data"]]
         assert stats["first_timestamp"] == timestamps[0]
         assert stats["last_timestamp"] == timestamps[-1]
 
     def test_bssid_on_two_bands_gets_one_summary_per_band_and_a_warning(
-        self, tmp_path, caplog
+        self, tmp_path, capsys, caplog
     ):
         caplog.set_level(logging.INFO)
         backend = SequenceBackend(
@@ -348,14 +599,14 @@ class TestAppRun:
         with pytest.raises(SystemExit):
             app.run(stats_args("--json", str(path), "-n", "2"), backend=backend)
 
-        assert (
-            f"{IFACE_MAC} {BSSID_A} 2.4 GHz: 2/2 scans, mean -41.0 dBm, "
-            "stdev 1.4 dB, min -42 dBm, max -40 dBm, spread 2 dB" in caplog.text
-        )
-        assert (
-            f"{IFACE_MAC} {BSSID_A} 5 GHz: 2/2 scans, mean -62.0 dBm, "
-            "stdev 2.8 dB, min -64 dBm, max -60 dBm, spread 4 dB" in caplog.text
-        )
+        out = capsys.readouterr().out
+        assert "scan 1/2: -40 dBm (2.4 GHz), -60 dBm (5 GHz)" in out
+        blocks = out[out.index("RSSI stats") :].split("\n\n")
+        assert len(blocks) == 2
+        assert [summary_rows(block)["mean"] for block in blocks] == [
+            "-41.0 dBm",
+            "-62.0 dBm",
+        ]
         band_warnings = [
             r.getMessage()
             for r in caplog.records
@@ -371,49 +622,8 @@ class TestAppRun:
             (BSSID_A, "5 GHz", -62.0),
         ]
         assert [e["bssid_bands"] for e in stats] == [["2.4 GHz", "5 GHz"]] * 2
-        assert set(stats[0]) == {
-            "interface_mac",
-            "bssid",
-            "band",
-            "bssid_bands",
-            "first_timestamp",
-            "last_timestamp",
-            "completed_scans",
-            "samples",
-            "mean_dbm",
-            "stdev_db",
-            "min_dbm",
-            "max_dbm",
-            "spread_db",
-        }
 
-    def test_distinct_link_bssids_get_no_band_warning(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
-        bssid_c = "00:00:5e:00:53:03"
-        links = [
-            record(-40, bssid=BSSID_A, frequency_mhz=2412),
-            record(-50, bssid=BSSID_B, frequency_mhz=5180),
-            record(-60, bssid=bssid_c, frequency_mhz=5975),
-        ]
-        backend = SequenceBackend([links, links])
-        path = tmp_path / "out.json"
-        args = parse(
-            ["-bssid", "00:00:5e:00:53", "-all", "--rssi-stats", "-i", "0", "-n", "2"]
-            + ["--json", str(path)]
-        )
-        with pytest.raises(SystemExit):
-            app.run(args, backend=backend)
-
-        assert f"{IFACE_MAC} {BSSID_A} 2.4 GHz: 2/2 scans" in caplog.text
-        assert f"{IFACE_MAC} {BSSID_B} 5 GHz: 2/2 scans" in caplog.text
-        assert f"{IFACE_MAC} {bssid_c} 6 GHz: 2/2 scans" in caplog.text
-        assert "was seen on" not in caplog.text
-        stats = json.loads(path.read_text())["rssi_stats"]
-        assert len(stats) == 3
-        assert all("bssid_bands" not in entry for entry in stats)
-
-    def test_two_runs_into_one_file_append(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
+    def test_two_runs_into_one_file_append(self, tmp_path):
         path = tmp_path / "out.json"
         for _ in range(2):
             backend = SequenceBackend([[record(-60)], [record(-62)], [record(-64)]])
@@ -426,40 +636,29 @@ class TestAppRun:
         assert len(document["rssi_stats"]) == 2
         assert len(document["scan_data"]) == 6
 
-    def test_missing_scan_counts_as_completed(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
+    def test_missing_scan_counts_as_completed(self, capsys):
         backend = SequenceBackend([[record(-60)], [], [record(-64)]])
         with pytest.raises(SystemExit) as exited:
-            app.run(
-                stats_args("-n", "3", "-i", "0"),
-                backend=backend,
-            )
+            app.run(stats_args("-n", "3", "-i", "0"), backend=backend)
         assert exited.value.code == 0
-        assert "2/3 scans" in caplog.text
+        assert summary_rows(capsys.readouterr().out)["samples"] == "2/3 scans"
 
-    def test_weak_rssi_below_default_threshold_counts(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
+    def test_weak_rssi_below_default_threshold_counts(self, capsys):
         backend = SequenceBackend([[record(-60)], [record(-90)], [record(-62)]])
         with pytest.raises(SystemExit) as exited:
-            app.run(
-                stats_args("-n", "3", "-i", "0"),
-                backend=backend,
-            )
+            app.run(stats_args("-n", "3", "-i", "0"), backend=backend)
         assert exited.value.code == 0
-        assert "3/3 scans" in caplog.text
+        assert summary_rows(capsys.readouterr().out)["samples"] == "3/3 scans"
 
-    def test_one_scan_no_stdev(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
+    def test_one_scan_no_stdev(self, capsys):
         backend = SequenceBackend([[record(-60)]])
         with pytest.raises(SystemExit) as exited:
-            app.run(
-                stats_args("-n", "1", "-i", "0"),
-                backend=backend,
-            )
+            app.run(stats_args("-n", "1", "-i", "0"), backend=backend)
         assert exited.value.code == 0
-        assert "mean -60.0 dBm" in caplog.text
-        assert "min -60 dBm, max -60 dBm, spread 0 dB" in caplog.text
-        assert "stdev" not in caplog.text
+        rows = summary_rows(capsys.readouterr().out)
+        assert (rows["mean"], rows["spread"]) == ("-60.0 dBm", "0 dB")
+        assert "stdev" not in rows
+        assert "CV" not in rows
 
     def test_no_match_logs_warning_and_creates_no_json(self, tmp_path, caplog):
         caplog.set_level(logging.INFO)
@@ -474,34 +673,19 @@ class TestAppRun:
         assert f"no samples matched -bssid {BSSID_A}" in caplog.text
         assert not path.exists()
 
-    def test_without_rssi_stats_no_summary_or_key(self, tmp_path, caplog):
-        caplog.set_level(logging.INFO)
+    def test_without_rssi_stats_no_summary_or_key(self, tmp_path, capsys):
         backend = SequenceBackend([[record(-60)]])
         path = tmp_path / "out.json"
+        args = parse(["-bssid", BSSID_A, "-all", "--json", str(path), "-n", "1"])
         with pytest.raises(SystemExit) as exited:
-            app.run(
-                parse(
-                    [
-                        "-bssid",
-                        BSSID_A,
-                        "-all",
-                        "--json",
-                        str(path),
-                        "-n",
-                        "1",
-                        "-i",
-                        "0",
-                    ]
-                ),
-                backend=backend,
-            )
+            app.run(args, backend=backend)
         assert exited.value.code == 0
-        assert "mean" not in caplog.text
+        assert "RSSI stats" not in capsys.readouterr().out
         assert "rssi_stats" not in json.loads(path.read_text())
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="sends SIGINT")
-def test_ctrl_c_logs_summary_without_json_write(tmp_path):
+def test_ctrl_c_prints_summary_without_json_write(tmp_path):
     path = tmp_path / "out.json"
     script = f'''
 import sys, time
@@ -539,10 +723,15 @@ app.run(args, backend=backend)
     time.sleep(0.5)
     proc.send_signal(signal.SIGINT)
     try:
-        _, err = proc.communicate(timeout=10)
+        out, err = proc.communicate(timeout=10)
     finally:
         proc.kill()
     assert proc.returncode == 130
-    assert "1/1 scans, mean -57.0 dBm, min -57 dBm, max -57 dBm, spread 0 dB" in err
+    rows = summary_rows(out)
+    assert (rows["samples"], rows["mean"], rows["spread"]) == (
+        "1/1 scans",
+        "-57.0 dBm",
+        "0 dB",
+    )
     assert "Traceback" not in err
     assert "rssi_stats" not in json.loads(path.read_text())

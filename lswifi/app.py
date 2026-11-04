@@ -93,6 +93,12 @@ def exportraw_dir(path: str) -> str:
 class lswifi:
     def __init__(self) -> None:
         self.rssi_samples: rssistats.RssiSamples = {}
+        self.rssi_labels: rssistats.RssiLabels = {}
+        self.rssi_readings: dict[str, list[tuple[str, int]]] = {}
+        self.rssi_band_mismatch: dict[str, str] = {}
+        self.rssi_band_warned: set[str] = set()
+        self.scan_index = 0
+        self.scan_total: int | None = None
 
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -267,6 +273,19 @@ class lswifi:
 
             # TODO move other non-scanning functions here
 
+            if (
+                scanning
+                and args.rssi_stats
+                and args.bssid is None
+                and not any(
+                    iface.state_string == "connected" for iface in iface_infos.values()
+                )
+            ):
+                log.error(
+                    "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid to pick a BSSID"
+                )
+                sys.exit(-1)
+
             if scanning:
                 scans = 1
                 interval = 0.1
@@ -289,10 +308,12 @@ class lswifi:
                     csv_file_name = args.csv
                     json_file_name = args.json
 
+                self.scan_total = None if timeout > 0 else scans
                 if timeout > 0:  # we're scanning during a given time period
                     timeout_start = time.time()
 
                     while time.time() < timeout_start + timeout:
+                        self.scan_index = loops_completed + 1
                         self.scan(
                             clients,
                             is_caching_acknowledged,
@@ -309,6 +330,7 @@ class lswifi:
                             _first = False
                         else:
                             time.sleep(interval)
+                        self.scan_index = loops_completed + 1
                         self.scan(
                             clients,
                             is_caching_acknowledged,
@@ -399,6 +421,9 @@ class lswifi:
             for _idx, client in clients.items():
                 if client.data is None:
                     log.warning(f"no scan data for {client.mac}")
+                    if args.rssi_stats:
+                        self.rssi_readings[client.mac] = []
+                        self.report_rssi_progress(client.mac, args)
                 else:
                     (
                         out_results,
@@ -418,7 +443,11 @@ class lswifi:
 
                     if args.ies or args.bytes or args.export:
                         return
-                    if args.rnr:
+                    if args.rssi_stats:
+                        self.report_rssi_progress(client.mac, args)
+                        if args.apnames and is_caching_acknowledged:
+                            self.updateAPNames(json_names, newapnames)
+                    elif args.rnr:
                         self.print_rnr_list(rnr_results, client.mac, args)
                     else:
                         self.print_bss_list(
@@ -433,6 +462,8 @@ class lswifi:
                             args,
                         )
                     log.debug(f"finish parsing information elements for {client.mac}")
+            if args.rssi_stats:
+                self.check_rssi_band_mismatch(args)
 
             ############################
             # old sync example working #
@@ -460,23 +491,72 @@ class lswifi:
         except KeyboardInterrupt:
             raise
 
+    def report_rssi_progress(self, client_mac: str, args) -> None:
+        readings = self.rssi_readings.get(client_mac, [])
+        show_band = len({band for band, _rssi in readings}) > 1
+        text = rssistats.format_progress(
+            self.scan_index,
+            self.scan_total,
+            [
+                rssistats.format_reading(band, rssi, show_band)
+                for band, rssi in readings
+            ],
+        )
+        if len(self.rssi_readings) > 1:
+            text += f" on {client_mac}"
+        print(text, flush=True)
+
+    def check_rssi_band_mismatch(self, args) -> None:
+        log = logging.getLogger(__name__)
+        mismatched = {
+            mac: band
+            for mac, band in self.rssi_band_mismatch.items()
+            if not self.rssi_readings.get(mac)
+        }
+        self.rssi_band_mismatch = {}
+        mismatched = {
+            mac: band
+            for mac, band in mismatched.items()
+            if mac not in self.rssi_band_warned
+        }
+        if not mismatched:
+            return
+        flags = " ".join(
+            flag
+            for flag, given in (("-a", args.a), ("-g", args.g), ("-six", args.six))
+            if given
+        )
+        for mac, band in mismatched.items():
+            message = f"the connected BSSID on {mac} is on {band}, which {flags} leaves out. drop {flags} to measure the connected link, or add -bssid to measure another BSSID"
+            if any(self.rssi_readings.values()):
+                self.rssi_band_warned.add(mac)
+                log.warning(message)
+            else:
+                log.error(message)
+                sys.exit(-1)
+
     def report_rssi_stats(
         self, completed_scans: int, args
     ) -> list[rssistats.RssiSummary]:
         log = logging.getLogger(__name__)
-        summaries = rssistats.summarize(self.rssi_samples, completed_scans)
-        if not summaries:
+        summaries = rssistats.summarize(
+            self.rssi_samples, completed_scans, self.rssi_labels
+        )
+        if not summaries and args.bssid is not None:
             log.warning("no samples matched -bssid %s", args.bssid)
+        elif not summaries:
+            log.warning("the connected BSSID was not seen in the scan results")
         else:
             repeated = rssistats.repeated_bssids(summaries)
-            for index, summary in enumerate(summaries):
-                log.info(rssistats.format_summary(summary))
+            print(
+                "\n\n".join(rssistats.format_summary(summary) for summary in summaries),
+                flush=True,
+            )
+            warned = set()
+            for summary in summaries:
                 key = (summary.interface_mac, summary.bssid)
-                is_last_of_group = index + 1 == len(summaries) or key != (
-                    summaries[index + 1].interface_mac,
-                    summaries[index + 1].bssid,
-                )
-                if key in repeated and is_last_of_group:
+                if key in repeated and key not in warned:
+                    warned.add(key)
                     log.warning(rssistats.format_band_warning(*key, repeated[key]))
         return summaries
 
@@ -688,6 +768,8 @@ class lswifi:
         newapnames = {}
 
         bss_len = len(wireless_network_bss_list)
+        if args.rssi_stats:
+            self.rssi_readings[client.mac] = []
 
         if args.bytes:
             for _index, bss in enumerate(wireless_network_bss_list):
@@ -742,6 +824,17 @@ class lswifi:
                         f"excluding {bss.bssid} ({bss.ssid}) because bss.rssi.value {bss.rssi.value} is < {args.sensitivity}"
                     )
                     continue
+
+                if (
+                    args.rssi_stats
+                    and args.bssid is None
+                    and bss.bssid.connected
+                    and (args.a or args.g or args.six)
+                    and not self._bss_matches_band_filter(bss, args)
+                ):
+                    self.rssi_band_mismatch[client.mac] = rssistats.band_of(
+                        str(bss.channel_frequency.value)
+                    )
 
                 # handle band filters
                 if not args.a and not args.g and not args.six:
@@ -814,9 +907,12 @@ class lswifi:
                     input_mac = strip_mac_address_format(args.bssid)
                     bss_mac = strip_mac_address_format(str(bss.bssid))
                 # print("{} {}".format(input_mac, bss_mac))
-                if args.bssid is None or input_mac in bss_mac:
-                    pass
-                else:
+                if args.bssid is not None and not (
+                    input_mac == bss_mac if args.rssi_stats else input_mac in bss_mac
+                ):
+                    continue
+
+                if args.rssi_stats and args.bssid is None and not bss.bssid.connected:
                     continue
 
                 if args.rnr:
@@ -829,16 +925,6 @@ class lswifi:
 
                 # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
                 bssid_list.append(str(bss.bssid))
-
-                if args.rssi_stats:
-                    rssistats.add_sample(
-                        self.rssi_samples,
-                        client.mac,
-                        str(bss.bssid).strip(),
-                        rssistats.band_of(str(bss.channel_frequency.value)),
-                        client.last_scan_time_iso,
-                        bss.rssi.value,
-                    )
 
                 if args.ethers:
                     if bss.bssid.value in ethers:
@@ -866,6 +952,34 @@ class lswifi:
                         newapnames[scan_bssid] = (
                             scan_apname  # then 1) update new hash table with new AP name
                         )
+
+                if args.rssi_stats:
+                    bssid = str(bss.bssid).strip()
+                    band = rssistats.band_of(str(bss.channel_frequency.value))
+                    rssistats.add_sample(
+                        self.rssi_samples,
+                        client.mac,
+                        bssid,
+                        band,
+                        client.last_scan_time_iso,
+                        bss.rssi.value,
+                    )
+                    rssistats.add_label(
+                        self.rssi_labels,
+                        client.mac,
+                        bssid,
+                        band,
+                        rssistats.RssiLabel(
+                            ssid=str(bss.ssid).strip(),
+                            ap_name=remove_control_chars(
+                                str(bss.apname.value or "")
+                            ).strip(),
+                            channel=str(bss.channel_number.value or "").strip(),
+                            channel_width=str(bss.channel_width.value or "").strip(),
+                        ),
+                    )
+                    if isinstance(bss.rssi.value, int):
+                        self.rssi_readings[client.mac].append((band, bss.rssi.value))
 
                 # bss.element.out() contains a tuple with the following values
                 #   1. value, 2. header and alignment (left, center, right), 3. subheader
