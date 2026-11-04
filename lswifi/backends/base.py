@@ -65,6 +65,7 @@ class BssRecord:
     # width the OS reports, for when there are no IEs; IE-derived width wins
     channel_width_mhz: int | None = None
     seen_ms_ago: int | None = None
+    last_seen: int | None = None
 
 
 @dataclass

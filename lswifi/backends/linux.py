@@ -150,6 +150,7 @@ def bss_to_record(attrs: dict[int, bytes]) -> BssRecord:
             nl.get_uint(attrs, nl.BSS_CHAN_WIDTH, 0) or 0
         ),
         seen_ms_ago=nl.get_uint(attrs, nl.BSS_SEEN_MS_AGO),
+        last_seen=nl.get_uint(attrs, nl.BSS_LAST_SEEN_BOOTTIME),
     )
 
 

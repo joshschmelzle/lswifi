@@ -16,7 +16,7 @@ import os
 import re
 import statistics
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from lswifi.helpers import (
     is_five_band,
@@ -39,6 +39,68 @@ class RssiLabel:
 RssiLabels = dict[tuple[str, str, str], RssiLabel]
 
 
+@dataclass
+class Freshness:
+    scan_calls: int = 0
+    fresh_scans: int = 0
+    has_markers: bool = True
+    fresh_times: list[float] = field(default_factory=list)
+    started: float | None = None
+    last_call: float | None = None
+    previous: dict[tuple[str, str], int] = field(default_factory=dict)
+    counted: dict[tuple[str, str], int] = field(default_factory=dict)
+
+    def observe(self, markers: dict[tuple[str, str], int | None], now: float) -> bool:
+        self.scan_calls += 1
+        if self.started is None:
+            self.started = now
+        self.last_call = now
+        if not markers:
+            self.fresh_scans += 1
+            self.fresh_times.append(now)
+            return True
+        if any(marker is None for marker in markers.values()):
+            self.has_markers = False
+            fresh = True
+        else:
+            known = {
+                key: marker for key, marker in markers.items() if marker is not None
+            }
+            fresh = known != self.previous
+            self.previous = known
+        if fresh:
+            self.fresh_scans += 1
+            self.fresh_times.append(now)
+        return fresh
+
+    def is_fresh_reading(self, key: tuple[str, str], marker: int | None) -> bool:
+        if marker is None or not self.has_markers:
+            return True
+        if self.counted.get(key) == marker:
+            return False
+        self.counted[key] = marker
+        return True
+
+    def gap_s(self) -> float | None:
+        if len(self.fresh_times) < 2:
+            return None
+        return (self.fresh_times[-1] - self.fresh_times[0]) / (
+            len(self.fresh_times) - 1
+        )
+
+    def duration_s(self) -> float:
+        if self.started is None or self.last_call is None:
+            return 0.0
+        return self.last_call - self.started
+
+
+@dataclass(frozen=True)
+class RunInfo:
+    scan_calls: int = 0
+    duration_s: float = 0.0
+    every_scan: bool = False
+
+
 @dataclass(frozen=True)
 class RssiSummary:
     interface_mac: str
@@ -56,6 +118,7 @@ class RssiSummary:
     cv: float | None = None
     label: RssiLabel = RssiLabel()
     possibly_stale: bool = False
+    run: RunInfo = RunInfo()
 
 
 def band_of(frequency: str) -> str:
@@ -134,10 +197,18 @@ def is_possibly_stale(values: list[int], completed_scans: int) -> bool:
 
 
 def summarize(
-    samples: RssiSamples, completed_scans: int, labels: RssiLabels | None = None
+    samples: RssiSamples,
+    completed_scans: int | dict[str, int],
+    labels: RssiLabels | None = None,
+    runs: dict[str, RunInfo] | None = None,
 ) -> list[RssiSummary]:
     summaries = []
     for (interface_mac, bssid, band), entries in sorted(samples.items()):
+        scans = (
+            completed_scans.get(interface_mac, 0)
+            if isinstance(completed_scans, dict)
+            else completed_scans
+        )
         values = [rssi for _timestamp, rssi in entries]
         min_dbm = min(values)
         max_dbm = max(values)
@@ -148,7 +219,7 @@ def summarize(
                 band=band,
                 first_timestamp=entries[0][0],
                 last_timestamp=entries[-1][0],
-                completed_scans=completed_scans,
+                completed_scans=scans,
                 samples=len(values),
                 mean_dbm=round(statistics.fmean(values), 1),
                 stdev_db=(
@@ -159,7 +230,8 @@ def summarize(
                 spread_db=max_dbm - min_dbm,
                 cv=cv_pct(values),
                 label=(labels or {}).get((interface_mac, bssid, band), RssiLabel()),
-                possibly_stale=is_possibly_stale(values, completed_scans),
+                possibly_stale=is_possibly_stale(values, scans),
+                run=(runs or {}).get(interface_mac, RunInfo()),
             )
         )
     return summaries
@@ -184,41 +256,68 @@ def format_band_warning(
     )
 
 
-def format_time_left(seconds_left: int | None, scans_left: int | None) -> str:
-    if seconds_left is None:
-        return ""
-    text = f"{seconds_left} s left"
-    if scans_left is not None:
-        text += f", about {scans_left} scans"
-    return text
+def scan_noun(every_scan: bool) -> str:
+    return "scan" if every_scan else "fresh scan"
 
 
 def format_progress(
-    index: int, total: int | None, readings: list[str], time_left: str = ""
+    index: int,
+    total: int | None,
+    readings: list[str],
+    scan_calls: int,
+    every_scan: bool = False,
 ) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    text = f"scan {position}: {', '.join(readings) if readings else 'not seen'}"
-    return f"{text}  {time_left}" if time_left else text
+    text = (
+        f"{scan_noun(every_scan)} {position}: "
+        f"{', '.join(readings) if readings else 'not seen'}"
+    )
+    return text if every_scan else f"{text}  ({scan_calls} scan calls)"
 
 
 def format_multi_progress(
-    index: int, total: int | None, seen: int, matched: int, time_left: str = ""
+    index: int,
+    total: int | None,
+    seen: int,
+    matched: int,
+    scan_calls: int,
+    every_scan: bool = False,
 ) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    text = f"scan {position}  seen {seen}/{matched}"
-    return f"{text}  {time_left}" if time_left else text
+    text = f"{scan_noun(every_scan)} {position}  seen {seen}/{matched}"
+    return text if every_scan else f"{text}  ({scan_calls} scan calls)"
 
 
 def format_plan(
-    matched: int, bands: int, scans: int | None, interval: int, duration: int | None
+    matched: int, bands: int, scans: int | None, duration: int | None
 ) -> str:
     noun = "BSSID" if matched == 1 else "BSSIDs"
     band_noun = "band" if bands == 1 else "bands"
-    if scans:
-        run = f"{scans} scans every {interval} s"
-    else:
-        run = f"scans every {interval} s for {duration} s"
+    run = f"{scans} fresh scans" if scans else f"fresh scans for {duration} s"
     return f"matched {matched} {noun} on {bands} {band_noun}; {run}, Ctrl-C to stop"
+
+
+def format_estimate(gap_s: float, scans: int | None) -> str:
+    text = f"the OS returns a fresh scan about every {gap_s:.0f} s"
+    if scans:
+        minutes = gap_s * scans / 60
+        span = f"{minutes:.0f} min" if minutes >= 2 else f"{gap_s * scans:.0f} s"
+        text += f"; {scans} fresh scans take about {span}"
+    return text
+
+
+EVERY_SCAN_NOTE = (
+    "this OS does not say when each BSS was last heard, "
+    "so every scan counts as a reading"
+)
+
+
+def format_run(run: RunInfo, fresh_scans: int) -> str:
+    noun = "scans" if run.every_scan else "fresh scans"
+    text = f"{fresh_scans} {noun}"
+    if not run.every_scan:
+        text += f" from {run.scan_calls} scan calls"
+    return f"{text} over {run.duration_s:.0f} s"
 
 
 def steadiness_key(summary: "RssiSummary") -> tuple[bool, float, float]:
@@ -269,11 +368,15 @@ def format_table(summaries: list["RssiSummary"]) -> str:
     )
     if any(summary.possibly_stale for summary in summaries):
         lines.append(
-            "* possibly stale: seen in fewer than 2 scans, or the same reading "
-            "every time in fewer than half the scans"
+            "* possibly stale: heard in fewer than 2 fresh scans, or the same "
+            "reading every time in fewer than half the fresh scans"
         )
-    interfaces = sorted({summary.interface_mac for summary in summaries})
-    lines.append(f"interface {', '.join(interfaces)}")
+    runs = {
+        summary.interface_mac: format_run(summary.run, summary.completed_scans)
+        for summary in summaries
+    }
+    for interface_mac in sorted(runs):
+        lines.append(f"interface {interface_mac}: {runs[interface_mac]}")
     return "\n".join(lines)
 
 
@@ -296,7 +399,10 @@ def format_summary(summary: RssiSummary) -> str:
         ("AP name", summary.label.ap_name),
         ("BSSID", summary.bssid),
         ("band", format_channel(summary)),
-        ("samples", f"{summary.samples}/{summary.completed_scans} scans"),
+        (
+            "samples",
+            f"{summary.samples} of {format_run(summary.run, summary.completed_scans)}",
+        ),
         ("mean", f"{summary.mean_dbm:.1f} dBm"),
         (
             "stdev",
@@ -355,6 +461,11 @@ def summary_to_json(
     result["spread_db"] = summary.spread_db
     if summary.possibly_stale:
         result["possibly_stale"] = True
+    if summary.run.scan_calls:
+        result["scan_calls"] = summary.run.scan_calls
+        result["duration_s"] = round(summary.run.duration_s, 1)
+    if summary.run.every_scan:
+        result["every_scan_counted"] = True
     return result
 
 

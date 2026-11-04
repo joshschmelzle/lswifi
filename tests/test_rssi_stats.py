@@ -21,13 +21,16 @@ BSSID_B = "00:00:5e:00:53:02"
 SSID = b"ExampleNet"
 
 
-def record(rssi_dbm, bssid=BSSID_A, connected=False, frequency_mhz=5180):
+def record(
+    rssi_dbm, bssid=BSSID_A, connected=False, frequency_mhz=5180, last_seen=None
+):
     return BssRecord(
         ssid=SSID,
         bssid=bssid,
         frequency_mhz=frequency_mhz,
         rssi_dbm=rssi_dbm,
         connected=connected,
+        last_seen=last_seen,
     )
 
 
@@ -370,7 +373,7 @@ class TestCliValidation:
         assert (rows["SSID"], rows["BSSID"], rows["samples"]) == (
             "ExampleNet",
             BSSID_A,
-            "1/1 scans",
+            "1 of 1 scans over 0 s",
         )
         assert BSSID_B not in out
 
@@ -379,7 +382,7 @@ class TestCliValidation:
         argv = ["-bssid", BSSID_A, "--rssi-stats", "-n", "2", "-i", "0"]
         assert run_main(monkeypatch, backend, argv) == 0
         rows = summary_rows(capsys.readouterr().out)
-        assert (rows["samples"], rows["mean"]) == ("2/2 scans", "-75.0 dBm")
+        assert (rows["samples"], rows["mean"]) == ("2 of 2 scans over 0 s", "-75.0 dBm")
 
     def test_defaults_to_30_scans_two_seconds_apart(self, monkeypatch, capsys):
         sleeps = []
@@ -388,7 +391,10 @@ class TestCliValidation:
         assert run_main(monkeypatch, backend, ["--rssi-stats"]) == 0
         assert backend.calls == 30
         assert sleeps.count(2) == 29
-        assert summary_rows(capsys.readouterr().out)["samples"] == "30/30 scans"
+        assert (
+            summary_rows(capsys.readouterr().out)["samples"]
+            == "30 of 30 scans over 0 s"
+        )
 
     def test_explicit_scans_and_interval_override_the_defaults(
         self, monkeypatch, capsys
@@ -483,9 +489,9 @@ class TestConnectedTarget:
             app.run(args, backend=SequenceBackend(scans))
         out = capsys.readouterr().out
         assert out.splitlines()[:3] == [
-            "scan 1/3: -60 dBm  6 s left",
-            "scan 2/3: not seen  3 s left",
-            "scan 3/3: -64 dBm  0 s left",
+            "scan 1/3: -60 dBm",
+            "scan 2/3: not seen",
+            "scan 3/3: -64 dBm",
         ]
         assert "AMENDMENTS" not in out
 
@@ -555,7 +561,9 @@ class TestConnectedTarget:
         with pytest.raises(SystemExit) as exited:
             app.run(stats_args("-n", "1"), backend=backend)
         assert exited.value.code == 0
-        assert summary_rows(capsys.readouterr().out)["samples"] == "1/1 scans"
+        assert (
+            summary_rows(capsys.readouterr().out)["samples"] == "1 of 1 scans over 0 s"
+        )
 
     def test_ethers_name_labels_the_summary_and_json(
         self, tmp_path, capsys, monkeypatch
@@ -599,7 +607,7 @@ class TestAppRun:
         assert exited.value.code == 0
         rows = summary_rows(capsys.readouterr().out)
         assert (rows["samples"], rows["mean"], rows["stdev"]) == (
-            "3/3 scans",
+            "3 of 3 scans over 0 s",
             "-62.0 dBm",
             "2.0 dB",
         )
@@ -624,6 +632,9 @@ class TestAppRun:
             "min_dbm",
             "max_dbm",
             "spread_db",
+            "scan_calls",
+            "duration_s",
+            "every_scan_counted",
         }
         assert isinstance(stats["min_dbm"], int)
         assert isinstance(stats["max_dbm"], int)
@@ -688,14 +699,18 @@ class TestAppRun:
         with pytest.raises(SystemExit) as exited:
             app.run(stats_args("-n", "3", "-i", "0"), backend=backend)
         assert exited.value.code == 0
-        assert summary_rows(capsys.readouterr().out)["samples"] == "2/3 scans"
+        assert (
+            summary_rows(capsys.readouterr().out)["samples"] == "2 of 3 scans over 0 s"
+        )
 
     def test_weak_rssi_below_default_threshold_counts(self, capsys):
         backend = SequenceBackend([[record(-60)], [record(-90)], [record(-62)]])
         with pytest.raises(SystemExit) as exited:
             app.run(stats_args("-n", "3", "-i", "0"), backend=backend)
         assert exited.value.code == 0
-        assert summary_rows(capsys.readouterr().out)["samples"] == "3/3 scans"
+        assert (
+            summary_rows(capsys.readouterr().out)["samples"] == "3 of 3 scans over 0 s"
+        )
 
     def test_one_scan_no_stdev(self, capsys):
         backend = SequenceBackend([[record(-60)]])
@@ -776,7 +791,7 @@ app.run(args, backend=backend)
     assert proc.returncode == 130
     rows = summary_rows(out)
     assert (rows["samples"], rows["mean"], rows["spread"]) == (
-        "1/1 scans",
+        "1 of 1 scans over 0 s",
         "-57.0 dBm",
         "0 dB",
     )
@@ -931,13 +946,11 @@ class TestPrefixMatch:
         assert exited.value.code == 0
         out = capsys.readouterr().out
         lines = out.splitlines()
-        assert (
-            lines[0] == "matched 3 BSSIDs on 2 bands; 3 scans every 2 s, Ctrl-C to stop"
-        )
+        assert lines[0] == "matched 3 BSSIDs on 2 bands; 3 fresh scans, Ctrl-C to stop"
         assert lines[1:4] == [
-            "scan 1/3  seen 3/3  10 s left",
-            "scan 2/3  seen 2/3  4 s left",
-            "scan 3/3  seen 3/3  0 s left",
+            "scan 1/3  seen 3/3",
+            "scan 2/3  seen 2/3",
+            "scan 3/3  seen 3/3",
         ]
         assert BSSID_OTHER not in out
         rows = table_rows(out)
@@ -975,9 +988,7 @@ class TestPrefixMatch:
             app.run(args, backend=SequenceBackend(scans))
         assert exited.value.code == 0
         lines = capsys.readouterr().out.splitlines()
-        assert (
-            lines[0] == "matched 1 BSSID on 1 band; 2 scans every 0 s, Ctrl-C to stop"
-        )
+        assert lines[0] == "matched 1 BSSID on 1 band; 2 fresh scans, Ctrl-C to stop"
         assert lines[1].startswith("scan 1/2  seen 1/1")
         assert lines[2].startswith("scan 2/2  seen 1/1")
         assert [row["BSSID"] for row in table_rows("\n".join(lines))] == [BSSID_A]
@@ -1043,12 +1054,86 @@ class TestPrefixMatch:
             app.run(args, backend=SequenceBackend(scans))
         assert "each band has its own row." in caplog.text
 
-    def test_time_mode_shows_clock_time_and_estimated_scans(self, monkeypatch):
-        scanner = app.lswifi()
-        scanner.scan_index = 1
-        scanner.scan_interval = 1
-        scanner.rssi_started = 0
-        scanner.scan_deadline = 112.0
-        monkeypatch.setattr(app.time, "perf_counter", lambda: 2)
-        monkeypatch.setattr(app.time, "time", lambda: 103.0)
-        assert scanner.rssi_time_left() == "9 s left, about 3 scans"
+
+class TestFreshReadings:
+    def test_cached_call_is_not_a_fresh_scan(self):
+        tracker = rssistats.Freshness()
+        assert tracker.observe({("a", "5180"): 1, ("b", "5180"): 1}, 0.0)
+        assert not tracker.observe({("a", "5180"): 1, ("b", "5180"): 1}, 2.0)
+        assert tracker.observe({("a", "5180"): 1, ("b", "5180"): 2}, 4.0)
+        assert (tracker.scan_calls, tracker.fresh_scans) == (3, 2)
+        assert tracker.has_markers
+
+    def test_reading_counts_only_when_its_marker_changes(self):
+        tracker = rssistats.Freshness()
+        assert tracker.is_fresh_reading(("a", "5 GHz"), 1)
+        assert not tracker.is_fresh_reading(("a", "5 GHz"), 1)
+        assert tracker.is_fresh_reading(("a", "5 GHz"), 2)
+
+    def test_no_markers_counts_every_scan(self):
+        tracker = rssistats.Freshness()
+        assert tracker.observe({("a", "5180"): None}, 0.0)
+        assert tracker.observe({("a", "5180"): None}, 1.0)
+        assert not tracker.has_markers
+        assert tracker.is_fresh_reading(("a", "5 GHz"), None)
+
+    def test_gap_is_measured_between_fresh_scans(self):
+        tracker = rssistats.Freshness()
+        for now, marker in ((0.0, 1), (5.0, 1), (20.0, 2), (40.0, 3)):
+            tracker.observe({("a", "5180"): marker}, now)
+        assert tracker.gap_s() == 20.0
+        assert tracker.duration_s() == 40.0
+
+    def test_estimate_uses_the_measured_gap(self):
+        assert rssistats.format_estimate(20.0, 30) == (
+            "the OS returns a fresh scan about every 20 s; "
+            "30 fresh scans take about 10 min"
+        )
+
+    def test_run_keeps_scanning_until_n_fresh_readings(self, tmp_path, capsys):
+        scans = [
+            [record(-60, last_seen=1)],
+            [record(-60, last_seen=1)],
+            [record(-60, last_seen=1)],
+            [record(-63, last_seen=2)],
+            [record(-63, last_seen=2)],
+            [record(-61, last_seen=3)],
+        ]
+        backend = SequenceBackend(scans)
+        path = tmp_path / "out.json"
+        with pytest.raises(SystemExit) as exited:
+            app.lswifi().run(
+                stats_args("-n", "3", "--json", str(path)), backend=backend
+            )
+        assert exited.value.code == 0
+        assert backend.calls == 6
+        out = capsys.readouterr().out
+        assert [line for line in out.splitlines() if line.startswith("fresh scan")] == [
+            "fresh scan 1/3: -60 dBm  (1 scan calls)",
+            "fresh scan 2/3: -63 dBm  (4 scan calls)",
+            "fresh scan 3/3: -61 dBm  (6 scan calls)",
+        ]
+        assert "s left" not in out
+        assert "the OS returns a fresh scan about every" in out
+        assert summary_rows(out)["samples"].startswith(
+            "3 of 3 fresh scans from 6 scan calls over "
+        )
+        stats = json.loads(path.read_text())["rssi_stats"][0]
+        assert (stats["samples"], stats["completed_scans"], stats["scan_calls"]) == (
+            3,
+            3,
+            6,
+        )
+        assert "every_scan_counted" not in stats
+
+    def test_target_not_heard_again_is_not_counted(self, capsys):
+        scans = [
+            [record(-60, last_seen=1), record(-70, bssid=BSSID_B, last_seen=1)],
+            [record(-60, last_seen=1), record(-72, bssid=BSSID_B, last_seen=2)],
+            [record(-62, last_seen=3), record(-72, bssid=BSSID_B, last_seen=2)],
+        ]
+        with pytest.raises(SystemExit):
+            app.lswifi().run(stats_args("-n", "3"), backend=SequenceBackend(scans))
+        out = capsys.readouterr().out
+        assert "fresh scan 2/3: not seen  (2 scan calls)" in out
+        assert summary_rows(out)["samples"].startswith("2 of 3 fresh scans")

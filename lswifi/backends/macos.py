@@ -176,7 +176,19 @@ def network_to_record(network, connected_bssid: str | None = None) -> BssRecord:
         connected=bool(bssid) and bssid == connected_bssid,
         ie_source=None,
         channel_width_mhz=CW_CHANNEL_WIDTH_MHZ.get(width) if width else None,
+        last_seen=scan_timestamp(network),
     )
+
+
+def scan_timestamp(network) -> int | None:
+    if not _responds(network, "scanRecord"):
+        return None
+    try:
+        record = network.scanRecord()
+        value = record.get("TIMESTAMP") if record is not None else None
+    except Exception:
+        return None
+    return int(value) if isinstance(value, int | float) else None
 
 
 def is_redacted(record: BssRecord) -> bool:

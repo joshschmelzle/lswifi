@@ -253,6 +253,17 @@ class TestMapper:
     def test_ibss(self):
         assert network_to_record(redacted_network(ibss=True)).bss_type == "Independent"
 
+    def test_scan_timestamp_is_the_freshness_marker(self):
+        class Scanned(FakeNetwork):
+            def scanRecord(self):
+                return {"TIMESTAMP": 123456789}
+
+        record = network_to_record(Scanned(channel=None))
+        assert record.last_seen == 123456789
+
+    def test_no_scan_record_means_no_marker(self):
+        assert network_to_record(FakeNetwork(channel=None)).last_seen is None
+
     def test_ie_columns_match_decode(self):
         """IE-derived columns equal decoding the same bytes directly"""
         mac = WirelessNetworkBss(network_to_record(granted_network()))

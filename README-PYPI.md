@@ -88,7 +88,7 @@ Measure how strong and how steady the link you're connected to is. Keep the devi
 > lswifi --rssi-stats
 ```
 
-lswifi measures the connected BSSID on the band it's connected on. It runs 30 scans 2 seconds apart, prints one line per scan instead of the scan table (`scan 7/30: -65 dBm`, or `not seen`), then prints a summary:
+lswifi measures the connected BSSID on the band it's connected on. It collects 30 fresh scans, prints one line per fresh scan instead of the scan table (`fresh scan 7/30: -65 dBm  (19 scan calls)`, or `not seen`), then prints a summary:
 
 ```
 RSSI stats
@@ -96,7 +96,7 @@ RSSI stats
   AP name    AP-12
   BSSID      00:00:5e:00:53:01
   band       6 GHz, channel 37, 80 MHz
-  samples    30/30 scans
+  samples    30 of 30 fresh scans from 74 scan calls over 655 s
   mean       -65.2 dBm
   stdev      0.9 dB
   CV         1.4%
@@ -106,7 +106,9 @@ RSSI stats
   interface  00:00:5e:00:53:aa
 ```
 
-`stdev` is the sample standard deviation of the dBm readings. `CV` is the coefficient of variation: stdev divided by the absolute value of the mean dBm, as a percentage. The AP name comes from the beacon, from the cache with `--ap-names`, or from your ethers file with `-ethers`. Rows with no value are left out. Use `-n` or `--time` to change the run length and `-i` to change the gap between scans. If no interface is connected, macOS hides BSSIDs, or the BSSID is never seen, lswifi exits with code 2.
+`stdev` is the sample standard deviation of the dBm readings. `CV` is the coefficient of variation: stdev divided by the absolute value of the mean dBm, as a percentage. The AP name comes from the beacon, from the cache with `--ap-names`, or from your ethers file with `-ethers`. Rows with no value are left out. Use `-n` or `--time` to change the run length and `-i` to change the gap between scan calls.
+
+The OS can answer a scan request from its cache instead of scanning again; macOS does this for several seconds after each real scan. lswifi asks again every `-i` seconds (2 by default) and counts a reading only when the OS reports that it heard that BSSID again since the last counted reading. A scan call counts as a fresh scan when any network in it was heard again. After 3 fresh scans, lswifi prints how often the OS has returned a fresh scan so far and about how long the run takes at that pace. If the OS doesn't say when each BSSID was last heard, every scan counts as a reading, lswifi logs that, and `--json` adds `"every_scan_counted": true`. If no interface is connected, macOS hides BSSIDs, or the BSSID is never seen, lswifi exits with code 2.
 
 To compare antennas, adapters or placements, run the same command once per setup, change one thing between runs, and compare the summaries. Add `--json` to keep each run:
 
@@ -115,7 +117,7 @@ To compare antennas, adapters or placements, run the same command once per setup
 > lswifi --rssi-stats -n 60 --json antenna-b.json
 ```
 
-`--json` writes the per-scan rows to `scan_data` as usual and adds an `rssi_stats` list with the summary values, including `ssid`, `ap_name`, `band`, `channel`, `channel_width` and `cv` when known. Keys with no value are left out, never set to `null`. If you stop the run with Ctrl-C, lswifi still prints the summary but doesn't add `rssi_stats` to the file. It isn't meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
+`--json` writes the per-scan rows to `scan_data` as usual and adds an `rssi_stats` list with the summary values, including `ssid`, `ap_name`, `band`, `channel`, `channel_width` and `cv` when known. `completed_scans` is the number of fresh scans, `scan_calls` the number of scan requests and `duration_s` how long the run took. Keys with no value are left out, never set to `null`. If you stop the run with Ctrl-C, lswifi still prints the summary but doesn't add `rssi_stats` to the file. It isn't meant for a moving client or a roaming test. Movement or roaming doesn't stop the run, but it can mean fewer samples and a wider spread.
 
 To measure a BSSID you aren't connected to, add `-bssid` with the full address:
 
@@ -129,7 +131,7 @@ With a static client, `-bssid` also takes a prefix of 1 to 6 octets, such as an 
 > lswifi --rssi-stats -bssid 00:00:5e
 ```
 
-lswifi prints one plan line (`matched 12 BSSIDs on 2 bands; 30 scans every 2 s, Ctrl-C to stop`), one line per scan (`scan 6/30  seen 11/12  72 s left`), then one table with a row per BSSID and band, steadiest first by stdev. Time left comes from how long scans have taken so far. A row is marked `*` (possibly stale) when it was seen in fewer than 2 scans, or gave the same reading every time while seen in fewer than half the scans; those rows sort last and get `"possibly_stale": true` in `--json`. A prefix always gives the table, even with one match. A malformed prefix is an error.
+lswifi prints one plan line (`matched 12 BSSIDs on 2 bands; 30 fresh scans, Ctrl-C to stop`), one line per fresh scan (`fresh scan 6/30  seen 11/12  (15 scan calls)`), then one table with a row per BSSID and band, steadiest first by stdev. A row is marked `*` (possibly stale) when it was heard in fewer than 2 fresh scans, or gave the same reading every time while heard in fewer than half the fresh scans; those rows sort last and get `"possibly_stale": true` in `--json`. A prefix always gives the table, even with one match. A malformed prefix is an error.
 
 `-bssid` matches link BSSIDs, not the AP MLD address. Readings are kept per interface, BSSID and band. If an AP uses the same BSSID on two bands, each band gets its own row, and lswifi logs a warning that names the BSSID and the bands. With `--json`, each of those entries also gets `bssid_bands`, the list of bands that BSSID was seen on. Add `-a` (5 GHz), `-g` (2.4 GHz) or `-six` (6 GHz) to measure one band. Without `-bssid`, a band flag that leaves out the connected link is an error.
 
