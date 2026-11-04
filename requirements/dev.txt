@@ -47,7 +47,7 @@ librt==0.16.0
     # via mypy
 mock==5.2.0
     # via -r tests.in
-mypy==2.4.0
+mypy==2.4.1
     # via -r typing.in
 mypy-extensions==1.1.0
     # via mypy
@@ -90,9 +90,9 @@ pyproject-hooks==1.2.0
     # via
     #   build
     #   pip-tools
-pytest==9.0.3
+pytest==9.2.0
     # via -r tests.in
-python-discovery==1.6.4
+python-discovery==1.9.2
     # via
     #   tox
     #   virtualenv
@@ -106,7 +106,7 @@ scapy==2.8.0
     # via -r tests.in
 tomli-w==1.2.0
     # via tox
-tox==4.67.1
+tox==4.67.5
     # via -r dev.in
 typing-extensions==4.13.2
     # via mypy
