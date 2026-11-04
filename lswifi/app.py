@@ -100,11 +100,10 @@ class lswifi:
         self.scan_index = 0
         self.scan_total: int | None = None
         self.rssi_multi = False
-        self.rssi_plan_printed = False
         self.rssi_fresh: dict[str, rssistats.Freshness] = {}
         self.rssi_call_fresh: dict[str, bool] = {}
         self.rssi_json_out: list = []
-        self.rssi_estimate_printed = False
+        self.rssi_targets_printed: set[str] = set()
         self.rssi_every_scan_noted = False
 
     def run(self, args, **kwargs):
@@ -594,26 +593,39 @@ class lswifi:
             (str(bss.bssid).strip(), band), getattr(bss, "last_seen", None)
         )
 
+    def print_rssi_target(self, client_mac: str, args) -> None:
+        if client_mac in self.rssi_targets_printed:
+            return
+        targets = sorted(key for key in self.rssi_labels if key[0] == client_mac)
+        if not targets:
+            return
+        self.rssi_targets_printed.add(client_mac)
+        duration = int(args.time) if args.time else None
+        if self.rssi_multi:
+            print(
+                rssistats.format_plan(
+                    len(targets),
+                    len({band for _mac, _bssid, band in targets}),
+                    self.scan_total,
+                    duration,
+                ),
+                flush=True,
+            )
+            return
+        for key in targets:
+            print(rssistats.format_target(*key, self.rssi_labels[key]), flush=True)
+        print(rssistats.format_measuring(self.scan_total, duration), flush=True)
+
     def report_rssi_progress(self, client, args) -> None:
         client_mac = client.mac
+        self.print_rssi_target(client_mac, args)
         if not self.rssi_call_fresh.get(client_mac, True):
             return
         tracker = self.rssi_fresh.get(client_mac, rssistats.Freshness())
         at = tracker.ended_at
         readings = self.rssi_readings.get(client_mac, [])
         if self.rssi_multi:
-            matched = {key for key in self.rssi_samples if key[0] == client_mac}
-            if not self.rssi_plan_printed:
-                self.rssi_plan_printed = True
-                print(
-                    rssistats.format_plan(
-                        len(matched),
-                        len({band for _mac, _bssid, band in matched}),
-                        self.scan_total,
-                        int(args.time) if args.time else None,
-                    ),
-                    flush=True,
-                )
+            matched = {key for key in self.rssi_labels if key[0] == client_mac}
             text = rssistats.format_multi_progress(
                 at, tracker.real_scans, self.scan_total, len(readings), len(matched)
             )
@@ -629,6 +641,7 @@ class lswifi:
                         rssistats.format_reading(band, rssi, show_band)
                         for band, rssi in readings
                     ],
+                    tracker.sample_gap,
                 )
                 if readings
                 else rssistats.format_miss(at, tracker.misses)
@@ -636,20 +649,6 @@ class lswifi:
         if len(self.rssi_readings) > 1:
             text += f" on {client_mac}"
         print(text, flush=True)
-        gap = tracker.gap_s()
-        if (
-            tracker.has_markers
-            and not self.rssi_estimate_printed
-            and tracker.real_scans >= 3
-            and gap is not None
-        ):
-            self.rssi_estimate_printed = True
-            print(
-                rssistats.format_estimate(
-                    gap, self.scan_total, "scan" if self.rssi_multi else "sample"
-                ),
-                flush=True,
-            )
 
     def check_rssi_band_mismatch(self, args) -> None:
         log = logging.getLogger(__name__)
@@ -684,6 +683,13 @@ class lswifi:
         log = logging.getLogger(__name__)
         fresh = {mac: tracker.real_scans for mac, tracker in self.rssi_fresh.items()}
         completed_scans = max(fresh.values(), default=0)
+        for mac, tracker in self.rssi_fresh.items():
+            log.debug(
+                "%s: %s real scans from %s scan calls",
+                mac,
+                tracker.real_scans,
+                tracker.scan_calls,
+            )
         summaries = rssistats.summarize(
             self.rssi_samples,
             fresh,

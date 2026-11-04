@@ -60,8 +60,9 @@ class Freshness:
     miss_streak: int = 0
     idle_streak: int = 0
     has_markers: bool = True
-    real_times: list[float] = field(default_factory=list)
     started: float | None = None
+    last_sample: float | None = None
+    sample_gap: float | None = None
     last_call: float | None = None
     started_at: str = ""
     ended_at: str = ""
@@ -99,7 +100,6 @@ class Freshness:
         self.idle_streak = 0 if is_real else self.idle_streak + 1
         if is_real:
             self.real_scans += 1
-            self.real_times.append(now)
         return is_real
 
     def is_fresh_reading(self, key: tuple[str, str], marker: int | None) -> bool:
@@ -112,16 +112,18 @@ class Freshness:
 
     def record(self, measured: bool) -> None:
         if measured:
+            now = self.last_call
+            self.sample_gap = (
+                now - self.last_sample
+                if now is not None and self.last_sample is not None
+                else None
+            )
+            self.last_sample = now
             self.samples += 1
             self.miss_streak = 0
         else:
             self.misses += 1
             self.miss_streak += 1
-
-    def gap_s(self) -> float | None:
-        if len(self.real_times) < 2:
-            return None
-        return (self.real_times[-1] - self.real_times[0]) / (len(self.real_times) - 1)
 
     def duration_s(self) -> float:
         if self.started is None or self.last_call is None:
@@ -295,9 +297,18 @@ def format_band_warning(
     )
 
 
-def format_progress(at: str, index: int, total: int | None, readings: list[str]) -> str:
+def format_progress(
+    at: str,
+    index: int,
+    total: int | None,
+    readings: list[str],
+    gap_s: float | None = None,
+) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    return f"{clock(at)} sample {position}: {', '.join(readings)}"
+    text = f"{clock(at)} sample {position}: {', '.join(readings)}"
+    if gap_s is not None:
+        text += f" (+{gap_s:.0f} s)"
+    return text
 
 
 def format_miss(at: str, misses: int) -> str:
@@ -320,15 +331,6 @@ def format_plan(
     return f"matched {matched} {noun} on {bands} {band_noun}; {run}, Ctrl-C to stop"
 
 
-def format_estimate(gap_s: float, scans: int | None, noun: str = "sample") -> str:
-    text = f"the OS returns a new scan about every {gap_s:.0f} s"
-    if scans:
-        minutes = gap_s * scans / 60
-        span = f"{minutes:.0f} min" if minutes >= 2 else f"{gap_s * scans:.0f} s"
-        text += f"; {plural(scans, noun)} take about {span}"
-    return text
-
-
 EVERY_SCAN_NOTE = (
     "this OS does not say when each BSS was last heard, "
     "so every scan counts as a reading"
@@ -342,19 +344,17 @@ def format_span(run: RunInfo) -> str:
     return text
 
 
-def format_run(run: RunInfo, scans: int) -> str:
-    text = plural(scans, "scan")
-    if not run.every_scan and run.scan_calls:
-        text += f" from {plural(run.scan_calls, 'scan call')}"
+def format_samples(summary: "RssiSummary") -> str:
+    missed = summary.completed_scans - summary.samples
+    text = f"{summary.samples} of {plural(summary.completed_scans, 'scan')}"
+    if missed > 0:
+        text += f", {missed} missed"
     return text
 
 
-def format_samples(summary: "RssiSummary") -> str:
-    missed = summary.completed_scans - summary.samples
-    text = f"{summary.samples} measured"
-    if missed > 0:
-        text += f", {missed} missed"
-    return f"{text} in {format_run(summary.run, summary.completed_scans)}"
+def format_measuring(scans: int | None, duration: int | None) -> str:
+    run = plural(scans, "sample") if scans else f"for {duration} s"
+    return f"measuring {run}, Ctrl-C to stop"
 
 
 def steadiness_key(summary: "RssiSummary") -> tuple[bool, float, float]:
@@ -410,8 +410,7 @@ def format_table(summaries: list["RssiSummary"]) -> str:
         )
     runs = {
         summary.interface_mac: (
-            f"{format_run(summary.run, summary.completed_scans)}, "
-            f"{format_span(summary.run)}"
+            f"{plural(summary.completed_scans, 'scan')}, {format_span(summary.run)}"
         )
         for summary in summaries
     }
@@ -433,10 +432,26 @@ def format_channel(summary: RssiSummary) -> str:
     return ", ".join(part for part in parts if part)
 
 
+def format_rows(rows: list[tuple[str, str]]) -> list[str]:
+    return [f"  {name:<10} {value}" for name, value in rows if value]
+
+
+def format_target(interface_mac: str, bssid: str, band: str, label: RssiLabel) -> str:
+    probe = RssiSummary(
+        interface_mac, bssid, band, "", "", 0, 0, 0.0, None, 0, 0, 0, label=label
+    )
+    rows = [
+        ("SSID", label.ssid),
+        ("AP name", label.ap_name),
+        ("BSSID", bssid),
+        ("band", format_channel(probe)),
+        ("interface", interface_mac),
+    ]
+    return "\n".join(["target", *format_rows(rows)])
+
+
 def format_summary(summary: RssiSummary) -> str:
     rows = [
-        ("SSID", summary.label.ssid),
-        ("AP name", summary.label.ap_name),
         ("BSSID", summary.bssid),
         ("band", format_channel(summary)),
         ("samples", format_samples(summary)),
@@ -453,11 +468,8 @@ def format_summary(summary: RssiSummary) -> str:
         ("min", f"{summary.min_dbm} dBm"),
         ("max", f"{summary.max_dbm} dBm"),
         ("spread", f"{summary.spread_db} dB"),
-        ("interface", summary.interface_mac),
     ]
-    lines = ["RSSI stats"]
-    lines.extend(f"  {name:<10} {value}" for name, value in rows if value)
-    return "\n".join(lines)
+    return "\n".join(["RSSI stats", *format_rows(rows)])
 
 
 def as_number(text: str) -> int | str:

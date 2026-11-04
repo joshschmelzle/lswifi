@@ -48,18 +48,27 @@ class SequenceBackend(FakeBackend):
         return result
 
 
-def summary_rows(text):
-    block = text[text.index("RSSI stats") :].split("\n\n")[0]
+def block_rows(text, title):
+    block = text[text.index(title) :].split("\n\n")[0]
     rows = {}
     for line in block.splitlines()[1:]:
+        if not line.startswith("  "):
+            break
         name, _, value = line.strip().partition("  ")
         rows.setdefault(name, value.strip())
     return rows
 
 
+def summary_rows(text):
+    rows = block_rows(text, "target\n") if "target\n" in text else {}
+    return rows | block_rows(text, "RSSI stats")
+
+
 def progress(text):
     return [
-        line[9:] for line in text.splitlines() if re.match(r"\d\d:\d\d:\d\d ", line)
+        re.sub(r" \(\+\d+ s\)$", "", line[9:])
+        for line in text.splitlines()
+        if re.match(r"\d\d:\d\d:\d\d ", line)
     ]
 
 
@@ -380,7 +389,7 @@ class TestCliValidation:
         assert (rows["SSID"], rows["BSSID"], rows["samples"]) == (
             "ExampleNet",
             BSSID_A,
-            "1 measured in 1 scan",
+            "1 of 1 scan",
         )
         assert BSSID_B not in out
 
@@ -389,7 +398,7 @@ class TestCliValidation:
         argv = ["-bssid", BSSID_A, "--rssi-stats", "-n", "2", "-i", "0"]
         assert run_main(monkeypatch, backend, argv) == 0
         rows = summary_rows(capsys.readouterr().out)
-        assert (rows["samples"], rows["mean"]) == ("2 measured in 2 scans", "-75.0 dBm")
+        assert (rows["samples"], rows["mean"]) == ("2 of 2 scans", "-75.0 dBm")
 
     def test_defaults_to_30_scans_two_seconds_apart(self, monkeypatch, capsys):
         sleeps = []
@@ -398,10 +407,7 @@ class TestCliValidation:
         assert run_main(monkeypatch, backend, ["--rssi-stats"]) == 0
         assert backend.calls == 30
         assert sleeps.count(2) == 29
-        assert (
-            summary_rows(capsys.readouterr().out)["samples"]
-            == "30 measured in 30 scans"
-        )
+        assert summary_rows(capsys.readouterr().out)["samples"] == "30 of 30 scans"
 
     def test_explicit_scans_and_interval_override_the_defaults(
         self, monkeypatch, capsys
@@ -517,6 +523,7 @@ class TestConnectedTarget:
             "SSID",
             "BSSID",
             "band",
+            "interface",
             "samples",
             "time",
             "mean",
@@ -525,7 +532,6 @@ class TestConnectedTarget:
             "min",
             "max",
             "spread",
-            "interface",
         ]
         assert rows["stdev"] == "2.0 dB"
         assert rows["CV"] == "3.2%"
@@ -574,9 +580,7 @@ class TestConnectedTarget:
         with pytest.raises(SystemExit) as exited:
             app.run(stats_args("-n", "1"), backend=backend)
         assert exited.value.code == 0
-        assert (
-            summary_rows(capsys.readouterr().out)["samples"] == "1 measured in 1 scan"
-        )
+        assert summary_rows(capsys.readouterr().out)["samples"] == "1 of 1 scan"
 
     def test_ethers_name_labels_the_summary_and_json(
         self, tmp_path, capsys, monkeypatch
@@ -620,7 +624,7 @@ class TestAppRun:
         assert exited.value.code == 0
         rows = summary_rows(capsys.readouterr().out)
         assert (rows["samples"], rows["mean"], rows["stdev"]) == (
-            "3 measured in 3 scans",
+            "3 of 3 scans",
             "-62.0 dBm",
             "2.0 dB",
         )
@@ -717,8 +721,7 @@ class TestAppRun:
         assert exited.value.code == 0
         assert backend.calls == 4
         assert (
-            summary_rows(capsys.readouterr().out)["samples"]
-            == "3 measured, 1 missed in 4 scans"
+            summary_rows(capsys.readouterr().out)["samples"] == "3 of 4 scans, 1 missed"
         )
 
     def test_weak_rssi_below_default_threshold_counts(self, capsys):
@@ -726,9 +729,7 @@ class TestAppRun:
         with pytest.raises(SystemExit) as exited:
             app.run(stats_args("-n", "3", "-i", "0"), backend=backend)
         assert exited.value.code == 0
-        assert (
-            summary_rows(capsys.readouterr().out)["samples"] == "3 measured in 3 scans"
-        )
+        assert summary_rows(capsys.readouterr().out)["samples"] == "3 of 3 scans"
 
     def test_one_scan_no_stdev(self, capsys):
         backend = SequenceBackend([[record(-60)]])
@@ -812,7 +813,7 @@ app.run(args, backend=backend)
     assert proc.returncode == 130
     rows = summary_rows(out)
     assert (rows["samples"], rows["mean"], rows["spread"]) == (
-        "1 measured in 1 scan",
+        "1 of 1 scan",
         "-57.0 dBm",
         "0 dB",
     )
@@ -1039,7 +1040,9 @@ class TestPrefixMatch:
         with pytest.raises(SystemExit):
             app.run(stats_args("-n", "2"), backend=SequenceBackend(scans))
         out = capsys.readouterr().out
-        assert re.match(r"\d\d:\d\d:\d\d sample 1/2: -60 dBm", out)
+        assert out.startswith("target\n")
+        assert re.search(r"^measuring 2 samples, Ctrl-C to stop$", out, re.M)
+        assert re.search(r"^\d\d:\d\d:\d\d sample 1/2: -60 dBm$", out, re.M)
         assert "matched" not in out
         assert summary_rows(out)["BSSID"] == BSSID_A
 
@@ -1108,24 +1111,33 @@ class TestFreshReadings:
         assert not tracker.has_markers
         assert tracker.is_fresh_reading(("a", "5 GHz"), None)
 
-    def test_gap_is_measured_between_real_scans(self):
+    def test_gap_is_measured_between_samples(self):
         tracker = rssistats.Freshness()
-        for now, marker in ((0.0, 1), (5.0, 2), (25.0, 3), (45.0, 4)):
-            tracker.observe({("a", "5180"): marker}, now)
-        assert tracker.gap_s() == 20.0
-        assert tracker.duration_s() == 45.0
+        gaps = []
+        for now, measured in ((0.0, True), (24.0, False), (49.0, True), (73.0, True)):
+            tracker.observe({("a", "5180"): int(now)}, now, real=True)
+            tracker.record(measured)
+            gaps.append(tracker.sample_gap if measured else "miss")
+        assert gaps == [None, "miss", 49.0, 24.0]
+        assert tracker.duration_s() == 73.0
 
-    def test_estimate_uses_the_measured_gap(self):
-        assert rssistats.format_estimate(20.0, 30) == (
-            "the OS returns a new scan about every 20 s; 30 samples take about 10 min"
+    def test_progress_shows_the_gap_after_the_first_sample(self):
+        at = "2026-11-04T00:01:39.000-05:00"
+        assert rssistats.format_progress(at, 1, 5, ["-62 dBm"]) == (
+            "00:01:39 sample 1/5: -62 dBm"
+        )
+        assert rssistats.format_progress(at, 2, 5, ["-65 dBm"], 24.4) == (
+            "00:01:39 sample 2/5: -65 dBm (+24 s)"
         )
 
-    def test_plural_scan_call(self):
-        run = rssistats.RunInfo(scan_calls=1)
-        assert rssistats.format_run(run, 1) == "1 scan from 1 scan call"
-        assert rssistats.format_run(rssistats.RunInfo(scan_calls=2), 2) == (
-            "2 scans from 2 scan calls"
-        )
+    def test_samples_row_counts_only_scans(self):
+        def summary(samples, scans):
+            return rssistats.summarize(
+                {("m", "b", "5 GHz"): [("t", -60)] * samples}, scans
+            )[0]
+
+        assert rssistats.format_samples(summary(1, 1)) == "1 of 1 scan"
+        assert rssistats.format_samples(summary(18, 20)) == "18 of 20 scans, 2 missed"
 
     def test_run_keeps_scanning_until_n_samples(self, tmp_path, capsys, caplog):
         caplog.set_level(logging.INFO)
@@ -1152,9 +1164,11 @@ class TestFreshReadings:
             "sample 2/3: -63 dBm",
             "sample 3/3: -61 dBm",
         ]
-        assert "the OS returns a new scan about every" in out
+        assert "the OS returns" not in out
+        assert "scan call" not in out
+        assert out.index("measuring 3 samples") < out.index("sample 1/3")
         rows = summary_rows(out)
-        assert rows["samples"] == "3 measured in 3 scans from 7 scan calls"
+        assert rows["samples"] == "3 of 3 scans"
         assert re.fullmatch(r"\d\d:\d\d:\d\d to \d\d:\d\d:\d\d \(\d+ s\)", rows["time"])
         assert caplog.text.count("exporting scans as JSON") == 1
         document = json.loads(path.read_text())
@@ -1195,9 +1209,7 @@ class TestFreshReadings:
             "sample 2/3: -62 dBm",
             "sample 3/3: -63 dBm",
         ]
-        assert summary_rows(out)["samples"] == (
-            "3 measured, 1 missed in 4 scans from 5 scan calls"
-        )
+        assert summary_rows(out)["samples"] == "3 of 4 scans, 1 missed"
         stats = json.loads(path.read_text())["rssi_stats"][0]
         assert stats["missed"] == 1
 
