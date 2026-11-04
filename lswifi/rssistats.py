@@ -39,39 +39,68 @@ class RssiLabel:
 RssiLabels = dict[tuple[str, str, str], RssiLabel]
 
 
+MISS_LIMIT = 10
+IDLE_LIMIT = 60
+
+
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
+
+
+def clock(iso: str) -> str:
+    return iso[11:19] if len(iso) >= 19 else iso
+
+
 @dataclass
 class Freshness:
     scan_calls: int = 0
-    fresh_scans: int = 0
+    real_scans: int = 0
+    samples: int = 0
+    misses: int = 0
+    miss_streak: int = 0
+    idle_streak: int = 0
     has_markers: bool = True
-    fresh_times: list[float] = field(default_factory=list)
+    real_times: list[float] = field(default_factory=list)
     started: float | None = None
     last_call: float | None = None
+    started_at: str = ""
+    ended_at: str = ""
     previous: dict[tuple[str, str], int] = field(default_factory=dict)
     counted: dict[tuple[str, str], int] = field(default_factory=dict)
 
-    def observe(self, markers: dict[tuple[str, str], int | None], now: float) -> bool:
+    def observe(
+        self,
+        markers: dict[tuple[str, str], int | None],
+        now: float,
+        real: bool | None = None,
+        at: str = "",
+    ) -> bool:
+        first = self.scan_calls == 0
         self.scan_calls += 1
         if self.started is None:
             self.started = now
+            self.started_at = at
         self.last_call = now
-        if not markers:
-            self.fresh_scans += 1
-            self.fresh_times.append(now)
-            return True
+        self.ended_at = at or self.ended_at
         if any(marker is None for marker in markers.values()):
             self.has_markers = False
-            fresh = True
+        known = {key: marker for key, marker in markers.items() if marker is not None}
+        changed = known != self.previous
+        self.previous = known
+        if real is not None:
+            is_real = real
+        elif not markers or not self.has_markers:
+            is_real = True
+        elif first:
+            self.counted = dict(known)
+            is_real = False
         else:
-            known = {
-                key: marker for key, marker in markers.items() if marker is not None
-            }
-            fresh = known != self.previous
-            self.previous = known
-        if fresh:
-            self.fresh_scans += 1
-            self.fresh_times.append(now)
-        return fresh
+            is_real = changed
+        self.idle_streak = 0 if is_real else self.idle_streak + 1
+        if is_real:
+            self.real_scans += 1
+            self.real_times.append(now)
+        return is_real
 
     def is_fresh_reading(self, key: tuple[str, str], marker: int | None) -> bool:
         if marker is None or not self.has_markers:
@@ -81,12 +110,18 @@ class Freshness:
         self.counted[key] = marker
         return True
 
+    def record(self, measured: bool) -> None:
+        if measured:
+            self.samples += 1
+            self.miss_streak = 0
+        else:
+            self.misses += 1
+            self.miss_streak += 1
+
     def gap_s(self) -> float | None:
-        if len(self.fresh_times) < 2:
+        if len(self.real_times) < 2:
             return None
-        return (self.fresh_times[-1] - self.fresh_times[0]) / (
-            len(self.fresh_times) - 1
-        )
+        return (self.real_times[-1] - self.real_times[0]) / (len(self.real_times) - 1)
 
     def duration_s(self) -> float:
         if self.started is None or self.last_call is None:
@@ -99,6 +134,8 @@ class RunInfo:
     scan_calls: int = 0
     duration_s: float = 0.0
     every_scan: bool = False
+    started_at: str = ""
+    ended_at: str = ""
 
 
 @dataclass(frozen=True)
@@ -119,6 +156,7 @@ class RssiSummary:
     label: RssiLabel = RssiLabel()
     possibly_stale: bool = False
     run: RunInfo = RunInfo()
+    readings: tuple[tuple[str, int], ...] = ()
 
 
 def band_of(frequency: str) -> str:
@@ -232,6 +270,7 @@ def summarize(
                 label=(labels or {}).get((interface_mac, bssid, band), RssiLabel()),
                 possibly_stale=is_possibly_stale(values, scans),
                 run=(runs or {}).get(interface_mac, RunInfo()),
+                readings=tuple(entries),
             )
         )
     return summaries
@@ -256,36 +295,20 @@ def format_band_warning(
     )
 
 
-def scan_noun(every_scan: bool) -> str:
-    return "scan" if every_scan else "fresh scan"
-
-
-def format_progress(
-    index: int,
-    total: int | None,
-    readings: list[str],
-    scan_calls: int,
-    every_scan: bool = False,
-) -> str:
+def format_progress(at: str, index: int, total: int | None, readings: list[str]) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    text = (
-        f"{scan_noun(every_scan)} {position}: "
-        f"{', '.join(readings) if readings else 'not seen'}"
-    )
-    return text if every_scan else f"{text}  ({scan_calls} scan calls)"
+    return f"{clock(at)} sample {position}: {', '.join(readings)}"
+
+
+def format_miss(at: str, misses: int) -> str:
+    return f"{clock(at)} not heard in this scan ({misses} missed so far)"
 
 
 def format_multi_progress(
-    index: int,
-    total: int | None,
-    seen: int,
-    matched: int,
-    scan_calls: int,
-    every_scan: bool = False,
+    at: str, index: int, total: int | None, seen: int, matched: int
 ) -> str:
     position = f"{index}/{total}" if total else f"{index}"
-    text = f"{scan_noun(every_scan)} {position}  seen {seen}/{matched}"
-    return text if every_scan else f"{text}  ({scan_calls} scan calls)"
+    return f"{clock(at)} scan {position}  seen {seen}/{matched}"
 
 
 def format_plan(
@@ -293,16 +316,16 @@ def format_plan(
 ) -> str:
     noun = "BSSID" if matched == 1 else "BSSIDs"
     band_noun = "band" if bands == 1 else "bands"
-    run = f"{scans} fresh scans" if scans else f"fresh scans for {duration} s"
+    run = plural(scans, "scan") if scans else f"scans for {duration} s"
     return f"matched {matched} {noun} on {bands} {band_noun}; {run}, Ctrl-C to stop"
 
 
-def format_estimate(gap_s: float, scans: int | None) -> str:
-    text = f"the OS returns a fresh scan about every {gap_s:.0f} s"
+def format_estimate(gap_s: float, scans: int | None, noun: str = "sample") -> str:
+    text = f"the OS returns a new scan about every {gap_s:.0f} s"
     if scans:
         minutes = gap_s * scans / 60
         span = f"{minutes:.0f} min" if minutes >= 2 else f"{gap_s * scans:.0f} s"
-        text += f"; {scans} fresh scans take about {span}"
+        text += f"; {plural(scans, noun)} take about {span}"
     return text
 
 
@@ -312,12 +335,26 @@ EVERY_SCAN_NOTE = (
 )
 
 
-def format_run(run: RunInfo, fresh_scans: int) -> str:
-    noun = "scans" if run.every_scan else "fresh scans"
-    text = f"{fresh_scans} {noun}"
-    if not run.every_scan:
-        text += f" from {run.scan_calls} scan calls"
-    return f"{text} over {run.duration_s:.0f} s"
+def format_span(run: RunInfo) -> str:
+    text = f"{run.duration_s:.0f} s"
+    if run.started_at and run.ended_at:
+        text = f"{clock(run.started_at)} to {clock(run.ended_at)} ({text})"
+    return text
+
+
+def format_run(run: RunInfo, scans: int) -> str:
+    text = plural(scans, "scan")
+    if not run.every_scan and run.scan_calls:
+        text += f" from {plural(run.scan_calls, 'scan call')}"
+    return text
+
+
+def format_samples(summary: "RssiSummary") -> str:
+    missed = summary.completed_scans - summary.samples
+    text = f"{summary.samples} measured"
+    if missed > 0:
+        text += f", {missed} missed"
+    return f"{text} in {format_run(summary.run, summary.completed_scans)}"
 
 
 def steadiness_key(summary: "RssiSummary") -> tuple[bool, float, float]:
@@ -368,11 +405,14 @@ def format_table(summaries: list["RssiSummary"]) -> str:
     )
     if any(summary.possibly_stale for summary in summaries):
         lines.append(
-            "* possibly stale: heard in fewer than 2 fresh scans, or the same "
-            "reading every time in fewer than half the fresh scans"
+            "* possibly stale: heard in fewer than 2 scans, or the same "
+            "reading every time in fewer than half the scans"
         )
     runs = {
-        summary.interface_mac: format_run(summary.run, summary.completed_scans)
+        summary.interface_mac: (
+            f"{format_run(summary.run, summary.completed_scans)}, "
+            f"{format_span(summary.run)}"
+        )
         for summary in summaries
     }
     for interface_mac in sorted(runs):
@@ -399,10 +439,8 @@ def format_summary(summary: RssiSummary) -> str:
         ("AP name", summary.label.ap_name),
         ("BSSID", summary.bssid),
         ("band", format_channel(summary)),
-        (
-            "samples",
-            f"{summary.samples} of {format_run(summary.run, summary.completed_scans)}",
-        ),
+        ("samples", format_samples(summary)),
+        ("time", format_span(summary.run)),
         ("mean", f"{summary.mean_dbm:.1f} dBm"),
         (
             "stdev",
@@ -428,8 +466,8 @@ def as_number(text: str) -> int | str:
 
 def summary_to_json(
     summary: RssiSummary, bssid_bands: list[str] | None = None
-) -> dict[str, str | int | float | list[str]]:
-    result: dict[str, str | int | float | list[str]] = {
+) -> dict[str, object]:
+    result: dict[str, object] = {
         "interface_mac": summary.interface_mac,
         "bssid": summary.bssid,
     }
@@ -464,6 +502,17 @@ def summary_to_json(
     if summary.run.scan_calls:
         result["scan_calls"] = summary.run.scan_calls
         result["duration_s"] = round(summary.run.duration_s, 1)
+    if summary.completed_scans > summary.samples:
+        result["missed"] = summary.completed_scans - summary.samples
+    if summary.run.started_at:
+        result["started"] = summary.run.started_at
+    if summary.run.ended_at:
+        result["ended"] = summary.run.ended_at
+    if summary.readings:
+        result["readings"] = [
+            {"timestamp": timestamp, "rssi_dbm": rssi}
+            for timestamp, rssi in summary.readings
+        ]
     if summary.run.every_scan:
         result["every_scan_counted"] = True
     return result

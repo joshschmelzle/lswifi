@@ -103,6 +103,7 @@ class lswifi:
         self.rssi_plan_printed = False
         self.rssi_fresh: dict[str, rssistats.Freshness] = {}
         self.rssi_call_fresh: dict[str, bool] = {}
+        self.rssi_json_out: list = []
         self.rssi_estimate_printed = False
         self.rssi_every_scan_noted = False
 
@@ -366,6 +367,9 @@ class lswifi:
                     log.info(f"total number of completed scans is {loops_completed}")
 
                 if args.rssi_stats:
+                    self.warn_rssi_misses()
+                    if args.json:
+                        self.write_scans_json(args.json, self.rssi_json_out, args)
                     summaries = self.report_rssi_stats(args)
                     if not summaries:
                         sys.exit(2)
@@ -383,6 +387,8 @@ class lswifi:
                     f"total number of completed scans during this session is {loops_completed}"
                 )
             if args.rssi_stats and not args.event_watcher:
+                if args.json:
+                    self.write_scans_json(args.json, self.rssi_json_out, args)
                 self.report_rssi_stats(args)
             log.warning("keyboard interruption detected... stopping...")
             logging.shutdown()
@@ -453,7 +459,7 @@ class lswifi:
                     if args.rssi_stats:
                         self.rssi_readings[client.mac] = []
                         self.observe_rssi_scan(client)
-                        self.report_rssi_progress(client.mac, args)
+                        self.report_rssi_progress(client, args)
                 else:
                     if args.rssi_stats:
                         self.observe_rssi_scan(client)
@@ -476,7 +482,7 @@ class lswifi:
                     if args.ies or args.bytes or args.export:
                         return
                     if args.rssi_stats:
-                        self.report_rssi_progress(client.mac, args)
+                        self.report_rssi_progress(client, args)
                         if args.apnames and is_caching_acknowledged:
                             self.updateAPNames(json_names, newapnames)
                     elif args.rnr:
@@ -524,11 +530,40 @@ class lswifi:
             raise
 
     def rssi_done(self, clients, scans: int) -> bool:
+        trackers = [self.rssi_fresh.get(client.mac) for client in clients.values()]
+        if self.rssi_multi:
+            return all(
+                tracker is not None
+                and (
+                    tracker.real_scans >= scans
+                    or tracker.idle_streak >= rssistats.IDLE_LIMIT
+                )
+                for tracker in trackers
+            )
         return all(
-            client.mac in self.rssi_fresh
-            and self.rssi_fresh[client.mac].fresh_scans >= scans
-            for client in clients.values()
+            tracker is not None
+            and (
+                tracker.samples >= scans
+                or tracker.miss_streak >= rssistats.MISS_LIMIT
+                or tracker.idle_streak >= rssistats.IDLE_LIMIT
+            )
+            for tracker in trackers
         )
+
+    def warn_rssi_misses(self) -> None:
+        for mac, tracker in self.rssi_fresh.items():
+            if not self.rssi_multi and tracker.miss_streak >= rssistats.MISS_LIMIT:
+                logging.getLogger(__name__).warning(
+                    "not heard in the last %s scans on %s; stopping",
+                    rssistats.MISS_LIMIT,
+                    mac,
+                )
+            if tracker.idle_streak >= rssistats.IDLE_LIMIT:
+                logging.getLogger(__name__).warning(
+                    "the OS returned no new scan in the last %s scan calls on %s; stopping",
+                    rssistats.IDLE_LIMIT,
+                    mac,
+                )
 
     def observe_rssi_scan(self, client) -> None:
         markers = {
@@ -538,7 +573,13 @@ class lswifi:
             for bss in client.data or []
         }
         tracker = self.rssi_fresh.setdefault(client.mac, rssistats.Freshness())
-        self.rssi_call_fresh[client.mac] = tracker.observe(markers, time.perf_counter())
+        self.rssi_call_fresh[client.mac] = tracker.observe(
+            markers,
+            time.perf_counter(),
+            getattr(client, "real_scan", None),
+            client.last_scan_time_iso
+            or datetime.datetime.now().astimezone().isoformat(timespec="milliseconds"),
+        )
         if not tracker.has_markers and not self.rssi_every_scan_noted:
             self.rssi_every_scan_noted = True
             logging.getLogger(__name__).info(rssistats.EVERY_SCAN_NOTE)
@@ -553,11 +594,12 @@ class lswifi:
             (str(bss.bssid).strip(), band), getattr(bss, "last_seen", None)
         )
 
-    def report_rssi_progress(self, client_mac: str, args) -> None:
+    def report_rssi_progress(self, client, args) -> None:
+        client_mac = client.mac
         if not self.rssi_call_fresh.get(client_mac, True):
             return
         tracker = self.rssi_fresh.get(client_mac, rssistats.Freshness())
-        every_scan = not tracker.has_markers
+        at = tracker.ended_at
         readings = self.rssi_readings.get(client_mac, [])
         if self.rssi_multi:
             matched = {key for key in self.rssi_samples if key[0] == client_mac}
@@ -573,37 +615,41 @@ class lswifi:
                     flush=True,
                 )
             text = rssistats.format_multi_progress(
-                tracker.fresh_scans,
-                self.scan_total,
-                len(readings),
-                len(matched),
-                tracker.scan_calls,
-                every_scan,
+                at, tracker.real_scans, self.scan_total, len(readings), len(matched)
             )
         else:
+            tracker.record(bool(readings))
             show_band = len({band for band, _rssi in readings}) > 1
-            text = rssistats.format_progress(
-                tracker.fresh_scans,
-                self.scan_total,
-                [
-                    rssistats.format_reading(band, rssi, show_band)
-                    for band, rssi in readings
-                ],
-                tracker.scan_calls,
-                every_scan,
+            text = (
+                rssistats.format_progress(
+                    at,
+                    tracker.samples,
+                    self.scan_total,
+                    [
+                        rssistats.format_reading(band, rssi, show_band)
+                        for band, rssi in readings
+                    ],
+                )
+                if readings
+                else rssistats.format_miss(at, tracker.misses)
             )
         if len(self.rssi_readings) > 1:
             text += f" on {client_mac}"
         print(text, flush=True)
         gap = tracker.gap_s()
         if (
-            not every_scan
+            tracker.has_markers
             and not self.rssi_estimate_printed
-            and tracker.fresh_scans >= 3
+            and tracker.real_scans >= 3
             and gap is not None
         ):
             self.rssi_estimate_printed = True
-            print(rssistats.format_estimate(gap, self.scan_total), flush=True)
+            print(
+                rssistats.format_estimate(
+                    gap, self.scan_total, "scan" if self.rssi_multi else "sample"
+                ),
+                flush=True,
+            )
 
     def check_rssi_band_mismatch(self, args) -> None:
         log = logging.getLogger(__name__)
@@ -636,7 +682,7 @@ class lswifi:
 
     def report_rssi_stats(self, args) -> list[rssistats.RssiSummary]:
         log = logging.getLogger(__name__)
-        fresh = {mac: tracker.fresh_scans for mac, tracker in self.rssi_fresh.items()}
+        fresh = {mac: tracker.real_scans for mac, tracker in self.rssi_fresh.items()}
         completed_scans = max(fresh.values(), default=0)
         summaries = rssistats.summarize(
             self.rssi_samples,
@@ -647,6 +693,8 @@ class lswifi:
                     scan_calls=tracker.scan_calls,
                     duration_s=tracker.duration_s(),
                     every_scan=not tracker.has_markers,
+                    started_at=tracker.started_at,
+                    ended_at=tracker.ended_at,
                 )
                 for mac, tracker in self.rssi_fresh.items()
             },
@@ -680,6 +728,31 @@ class lswifi:
                         )
                     )
         return summaries
+
+    def write_scans_json(self, json_file_name, json_out, args) -> None:
+        log = logging.getLogger(__name__)
+        if not json_out:
+            log.info(f"nothing found to export as JSON to {json_file_name}")
+            return
+        log.info(f"exporting scans as JSON to {json_file_name}")
+        if os.path.exists(json_file_name):
+            with open(json_file_name) as file:
+                file_data = json.load(file)
+            flat = []
+            for item in file_data["scan_data"]:
+                if isinstance(item, list):
+                    flat.extend(item)
+                else:
+                    flat.append(item)
+            flat.extend(json_out)
+            file_data["scan_data"] = flat
+        else:
+            file_data = {
+                "lswifi": {"version": f"lswifi {__version__}"},
+                "scan_data": json_out,
+            }
+        with open(json_file_name, "w") as file:
+            json.dump(file_data, file, indent=args.json_indent)
 
     def displayEthers(self):
         log = logging.getLogger(__name__)
@@ -1255,30 +1328,10 @@ class lswifi:
             csv_out = sorted(csv_out, key=export_rssi_sort_key, reverse=True)
             json_out = sorted(json_out, key=export_rssi_sort_key, reverse=True)
 
-        if args.json:
-            json_file_exists = os.path.exists(json_file_name)
-            if not json_out:
-                log.info(f"nothing found to export as JSON to {json_file_name}")
-            else:
-                log.info(f"exporting scans as JSON to {json_file_name}")
-                if json_file_exists:
-                    with open(json_file_name) as file:
-                        file_data = json.load(file)
-                    flat = []
-                    for item in file_data["scan_data"]:
-                        if isinstance(item, list):
-                            flat.extend(item)
-                        else:
-                            flat.append(item)
-                    flat.extend(json_out)
-                    file_data["scan_data"] = flat
-                else:
-                    file_data = {
-                        "lswifi": {"version": f"lswifi {__version__}"},
-                        "scan_data": json_out,
-                    }
-                with open(json_file_name, "w") as file:
-                    json.dump(file_data, file, indent=args.json_indent)
+        if args.json and args.rssi_stats:
+            self.rssi_json_out.extend(json_out)
+        elif args.json:
+            self.write_scans_json(json_file_name, json_out, args)
 
         if args.csv:
             has_headings = False

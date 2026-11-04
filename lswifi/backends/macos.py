@@ -25,6 +25,7 @@ is told once why the other columns are blank. sudo does not change this.
 
 import json
 import logging
+import time
 from typing import Any
 
 from lswifi.backends import macos_location
@@ -189,6 +190,13 @@ def scan_timestamp(network) -> int | None:
     except Exception:
         return None
     return int(value) if isinstance(value, int | float) else None
+
+
+REAL_SCAN_MIN_S = 1.0
+
+
+def is_real_scan(elapsed_s: float) -> bool:
+    return elapsed_s >= REAL_SCAN_MIN_S
 
 
 def is_redacted(record: BssRecord) -> bool:
@@ -474,6 +482,7 @@ class MacOSBackend:
                 ) from error
         self.corewlan = corewlan
         self.client = corewlan.CWWiFiClient.sharedWiFiClient()
+        self.last_scan_real: bool | None = None
 
     def _native(self, iface: InterfaceInfo):
         if iface.native is not None:
@@ -504,8 +513,11 @@ class MacOSBackend:
         """Broadcast scan (nil SSID), blocking until CoreWLAN returns"""
         note_location()
         cw_iface = self._native(iface)
+        started = time.monotonic()
         networks, error = cw_iface.scanForNetworksWithSSID_error_(None, None)
+        self.last_scan_real = is_real_scan(time.monotonic() - started)
         if networks is None:
+            self.last_scan_real = False
             log.debug("scanForNetworksWithSSID failed: %s; using scan cache", error)
             networks = cw_iface.cachedScanResults()
             if networks is None:
