@@ -99,6 +99,9 @@ class lswifi:
         self.rssi_band_warned: set[str] = set()
         self.scan_index = 0
         self.scan_total: int | None = None
+        self.scan_interval = 0
+        self.scan_deadline: float | None = None
+        self.rssi_multi = False
 
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -309,8 +312,10 @@ class lswifi:
                     json_file_name = args.json
 
                 self.scan_total = None if timeout > 0 else scans
+                self.scan_interval = interval
                 if timeout > 0:  # we're scanning during a given time period
                     timeout_start = time.time()
+                    self.scan_deadline = timeout_start + timeout
 
                     while time.time() < timeout_start + timeout:
                         self.scan_index = loops_completed + 1
@@ -340,7 +345,7 @@ class lswifi:
                         )
                         loops_completed += 1
 
-                if loops_completed > 1:
+                if loops_completed > 1 and not args.rssi_stats:
                     log.info(f"total number of completed scans is {loops_completed}")
 
                 if args.rssi_stats:
@@ -356,7 +361,7 @@ class lswifi:
                     ):
                         log.info(f"exporting rssi_stats as JSON to {args.json}")
         except KeyboardInterrupt:
-            if not args.event_watcher and loops_completed > 1:
+            if not args.event_watcher and not args.rssi_stats and loops_completed > 1:
                 log.info(
                     f"total number of completed scans during this session is {loops_completed}"
                 )
@@ -498,8 +503,41 @@ class lswifi:
         except KeyboardInterrupt:
             raise
 
+    def rssi_seconds_left(self) -> int | None:
+        if self.scan_total:
+            return max(self.scan_total - self.scan_index, 0) * int(self.scan_interval)
+        if self.scan_deadline is not None:
+            return max(int(self.scan_deadline - time.time()), 0)
+        return None
+
     def report_rssi_progress(self, client_mac: str, args) -> None:
         readings = self.rssi_readings.get(client_mac, [])
+        if args.bssid is not None and not rssistats.is_full_bssid(args.bssid):
+            matched = {key for key in self.rssi_samples if key[0] == client_mac}
+            if not self.rssi_multi and len(matched) > 1:
+                self.rssi_multi = True
+                print(
+                    rssistats.format_plan(
+                        len(matched),
+                        len({band for _mac, _bssid, band in matched}),
+                        self.scan_total,
+                        int(self.scan_interval),
+                        int(args.time) if args.time else None,
+                    ),
+                    flush=True,
+                )
+            if self.rssi_multi:
+                text = rssistats.format_multi_progress(
+                    self.scan_index,
+                    self.scan_total,
+                    len(readings),
+                    len(matched),
+                    self.rssi_seconds_left(),
+                )
+                if len(self.rssi_readings) > 1:
+                    text += f" on {client_mac}"
+                print(text, flush=True)
+                return
         show_band = len({band for band, _rssi in readings}) > 1
         text = rssistats.format_progress(
             self.scan_index,
@@ -558,7 +596,11 @@ class lswifi:
         else:
             repeated = rssistats.repeated_bssids(summaries)
             print(
-                "\n\n".join(rssistats.format_summary(summary) for summary in summaries),
+                (
+                    rssistats.format_summary(summaries[0])
+                    if len(summaries) == 1
+                    else rssistats.format_table(summaries)
+                ),
                 flush=True,
             )
             warned = set()
@@ -917,7 +959,9 @@ class lswifi:
                     bss_mac = strip_mac_address_format(str(bss.bssid))
                 # print("{} {}".format(input_mac, bss_mac))
                 if args.bssid is not None and not (
-                    input_mac == bss_mac if args.rssi_stats else input_mac in bss_mac
+                    rssistats.matches_bssid(args.bssid, str(bss.bssid))
+                    if args.rssi_stats
+                    else input_mac in bss_mac
                 ):
                     continue
 

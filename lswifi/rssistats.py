@@ -71,6 +71,22 @@ def is_full_bssid(text: str) -> bool:
     return re.fullmatch(r"[0-9a-f]{12}", strip_mac_address_format(text)) is not None
 
 
+def is_bssid_prefix(text: str) -> bool:
+    return (
+        is_full_bssid(text)
+        or re.fullmatch(
+            r"[0-9a-f]{2}(?:([:-])[0-9a-f]{2}(?:\1[0-9a-f]{2}){0,4})?", text.lower()
+        )
+        is not None
+    )
+
+
+def matches_bssid(wanted: str, bssid: str) -> bool:
+    want = strip_mac_address_format(wanted)
+    have = strip_mac_address_format(bssid)
+    return have == want if is_full_bssid(wanted) else have.startswith(want)
+
+
 def add_sample(
     samples: RssiSamples,
     interface_mac: str,
@@ -160,6 +176,78 @@ def format_band_warning(interface_mac: str, bssid: str, bands: list[str]) -> str
 def format_progress(index: int, total: int | None, readings: list[str]) -> str:
     position = f"{index}/{total}" if total else f"{index}"
     return f"scan {position}: {', '.join(readings) if readings else 'not seen'}"
+
+
+def format_multi_progress(
+    index: int, total: int | None, seen: int, matched: int, seconds_left: int | None
+) -> str:
+    position = f"{index}/{total}" if total else f"{index}"
+    text = f"scan {position}  seen {seen}/{matched}"
+    if seconds_left is not None:
+        text += f"  {seconds_left} s left"
+    return text
+
+
+def format_plan(
+    matched: int, bands: int, scans: int | None, interval: int, duration: int | None
+) -> str:
+    noun = "BSSID" if matched == 1 else "BSSIDs"
+    band_noun = "band" if bands == 1 else "bands"
+    if scans:
+        run = f"{scans} scans every {interval} s (about {scans * interval} s)"
+    else:
+        run = f"scans every {interval} s for {duration} s"
+    return f"matched {matched} {noun} on {bands} {band_noun}; {run}, Ctrl-C to stop"
+
+
+def steadiness_key(summary: "RssiSummary") -> tuple[int, float, float]:
+    if summary.stdev_db is None:
+        return (1, 0.0, -summary.mean_dbm)
+    return (0, summary.stdev_db, -summary.mean_dbm)
+
+
+def format_table(summaries: list["RssiSummary"]) -> str:
+    header = (
+        "SSID",
+        "AP name",
+        "BSSID",
+        "band",
+        "ch",
+        "samples",
+        "mean",
+        "stdev",
+        "CV",
+        "min",
+        "max",
+        "spread",
+    )
+    rows = [header]
+    for summary in sorted(summaries, key=steadiness_key):
+        rows.append(
+            (
+                summary.label.ssid or "-",
+                summary.label.ap_name or "-",
+                summary.bssid,
+                summary.band or "-",
+                summary.label.channel or "-",
+                f"{summary.samples}/{summary.completed_scans}",
+                f"{summary.mean_dbm:.1f}",
+                f"{summary.stdev_db:.1f}" if summary.stdev_db is not None else "-",
+                f"{summary.cv:.1f}%" if summary.cv is not None else "-",
+                str(summary.min_dbm),
+                str(summary.max_dbm),
+                str(summary.spread_db),
+            )
+        )
+    widths = [max(len(row[i]) for row in rows) for i in range(len(header))]
+    lines = ["RSSI stats (steadiest first; dBm, stdev and spread in dB)"]
+    lines.extend(
+        "  ".join(cell.ljust(width) for cell, width in zip(row, widths, strict=True)).rstrip()
+        for row in rows
+    )
+    interfaces = sorted({summary.interface_mac for summary in summaries})
+    lines.append(f"interface {', '.join(interfaces)}")
+    return "\n".join(lines)
 
 
 def format_reading(band: str, rssi_dbm: int, show_band: bool) -> str:
