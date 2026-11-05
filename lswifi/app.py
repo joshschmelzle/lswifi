@@ -59,6 +59,10 @@ def rssi_sort_key(rssi):
     return -1000 if rssi is None else rssi
 
 
+def rssi_marker_key(bss) -> tuple[str, str]:
+    return (str(bss.bssid).strip(), str(bss.channel_frequency.value))
+
+
 def export_rssi_sort_key(row):
     try:
         return rssi_sort_key(int(row["rssi"]))
@@ -571,9 +575,7 @@ class lswifi:
             getattr(getattr(client, "iface", None), "connection_name", "") or ""
         )
         markers = {
-            (str(bss.bssid).strip(), str(bss.channel_frequency.value)): getattr(
-                bss, "last_seen", None
-            )
+            rssi_marker_key(bss): getattr(bss, "last_seen", None)
             for bss in client.data or []
         }
         tracker = self.rssi_fresh.setdefault(client.mac, rssistats.Freshness())
@@ -588,14 +590,14 @@ class lswifi:
             self.rssi_every_scan_noted = True
             logging.getLogger(__name__).info(rssistats.EVERY_SCAN_NOTE)
 
-    def is_fresh_rssi_reading(self, client_mac: str, bss, band: str) -> bool:
+    def is_fresh_rssi_reading(self, client_mac: str, bss) -> bool:
         if not self.rssi_call_fresh.get(client_mac, True):
             return False
         tracker = self.rssi_fresh.get(client_mac)
         if tracker is None:
             return True
         return tracker.is_fresh_reading(
-            (str(bss.bssid).strip(), band), getattr(bss, "last_seen", None)
+            rssi_marker_key(bss), getattr(bss, "last_seen", None)
         )
 
     def print_rssi_target(self, client_mac: str, args) -> None:
@@ -1182,7 +1184,7 @@ class lswifi:
                 if args.rssi_stats:
                     bssid = str(bss.bssid).strip()
                     band = rssistats.band_of(str(bss.channel_frequency.value))
-                    fresh_reading = self.is_fresh_rssi_reading(client.mac, bss, band)
+                    fresh_reading = self.is_fresh_rssi_reading(client.mac, bss)
                 if args.rssi_stats and fresh_reading:
                     rssistats.add_sample(
                         self.rssi_samples,

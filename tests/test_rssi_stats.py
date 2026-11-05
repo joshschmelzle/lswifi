@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -1119,16 +1120,32 @@ class TestFreshReadings:
 
     def test_reading_counts_only_when_its_marker_changes(self):
         tracker = rssistats.Freshness()
-        assert tracker.is_fresh_reading(("a", "5 GHz"), 1)
-        assert not tracker.is_fresh_reading(("a", "5 GHz"), 1)
-        assert tracker.is_fresh_reading(("a", "5 GHz"), 2)
+        assert tracker.is_fresh_reading(("a", "5180"), 1)
+        assert not tracker.is_fresh_reading(("a", "5180"), 1)
+        assert tracker.is_fresh_reading(("a", "5180"), 2)
 
     def test_no_markers_counts_every_scan(self):
         tracker = rssistats.Freshness()
         assert tracker.observe({("a", "5180"): None}, 0.0)
         assert tracker.observe({("a", "5180"): None}, 1.0)
         assert not tracker.has_markers
-        assert tracker.is_fresh_reading(("a", "5 GHz"), None)
+        assert tracker.is_fresh_reading(("a", "5180"), None)
+
+    def test_seeded_marker_is_not_fresh_on_the_first_real_scan(self):
+        scanner = app.lswifi()
+        bss = WirelessNetworkBss(record(-60, last_seen=1))
+        client = SimpleNamespace(
+            mac=IFACE_MAC,
+            data=[bss],
+            real_scan=None,
+            last_scan_time_iso="2026-11-05T00:00:00.000-05:00",
+        )
+        scanner.observe_rssi_scan(client)
+        assert scanner.rssi_call_fresh[IFACE_MAC] is False
+        client.real_scan = True
+        scanner.observe_rssi_scan(client)
+        assert scanner.rssi_call_fresh[IFACE_MAC] is True
+        assert not scanner.is_fresh_rssi_reading(IFACE_MAC, bss)
 
     def test_gaps_and_span_agree_with_the_printed_clock(self):
         tracker = rssistats.Freshness()
