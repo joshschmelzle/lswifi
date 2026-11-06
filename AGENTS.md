@@ -4,6 +4,7 @@
 - No vendor, product, or chipset names in code, tests, new fixture names, commit messages, or PR text.
 - No unnecessary code comments.
 - Run the full pytest suite and mypy before pushing.
+- On macOS, run lswifi from a venv built from the code-signed python.org Python (`/Library/Frameworks/Python.framework/Versions/3.13/bin/python3 -m venv .venv`). macOS hides SSIDs, BSSIDs and information elements from unsigned interpreters, so a scan from any other Python looks redacted and can't be used to verify scan behavior.
 - Don't bump the version unless asked. A version change merged to `main` publishes a release.
 - Don't design for rare or future cases nobody asked about.
 - When reviewing, report a finding only if it would materially prevent or mislead a user doing ordinary work, or could cause data loss, a security hole, or a crash. Write the scenario first: the task, the normal steps, and what the user loses. If you can't write a concrete scenario, drop the finding.
