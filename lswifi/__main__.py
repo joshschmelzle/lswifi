@@ -61,12 +61,26 @@ def main():
             parser.error(
                 "-threshold (-t) is incompatible with --rssi-stats: this mode never filters readings, so the spread is not skewed"
             )
+        filters = [
+            flag
+            for flag, given in (
+                ("-a", args.a),
+                ("-g", args.g),
+                ("-six", args.six),
+                ("--channel-width", args.width is not None),
+            )
+            if given
+        ]
+        if filters:
+            parser.error(
+                f"{', '.join(filters)} {'is' if len(filters) == 1 else 'are'} incompatible with --rssi-stats: this mode measures every band and channel width, and each band gets its own summary"
+            )
         if args.bssid is not None and not rssistats.is_bssid_prefix(args.bssid):
             parser.error(
                 f"--rssi-stats needs a BSSID or a prefix of 1 to 6 octets for -bssid, such as 00:00:5e:00:53:01 or 00:00:5e, not {args.bssid}"
             )
         if not args.scans and not args.time:
-            args.scans = "30"
+            args.scans = "10"
         if not args.interval:
             args.interval = "2"
         args.all = True

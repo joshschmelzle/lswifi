@@ -387,14 +387,14 @@ class TestCliValidation:
         rows = summary_rows(capsys.readouterr().out)
         assert (rows["samples"], rows["mean"]) == ("2 of 2 scans", "-75.0 dBm")
 
-    def test_defaults_to_30_scans_two_seconds_apart(self, monkeypatch, capsys):
+    def test_defaults_to_10_scans_two_seconds_apart(self, monkeypatch, capsys):
         sleeps = []
         monkeypatch.setattr(app.time, "sleep", sleeps.append)
-        backend = SequenceBackend([[record(-60, connected=True)]] * 30)
+        backend = SequenceBackend([[record(-60, connected=True)]] * 10)
         assert run_main(monkeypatch, backend, ["--rssi-stats"]) == 0
-        assert backend.calls == 30
-        assert sleeps.count(2) == 29
-        assert summary_rows(capsys.readouterr().out)["samples"] == "30 of 30 scans"
+        assert backend.calls == 10
+        assert sleeps.count(2) == 9
+        assert summary_rows(capsys.readouterr().out)["samples"] == "10 of 10 scans"
 
     def test_explicit_scans_and_interval_override_the_defaults(
         self, monkeypatch, capsys
@@ -443,6 +443,26 @@ class TestCliValidation:
         assert "-threshold (-t) is incompatible with --rssi-stats" in (
             capsys.readouterr().err
         )
+        assert backend.calls == 0
+
+    @pytest.mark.parametrize(
+        ("argv", "named"),
+        [
+            (["-a"], "-a is"),
+            (["-g"], "-g is"),
+            (["-six"], "-six is"),
+            (["--channel-width", "80"], "--channel-width is"),
+            (["-a", "-six"], "-a, -six are"),
+            (["-bssid", "00:00:5e", "-six"], "-six is"),
+            (["-include", "Lab", "--channel-width", "20"], "--channel-width is"),
+        ],
+    )
+    def test_band_and_width_filters_are_rejected(
+        self, monkeypatch, capsys, argv, named
+    ):
+        backend = SequenceBackend([[record(-60, connected=True)]])
+        assert run_main(monkeypatch, backend, ["--rssi-stats", *argv]) == 2
+        assert f"{named} incompatible with --rssi-stats" in capsys.readouterr().err
         assert backend.calls == 0
 
     def test_all_is_accepted_and_left_out_of_help(self, monkeypatch, capsys):
@@ -523,28 +543,26 @@ class TestConnectedTarget:
         assert rows["range"] == "4 dB (min -64, max -60 dBm)"
         assert rows["interface"] == f"Wi-Fi ({IFACE_MAC})"
 
-    def test_band_flag_that_excludes_the_link_exits_2_after_one_scan(
-        self, capsys, caplog
-    ):
-        backend = SequenceBackend([[record(-60, connected=True)]] * 3)
-        args = parse(["--rssi-stats", "-i", "0", "-n", "3", "-six"])
-        with pytest.raises(SystemExit) as exited:
-            app.run(args, backend=backend)
-        assert exited.value.code == 2
-        assert backend.calls == 1
-        assert (
-            f"the connected BSSID on {IFACE_MAC} is on 5 GHz, which -six leaves out"
-            in caplog.text
-        )
-        assert "RSSI stats" not in capsys.readouterr().out
+    def test_connected_links_on_three_bands_each_get_a_summary(self, capsys):
+        def links(rssi):
+            return [
+                record(rssi, connected=True, frequency_mhz=2437),
+                record(rssi - 5, bssid=BSSID_B, connected=True),
+                record(rssi + 5, bssid=BSSID_C, connected=True, frequency_mhz=5975),
+            ]
 
-    def test_band_flag_that_keeps_the_link_measures_it(self, capsys):
-        backend = SequenceBackend([[record(-60, connected=True)]])
-        args = parse(["--rssi-stats", "-i", "0", "-n", "1", "-a"])
+        backend = SequenceBackend([links(-40), links(-42)])
+        args = parse(["--rssi-stats", "-i", "0", "-n", "2"])
         with pytest.raises(SystemExit) as exited:
             app.run(args, backend=backend)
         assert exited.value.code == 0
-        assert summary_rows(capsys.readouterr().out)["BSSID"] == BSSID_A
+        out = capsys.readouterr().out
+        blocks = out[out.index("RSSI stats") :].split("\n\n")
+        assert [summary_rows(block)["band"].split(",")[0] for block in blocks] == [
+            "2.4 GHz",
+            "5 GHz",
+            "6 GHz",
+        ]
 
     def test_not_connected_exits_before_scanning(self, caplog):
         backend = SequenceBackend([[record(-60)]])
@@ -673,7 +691,7 @@ class TestAppRun:
         ]
         assert band_warnings == [
             f"{IFACE_MAC} {BSSID_A} was seen on 2.4 GHz and 5 GHz. each band has "
-            "its own summary. add -a, -g or -six to measure one band"
+            "its own summary"
         ]
         stats = json.loads(path.read_text())["rssi_stats"]
         assert [(e["bssid"], e["band"], e["mean_dbm"]) for e in stats] == [
@@ -845,6 +863,33 @@ class TestRssiStatsCannotMatch:
         assert backend.calls == 1
         assert HIDDEN in caplog.text
         assert not path.exists() or "rssi_stats" not in path.read_text()
+
+    def test_hidden_bssid_mid_run_stops_and_keeps_samples(
+        self, hidden_message, tmp_path, capsys, caplog
+    ):
+        backend = HiddenBackend(
+            [[record(-60)], [record(-62)], [hidden_record()], [record(-64)]]
+        )
+        path = tmp_path / "out.json"
+        with pytest.raises(SystemExit) as exited:
+            app.run(stats_args("-n", "4", "--json", str(path)), backend=backend)
+        assert exited.value.code == 0
+        assert backend.calls == 3
+        assert HIDDEN in caplog.text
+        rows = summary_rows(capsys.readouterr().out)
+        assert (rows["samples"], rows["mean"]) == ("2 of 2 scans", "-61.0 dBm")
+        assert json.loads(path.read_text())["rssi_stats"][0]["samples"] == 2
+
+    def test_hidden_bssid_mid_run_with_time_stops(
+        self, hidden_message, monkeypatch, capsys
+    ):
+        monkeypatch.setattr(app.time, "sleep", lambda _seconds: None)
+        backend = HiddenBackend([[record(-60)], [hidden_record()], [record(-64)]])
+        with pytest.raises(SystemExit) as exited:
+            app.run(stats_args("--time", "3600"), backend=backend)
+        assert exited.value.code == 0
+        assert backend.calls == 2
+        assert summary_rows(capsys.readouterr().out)["mean"] == "-60.0 dBm"
 
     def test_connected_ap_never_seen_exits_2(self, tmp_path, caplog):
         limit = rssistats.MISS_LIMIT
@@ -1098,7 +1143,7 @@ class TestPrefixMatch:
         args = parse(["--rssi-stats", "-bssid", "00:00:5e", "-n", "2", "-i", "0"])
         with pytest.raises(SystemExit):
             app.run(args, backend=SequenceBackend(scans))
-        assert "each band has its own row." in caplog.text
+        assert "each band has its own row" in caplog.text
 
 
 class TestFreshReadings:

@@ -305,7 +305,7 @@ def format_band_warning(
     unit = "row" if table else "summary"
     return (
         f"{interface_mac} {bssid} was seen on {' and '.join(bands)}. "
-        f"each band has its own {unit}. add -a, -g or -six to measure one band"
+        f"each band has its own {unit}"
     )
 
 

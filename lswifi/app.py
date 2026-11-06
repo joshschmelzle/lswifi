@@ -99,8 +99,6 @@ class lswifi:
         self.rssi_samples: rssistats.RssiSamples = {}
         self.rssi_labels: rssistats.RssiLabels = {}
         self.rssi_readings: dict[str, list[tuple[str, int]]] = {}
-        self.rssi_band_mismatch: dict[str, str] = {}
-        self.rssi_band_warned: set[str] = set()
         self.scan_index = 0
         self.scan_total: int | None = None
         self.rssi_multi = False
@@ -110,6 +108,7 @@ class lswifi:
         self.rssi_targets_printed: set[str] = set()
         self.rssi_iface_names: dict[str, str] = {}
         self.rssi_every_scan_noted = False
+        self.rssi_stopped = False
 
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
@@ -336,6 +335,8 @@ class lswifi:
                             args,
                         )
                         loops_completed += 1
+                        if self.rssi_stopped:
+                            break
                         time.sleep(interval)
                 elif args.rssi_stats:
                     print(rssistats.format_waiting(self.rssi_multi), flush=True)
@@ -456,8 +457,12 @@ class lswifi:
             if args.rssi_stats:
                 for client in clients.values():
                     if getattr(client, "redacted", False):
-                        log.error(client.hidden_bssid_message())
-                        sys.exit(2)
+                        if not self.rssi_samples:
+                            log.error(client.hidden_bssid_message())
+                            sys.exit(2)
+                        log.warning(client.hidden_bssid_message())
+                        self.rssi_stopped = True
+                        return
             for _idx, client in clients.items():
                 if client.data is None:
                     log.warning(f"no scan data for {client.mac}")
@@ -505,8 +510,6 @@ class lswifi:
                             args,
                         )
                     log.debug(f"finish parsing information elements for {client.mac}")
-            if args.rssi_stats:
-                self.check_rssi_band_mismatch(args)
 
             ############################
             # old sync example working #
@@ -535,6 +538,8 @@ class lswifi:
             raise
 
     def rssi_done(self, clients, scans: int) -> bool:
+        if self.rssi_stopped:
+            return True
         trackers = [self.rssi_fresh.get(client.mac) for client in clients.values()]
         if self.rssi_multi:
             return all(
@@ -669,35 +674,6 @@ class lswifi:
         if len(self.rssi_readings) > 1:
             text += f" on {client_mac}"
         print(text, flush=True)
-
-    def check_rssi_band_mismatch(self, args) -> None:
-        log = logging.getLogger(__name__)
-        mismatched = {
-            mac: band
-            for mac, band in self.rssi_band_mismatch.items()
-            if not self.rssi_readings.get(mac)
-        }
-        self.rssi_band_mismatch = {}
-        mismatched = {
-            mac: band
-            for mac, band in mismatched.items()
-            if mac not in self.rssi_band_warned
-        }
-        if not mismatched:
-            return
-        flags = " ".join(
-            flag
-            for flag, given in (("-a", args.a), ("-g", args.g), ("-six", args.six))
-            if given
-        )
-        for mac, band in mismatched.items():
-            message = f"the connected BSSID on {mac} is on {band}, which {flags} leaves out. drop {flags} to measure the connected link, or add -bssid to measure another BSSID"
-            if any(self.rssi_readings.values()):
-                self.rssi_band_warned.add(mac)
-                log.warning(message)
-            else:
-                log.error(message)
-                sys.exit(2)
 
     def report_rssi_stats(self, args) -> list[rssistats.RssiSummary]:
         log = logging.getLogger(__name__)
@@ -1046,17 +1022,6 @@ class lswifi:
                         f"excluding {bss.bssid} ({bss.ssid}) because bss.rssi.value {bss.rssi.value} is < {args.sensitivity}"
                     )
                     continue
-
-                if (
-                    args.rssi_stats
-                    and not rssistats.picks_targets(args)
-                    and bss.bssid.connected
-                    and (args.a or args.g or args.six)
-                    and not self._bss_matches_band_filter(bss, args)
-                ):
-                    self.rssi_band_mismatch[client.mac] = rssistats.band_of(
-                        str(bss.channel_frequency.value)
-                    )
 
                 # handle band filters
                 if not args.a and not args.g and not args.six:

@@ -458,7 +458,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--rssi-stats",
         dest="rssi_stats",
         action="store_true",
-        help="special mode to measure signal strength mean, stdev, and range of the connected BSSID over 30 samples, or of -bssid/-include matches. keep the device still",
+        help="special mode to measure signal strength mean, stdev, and range of the connected BSSID over 10 samples, or of -bssid/-include matches. keep the device still; a run may take several minutes",
     )
     parser.add_argument(
         "--ap-names",
