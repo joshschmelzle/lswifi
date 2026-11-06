@@ -238,6 +238,7 @@ class FakeKernel:
         self.survey_error = 0
         self.wiphy_error = 0
         self.trigger_error = 0
+        self.busy_scans: list = []
         self.scan_event = nl.CMD_NEW_SCAN_RESULTS
         self.alpha2 = "US"
         self.bands = [0, 1]
@@ -345,6 +346,9 @@ class FakeKernel:
                 nl.build_error(seq, 0),
             ]
         if msg.cmd == nl.CMD_TRIGGER_SCAN:
+            if self.busy_scans:
+                self.busy_scans.pop(0)()
+                return [nl.build_error(seq, -errno.EBUSY)]
             if self.trigger_error:
                 return [nl.build_error(seq, -self.trigger_error)]
             if self.reject_scan_flags and nl.ATTR_SCAN_FLAGS in msg.attrs:
@@ -738,6 +742,48 @@ class TestScan:
         records = backend.scan(self.iface(backend))
         assert len(records) == 1
         assert "did not finish" in caplog.text
+
+    def other_scan_ends(self, kernel, cmd=nl.CMD_NEW_SCAN_RESULTS, attrs=None):
+        if attrs is None:
+            attrs = nl.attr_u32(nl.ATTR_WIPHY, 0) + nl.attr_u64(nl.ATTR_WDEV, 0x49)
+        return lambda: kernel.broadcast("scan", event(cmd, attrs))
+
+    def triggers(self, kernel):
+        return [m for m in kernel.sent if m.cmd == nl.CMD_TRIGGER_SCAN]
+
+    @pytest.mark.parametrize("cmd", [nl.CMD_NEW_SCAN_RESULTS, nl.CMD_SCAN_ABORTED])
+    def test_busy_with_a_scan_elsewhere_on_the_radio_requests_ours_after(
+        self, kernel, backend, caplog, cmd
+    ):
+        kernel.busy_scans = [self.other_scan_ends(kernel, cmd)]
+        assert len(backend.scan(self.iface(backend))) == 1
+        assert len(self.triggers(kernel)) == 2
+        assert "did not finish" not in caplog.text
+        assert "aborted" not in caplog.text
+
+    def test_busy_with_a_scan_on_this_interface_uses_its_results(
+        self, kernel, backend, caplog
+    ):
+        ours = nl.attr_u32(nl.ATTR_WIPHY, 0) + nl.attr_u32(nl.ATTR_IFINDEX, 5)
+        kernel.busy_scans = [self.other_scan_ends(kernel, attrs=ours)]
+        assert len(backend.scan(self.iface(backend))) == 1
+        assert len(self.triggers(kernel)) == 1
+        assert "did not finish" not in caplog.text
+
+    def test_busy_with_a_scan_on_another_radio_keeps_waiting(
+        self, kernel, backend, caplog
+    ):
+        elsewhere = nl.attr_u32(nl.ATTR_WIPHY, 1) + nl.attr_u64(nl.ATTR_WDEV, 0x49)
+        kernel.busy_scans = [self.other_scan_ends(kernel, attrs=elsewhere)]
+        backend.scan(self.iface(backend))
+        assert len(self.triggers(kernel)) == 1
+        assert "did not finish" in caplog.text
+
+    def test_busy_again_after_the_other_scan_waits_again(self, kernel, backend, caplog):
+        kernel.busy_scans = [self.other_scan_ends(kernel), self.other_scan_ends(kernel)]
+        assert len(backend.scan(self.iface(backend))) == 1
+        assert len(self.triggers(kernel)) == 3
+        assert "did not finish" not in caplog.text
 
     def test_aborted(self, kernel, backend, caplog):
         kernel.scan_event = nl.CMD_SCAN_ABORTED
