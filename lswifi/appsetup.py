@@ -334,6 +334,15 @@ def setup_parser() -> argparse.ArgumentParser:
             Print and add QBSS stations and utilization columns in output:
               >lswifi --qbss
 
+            Measure signal strength mean, stdev, and range of the connected AP (keep the device and AP still):
+              >lswifi --rssi-stats
+              >lswifi --rssi-stats -n 60
+
+            Measure signal strength stats of other BSSIDs by exact BSSID, BSSID prefix, or SSID:
+              >lswifi --rssi-stats -bssid 06:6D:15:88:81:59
+              >lswifi --rssi-stats -bssid 06:6D:15
+              >lswifi --rssi-stats -include Aperture_Science
+
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
 
@@ -449,7 +458,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--rssi-stats",
         dest="rssi_stats",
         action="store_true",
-        help="measure how strong one link is and how much it varies while the device and AP stay still. by default it measures the connected BSSID on the band it is connected on, prints the target (SSID, AP name when known, BSSID, band, channel, width and interface) after the first scan so you can stop with Ctrl-C, collects 30 samples, asking the OS for a scan every 2 seconds and counting a reading only when the OS really scanned and heard that BSSID again, prints one timestamped progress line per scan with the time since the previous sample instead of the table (a scan that misses the BSSID does not use up a sample), then prints a summary with the BSSID, band, samples, start and end time, the average interval between samples, mean, stdev (sample, n-1) and range (max - min, with min and max), and adds rssi_stats to the --json file. example: lswifi --rssi-stats. -n, --time and -i override the defaults. to compare antennas, adapters or placements, run once per setup and compare the summaries, for example lswifi --rssi-stats -n 60 --json antenna-a.json. -bssid measures that BSSID instead; with a static client it also takes a prefix such as an OUI (lswifi --rssi-stats -bssid 00:00:5e) and prints one table of every matching BSSID, strongest first. -include SSID picks every BSSID whose SSID contains that text (the same partial match as the normal display filter) and prints the same table; with -bssid both must match, and -exclude still drops SSIDs. example: lswifi --rssi-stats -include Lab. it matches link BSSIDs, not the MLD address. readings are kept per interface, BSSID and band; if one BSSID is seen on two bands, lswifi warns and gives each band its own summary. without -bssid or -include, a band flag (-a, -g, -six) that leaves out the connected link is an error. the signal threshold is bypassed in this mode, so weak readings are kept; -threshold (-t) is rejected. movement or roaming does not stop the run but can mean fewer samples and a wider spread",
+        help="special mode to measure signal strength mean, stdev, and range of the connected BSSID over 30 samples, or of -bssid/-include matches. keep the device still",
     )
     parser.add_argument(
         "--ap-names",
