@@ -298,9 +298,7 @@ class lswifi:
                         sessions[iface.mac] = backend.open_session(args, iface)
             except Exception as error:
                 log.error("%s", error)
-                if not sessions:
-                    log.error("no wireless interfaces found")
-                    sys.exit(-1)
+                sys.exit(-1)
             sleep(2)
 
     def list_interfaces(self, clients, args) -> None:
