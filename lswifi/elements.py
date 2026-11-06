@@ -69,6 +69,24 @@ class InformationElement:
         return f"Element ID: {self.eid}\nName: {self.name}\nLength: {self.length}\nDecoded: {self.decoded}\nBody: {self.body}\nPretty Body: {self.pbody}"
 
 
+def iter_elements(buffer):
+    """Yield (element id, length, body) for each element in an IE TLV chain.
+
+    A trailing byte with no length after it is ignored. A truncated last
+    element is yielded with the body bytes that are there, unless there are
+    none.
+    """
+    data = bytes(buffer)
+    offset = 0
+    while offset + 2 <= len(data):
+        element_id, length = data[offset], data[offset + 1]
+        body = data[offset + 2 : offset + 2 + length]
+        if length and not body:
+            return
+        yield element_id, length, body
+        offset += 2 + length
+
+
 class WirelessNetworkBss:
     def __init__(
         self,
@@ -623,173 +641,39 @@ class WirelessNetworkBss:
         """
         self.log.debug(f"Processing information elements for BSSID {self.bssid}")
         information_elements = []
-        if len(ie_buffer) == 0:
-            return information_elements
-        if isinstance(ie_buffer, (bytes, bytearray)):
-            # iterate as 1-byte bytes objects, like a ctypes c_char array
-            ie_buffer = [ie_buffer[i : i + 1] for i in range(len(ie_buffer))]
-        # init element vars
-        element_id = 0
-        element_length = 0
-        element_data = b""
-        # loop tracking vars
-        is_index_byte = True
-        is_length_byte = True
-        index = 0
-        for byte, is_last_byte in flag_last_object(ie_buffer):
-            if is_index_byte:
-                element_id = bytes_to_int(byte)
-                is_index_byte = False
-                continue
-            if is_length_byte:
-                element_length = bytes_to_int(byte)
-                self.log.debug(f"IE {element_id}: length={element_length}")
-                is_length_byte = False
-                if element_length == 0:
-                    self._append_information_elements(
-                        element_id, element_length, b"", information_elements
-                    )
-                    index = 0
-                    is_index_byte = True
-                    is_length_byte = True
-                    element_data = b""
-                    element_id = 0
-                    element_length = 0
-                continue
-            if index < element_length:
-                index += 1
-                element_data = element_data + byte
-                if is_last_byte:
-                    self.log.debug(
-                        f"IE {element_id}: appending (last byte, hex={element_data.hex()})"
-                    )
-                    self._append_information_elements(
-                        element_id, element_length, element_data, information_elements
-                    )
-            else:
-                self.log.debug(
-                    f"IE {element_id}: appending (hex={element_data.hex()}, latin1={ascii(element_data.decode('latin-1'))})"
-                )
-                self._append_information_elements(
-                    element_id, element_length, element_data, information_elements
-                )
-                # reset vars to decode next information element
-                index = 0
-                is_index_byte = True
-                is_length_byte = True
-                element_data = b""
-                element_id = 0
-                element_length = 0
-                # current byte should be next index byte
-                element_id = bytes_to_int(byte)
-                is_index_byte = False
-                continue
+        for element_id, element_length, element_data in iter_elements(ie_buffer):
+            self.log.debug(
+                f"IE {element_id}: length={element_length}, hex={element_data.hex()}"
+            )
+            self._append_information_elements(
+                element_id, element_length, element_data, information_elements
+            )
         return information_elements
 
     def decode_bytefile_ies(bytes):
-        # init element vars
         information_elements = []
-        eid = 0
-        elength = 0
-        edata = b""
-        # loop tracking vars
-        is_index_byte = True
-        is_length_byte = True
-        count = 0
-        for byte, is_last_byte in flag_last_object(bytes):
-            if is_index_byte:
-                eid = byte
-                is_index_byte = False
-                continue
-            if is_length_byte:
-                elength = byte
-                is_length_byte = False
-                if elength == 0:
-                    parsed_ie = WirelessNetworkBss._parse_information_element(
-                        None, eid, elength, b""
-                    )
+        for eid, elength, edata in iter_elements(bytes):
+            # self is None: there is no BSS to record parsed fields on
+            parsed_ie = WirelessNetworkBss._parse_information_element(
+                None, eid, elength, edata
+            )
+            str_len = f"{parsed_ie.length} bytes"
+            for count, item in enumerate(parsed_ie.decoded.split("\n")):
+                if count == 0:
                     information_elements.append(
                         InformationElement(
                             parsed_ie.eid,
                             parsed_ie.name,
-                            "0 bytes",
-                            parsed_ie.decoded,
+                            str_len,
+                            item,
                             parsed_ie.body,
                             parsed_ie.pbody,
                         )
                     )
-                    count = 0
-                    is_index_byte = True
-                    is_length_byte = True
-                    edata = b""
-                    eid = 0
-                    elength = 0
-                continue
-            if count < elength:
-                count = count + 1
-                if int_to_bytes(byte) == b"":
-                    edata = edata + b"\x00"
                 else:
-                    edata = edata + int_to_bytes(byte)
-            else:
-                # we're working with a new information element
-                # print("{} {} {}".format(eid, elength, edata))
-
-                # we're working with a new information element
-                # passing in None where we would usually pass in self.
-                parsed_ie = WirelessNetworkBss._parse_information_element(
-                    None, eid, elength, edata
-                )
-                str_len = f"{parsed_ie.length} bytes"
-                # handle pretty printing decoded strings
-                if parsed_ie:
-                    decoded_list = parsed_ie.decoded.split("\n")
-                    if len(decoded_list) > 1:
-                        for count, item in enumerate(decoded_list):
-                            if count == 0:
-                                information_elements.append(
-                                    InformationElement(
-                                        parsed_ie.eid,
-                                        parsed_ie.name,
-                                        str_len,
-                                        item,
-                                        parsed_ie.body,
-                                        parsed_ie.pbody,
-                                    )
-                                )
-                            else:
-                                information_elements.append(
-                                    InformationElement("", "", "", item, "", "")
-                                )
-                    else:
-                        information_elements.append(
-                            InformationElement(
-                                parsed_ie.eid,
-                                parsed_ie.name,
-                                str_len,
-                                parsed_ie.decoded,
-                                parsed_ie.body,
-                                parsed_ie.pbody,
-                            )
-                        )
-                # reset vars for next information element
-                count = 0
-                is_index_byte = True
-                is_length_byte = True
-                edata = b""
-                eid = 0
-                elength = 0
-                # current byte should be next index byte
-                eid = byte
-                is_index_byte = False
-                continue
-            if is_last_byte:
-                # passing in None where we would usually pass in self.
-                information_elements.append(
-                    WirelessNetworkBss._parse_information_element(
-                        None, eid, elength, edata
+                    information_elements.append(
+                        InformationElement("", "", "", item, "", "")
                     )
-                )
         return information_elements
 
     @staticmethod
