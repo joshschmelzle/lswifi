@@ -325,7 +325,7 @@ class TestExtensionElements:
         args = parse(["--json", str(path)])
         scanner = app.lswifi()
         out, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
-            Session([bss]), False, "", str(path), args
+            Session([bss]), app.ApNames.OFF, "", str(path), args
         )
         scanner.print_bss_list(
             out, length, "00:11:22:33:44:55", bssids, False, names, json_out, new, args
@@ -643,7 +643,7 @@ class TestExtensionElements:
         args = parse(["--json", str(path)])
         scanner = app.lswifi()
         out, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
-            Session(records), False, "", str(path), args
+            Session(records), app.ApNames.OFF, "", str(path), args
         )
         scanner.print_bss_list(
             out, length, "00:11:22:33:44:55", bssids, False, names, json_out, new, args
@@ -933,7 +933,7 @@ class TestHeCapabilitiesNss:
         args = parse(["--json", str(json_path), "--csv", str(csv_path)])
         scanner = app.lswifi()
         out, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
-            Session([bss]), False, str(csv_path), str(json_path), args
+            Session([bss]), app.ApNames.OFF, str(csv_path), str(json_path), args
         )
         scanner.print_bss_list(
             out,
@@ -960,6 +960,8 @@ class TestHeCapabilitiesNss:
             csv_row = next(csv.DictReader(handle))
         assert csv_row["ies_extension"] == "35/106/151"
         assert csv_row["spatial_streams"] == "4"
+
+
 def _rnr_decoded(bss):
     lines = []
     capture = False
@@ -1052,7 +1054,7 @@ class TestReducedNeighborReport:
         records = [aruba, unifi]
         scanner = app.lswifi()
         _out, rnr_results, _length, _bssids, _names, _json_out, _new = (
-            scanner.parse_bss_list(Session(records), False, "", "", args)
+            scanner.parse_bss_list(Session(records), app.ApNames.OFF, "", "", args)
         )
         assert len(rnr_results) == 4
         scanner.print_rnr_list(rnr_results, "00:11:22:33:44:55", args)
@@ -1151,7 +1153,7 @@ class TestReducedNeighborReport:
         args = parse(["--rnr", "--json", str(path)])
         scanner = app.lswifi()
         _out, rnr_results, _length, _bssids, _names, _json_out, _new = (
-            scanner.parse_bss_list(Session([bss]), False, "", str(path), args)
+            scanner.parse_bss_list(Session([bss]), app.ApNames.OFF, "", str(path), args)
         )
         scanner.print_rnr_list(rnr_results, "00:11:22:33:44:55", args)
         rows = json.loads(capsys.readouterr().out)

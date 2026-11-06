@@ -404,7 +404,7 @@ class TestBackend:
             assert bss.security_generation.out().value == "--"
             assert bss.security_generation.nonconformant == []
         _out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
-            session, False, "", str(path), args
+            session, app.ApNames.OFF, "", str(path), args
         )
         assert len(json_out) == 2
         for row in json_out:

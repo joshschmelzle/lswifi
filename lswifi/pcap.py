@@ -390,12 +390,7 @@ class PCAP:
 
         try:
             bssid_str = str(bss.bssid.value)
-            bssid_clean = (
-                bssid_str.replace(":", "")
-                .replace("-", "")
-                .replace(".", "")
-                .replace("(*)", "")
-            )
+            bssid_clean = bssid_str.replace(":", "").replace("-", "").replace(".", "")
             if len(bssid_clean) != 12:
                 self.log.error(f"Invalid BSSID format: {bssid_str}")
                 bssid_bytes = b"\xff\xff\xff\xff\xff\xff"

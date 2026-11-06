@@ -10,14 +10,13 @@ lswifi.rssistats
 Pure helpers for collecting and summarizing RSSI samples for --rssi-stats.
 """
 
-import contextlib
 import datetime
+import enum
 import json
 import math
 import os
 import re
 import statistics
-import tempfile
 from dataclasses import dataclass, field
 
 from lswifi.helpers import (
@@ -25,6 +24,7 @@ from lswifi.helpers import (
     is_six_band,
     is_two_four_band,
     strip_mac_address_format,
+    write_json,
 )
 
 RssiSamples = dict[tuple[str, str, str], list[tuple[str, int]]]
@@ -62,6 +62,13 @@ def seconds_between(start: str, end: str) -> int | None:
     return int((last - first).total_seconds())
 
 
+class Counting(enum.Enum):
+    """How a tracker tells a new reading from one the OS kept from earlier"""
+
+    MARKERS = enum.auto()
+    EVERY_SCAN = enum.auto()
+
+
 @dataclass
 class Freshness:
     scan_calls: int = 0
@@ -70,7 +77,7 @@ class Freshness:
     misses: int = 0
     miss_streak: int = 0
     idle_streak: int = 0
-    has_markers: bool = True
+    counting: Counting = Counting.MARKERS
     started: float | None = None
     last_sample_at: str = ""
     sample_gap: int | None = None
@@ -80,13 +87,11 @@ class Freshness:
     previous: dict[tuple[str, str], int] = field(default_factory=dict)
     counted: dict[tuple[str, str], int] = field(default_factory=dict)
 
-    def observe(
-        self,
-        markers: dict[tuple[str, str], int | None],
-        now: float,
-        real: bool | None = None,
-        at: str = "",
-    ) -> bool:
+    @property
+    def has_markers(self) -> bool:
+        return self.counting is Counting.MARKERS
+
+    def _call(self, now: float, at: str) -> bool:
         first = self.scan_calls == 0
         self.scan_calls += 1
         if self.started is None:
@@ -94,24 +99,40 @@ class Freshness:
             self.started_at = at
         self.last_call = now
         self.ended_at = at or self.ended_at
-        if any(marker is None for marker in markers.values()):
-            self.has_markers = False
-        known = {key: marker for key, marker in markers.items() if marker is not None}
-        changed = known != self.previous
-        self.previous = known
-        if real is not None:
-            is_real = real
-        elif not markers or not self.has_markers:
-            is_real = True
-        elif first:
-            self.counted = dict(known)
-            is_real = False
-        else:
-            is_real = changed
+        return first
+
+    def _settle(self, is_real: bool) -> bool:
         self.idle_streak = 0 if is_real else self.idle_streak + 1
         if is_real:
             self.real_scans += 1
         return is_real
+
+    def observe(
+        self,
+        markers: dict[tuple[str, str], int | None],
+        now: float,
+        real: bool | None = None,
+        at: str = "",
+    ) -> bool:
+        first = self._call(now, at)
+        if any(marker is None for marker in markers.values()):
+            self.counting = Counting.EVERY_SCAN
+        known = {key: marker for key, marker in markers.items() if marker is not None}
+        changed = known != self.previous
+        self.previous = known
+        if real is not None:
+            return self._settle(real)
+        if not markers or self.counting is Counting.EVERY_SCAN:
+            return self._settle(True)
+        if first:
+            self.counted = dict(known)
+            return self._settle(False)
+        return self._settle(changed)
+
+    def failed_call(self, now: float, at: str = "") -> None:
+        """A scan call that returned an error: no new scan, nothing heard"""
+        self._call(now, at)
+        self._settle(False)
 
     def is_fresh_reading(self, key: tuple[str, str], marker: int | None) -> bool:
         if marker is None or not self.has_markers:
@@ -630,18 +651,5 @@ def append_to_json_file(
         summary_to_json(summary, repeated.get((summary.interface_mac, summary.bssid)))
         for summary in summaries
     )
-
-    directory = os.path.dirname(os.path.abspath(path))
-    fd, tmp = tempfile.mkstemp(dir=directory, suffix=".tmp")
-    file = os.fdopen(fd, "w")
-    try:
-        json.dump(document, file, indent=indent)
-        file.close()
-        os.replace(tmp, path)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            file.close()
-        with contextlib.suppress(OSError):
-            os.remove(tmp)
-        raise
+    write_json(path, document, indent)
     return True
