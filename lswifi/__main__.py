@@ -15,6 +15,7 @@ lswifi.lswifi
 a CLI Wi-Fi scanning utility for Windows that leverages Microsofts Native Wifi wlanapi.h
 """
 
+import argparse
 import logging
 import os
 import platform
@@ -28,7 +29,7 @@ if sys.version_info < (3, 11):  # noqa: UP036
     sys.exit(-1)
 
 # app imports
-from lswifi import app, appsetup
+from lswifi import app, appsetup, rssistats
 from lswifi.backends.base import BackendError
 from lswifi.backends.factory import get_backend, needs_backend
 from lswifi.constants import APNAMEACKFILE, APNAMEJSONFILE
@@ -54,6 +55,35 @@ def main():
         return
 
     args = parser.parse_args()
+    if args.rssi_stats:
+        probe = parser.parse_args(namespace=argparse.Namespace(sensitivity=None))
+        if probe.sensitivity is not None:
+            parser.error(
+                "-threshold (-t) is incompatible with --rssi-stats: this mode never filters readings, so the spread is not skewed"
+            )
+        filters = [
+            flag
+            for flag, given in (
+                ("-a", args.a),
+                ("-g", args.g),
+                ("-six", args.six),
+                ("--channel-width", args.width is not None),
+            )
+            if given
+        ]
+        if filters:
+            parser.error(
+                f"{', '.join(filters)} {'is' if len(filters) == 1 else 'are'} incompatible with --rssi-stats: this mode measures every band and channel width, and each band gets its own summary"
+            )
+        if args.bssid is not None and not rssistats.is_bssid_prefix(args.bssid):
+            parser.error(
+                f"--rssi-stats needs a BSSID or a prefix of 1 to 6 octets for -bssid, such as 00:00:5e:00:53:01 or 00:00:5e, not {args.bssid}"
+            )
+        if not args.scans and not args.time:
+            args.scans = "10"
+        if not args.interval:
+            args.interval = "2"
+        args.all = True
     if args.exportraw and args.export_path:
         target = app.exportraw_dir(args.export_path)
         if os.path.isfile(target):

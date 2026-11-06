@@ -25,6 +25,7 @@ is told once why the other columns are blank. sudo does not change this.
 
 import json
 import logging
+import time
 from typing import Any
 
 from lswifi.backends import macos_location
@@ -176,7 +177,26 @@ def network_to_record(network, connected_bssid: str | None = None) -> BssRecord:
         connected=bool(bssid) and bssid == connected_bssid,
         ie_source=None,
         channel_width_mhz=CW_CHANNEL_WIDTH_MHZ.get(width) if width else None,
+        last_seen=scan_timestamp(network),
     )
+
+
+def scan_timestamp(network) -> int | None:
+    if not _responds(network, "scanRecord"):
+        return None
+    try:
+        record = network.scanRecord()
+        value = record.get("TIMESTAMP") if record is not None else None
+    except Exception:
+        return None
+    return int(value) if isinstance(value, int | float) else None
+
+
+REAL_SCAN_MIN_S = 1.0
+
+
+def is_real_scan(elapsed_s: float) -> bool:
+    return elapsed_s >= REAL_SCAN_MIN_S
 
 
 def is_redacted(record: BssRecord) -> bool:
@@ -437,8 +457,11 @@ class MacOSScanSession(RecordScanSession):
     async def scan(self) -> None:
         self.redacted = False
         await super().scan()
-        if self.redacted:
+        if self.redacted and not getattr(self.args, "rssi_stats", False):
             warn_location_once()
+
+    def hidden_bssid_message(self) -> str:
+        return macos_location.bssid_hidden_message()
 
 
 class MacOSBackend:
@@ -459,6 +482,7 @@ class MacOSBackend:
                 ) from error
         self.corewlan = corewlan
         self.client = corewlan.CWWiFiClient.sharedWiFiClient()
+        self.last_scan_real: bool | None = None
 
     def _native(self, iface: InterfaceInfo):
         if iface.native is not None:
@@ -489,8 +513,11 @@ class MacOSBackend:
         """Broadcast scan (nil SSID), blocking until CoreWLAN returns"""
         note_location()
         cw_iface = self._native(iface)
+        started = time.monotonic()
         networks, error = cw_iface.scanForNetworksWithSSID_error_(None, None)
+        self.last_scan_real = is_real_scan(time.monotonic() - started)
         if networks is None:
+            self.last_scan_real = False
             log.debug("scanForNetworksWithSSID failed: %s; using scan cache", error)
             networks = cw_iface.cachedScanResults()
             if networks is None:

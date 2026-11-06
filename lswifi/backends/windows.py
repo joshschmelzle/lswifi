@@ -64,6 +64,7 @@ def bss_entry_to_record(bss_entry, connected_bssid=None, include_ies=True) -> Bs
         beacon_interval_tu=bss_entry.BeaconPeriod,
         tsf=bss_entry.Timestamp,
         host_timestamp=bss_entry.HostTimestamp,
+        last_seen=bss_entry.HostTimestamp,
         capability=bss_entry.CapabilityInformation,
         ies=ies,
         phy_name=WLAN_API.DOT11_PHY_TYPE_DICT[bss_entry.dot11BssPhyType],

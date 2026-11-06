@@ -32,7 +32,7 @@ from ctypes import POINTER, cast, create_string_buffer
 from time import sleep
 
 # app imports
-from lswifi import helpers
+from lswifi import helpers, rssistats
 from lswifi.__version__ import __version__
 from lswifi.backends.base import BssRecord
 from lswifi.constants import APNAMEJSONFILE, DECORS, DECORS_END, DECORS_START
@@ -57,6 +57,10 @@ from lswifi.schemas.out import OUT_TUPLE, SubHeader
 def rssi_sort_key(rssi):
     """Sort key for RSSI; unknown (None, e.g. Linux drivers without dBm) sorts weakest"""
     return -1000 if rssi is None else rssi
+
+
+def rssi_marker_key(bss) -> tuple[str, str]:
+    return (str(bss.bssid).strip(), str(bss.channel_frequency.value))
 
 
 def export_rssi_sort_key(row):
@@ -91,6 +95,21 @@ def exportraw_dir(path: str) -> str:
 
 
 class lswifi:
+    def __init__(self) -> None:
+        self.rssi_samples: rssistats.RssiSamples = {}
+        self.rssi_labels: rssistats.RssiLabels = {}
+        self.rssi_readings: dict[str, list[tuple[str, int]]] = {}
+        self.scan_index = 0
+        self.scan_total: int | None = None
+        self.rssi_multi = False
+        self.rssi_fresh: dict[str, rssistats.Freshness] = {}
+        self.rssi_call_fresh: dict[str, bool] = {}
+        self.rssi_json_out: list = []
+        self.rssi_targets_printed: set[str] = set()
+        self.rssi_iface_names: dict[str, str] = {}
+        self.rssi_every_scan_noted = False
+        self.rssi_stopped = False
+
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
         loops_completed = 0
@@ -264,6 +283,19 @@ class lswifi:
 
             # TODO move other non-scanning functions here
 
+            if (
+                scanning
+                and args.rssi_stats
+                and not rssistats.picks_targets(args)
+                and not any(
+                    iface.state_string == "connected" for iface in iface_infos.values()
+                )
+            ):
+                log.error(
+                    "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid or -include to pick BSSIDs"
+                )
+                sys.exit(2)
+
             if scanning:
                 scans = 1
                 interval = 0.1
@@ -286,10 +318,15 @@ class lswifi:
                     csv_file_name = args.csv
                     json_file_name = args.json
 
+                self.scan_total = None if timeout > 0 else scans
+                self.rssi_multi = args.include is not None or (
+                    args.bssid is not None and not rssistats.is_full_bssid(args.bssid)
+                )
                 if timeout > 0:  # we're scanning during a given time period
                     timeout_start = time.time()
 
                     while time.time() < timeout_start + timeout:
+                        self.scan_index = loops_completed + 1
                         self.scan(
                             clients,
                             is_caching_acknowledged,
@@ -298,7 +335,23 @@ class lswifi:
                             args,
                         )
                         loops_completed += 1
+                        if self.rssi_stopped:
+                            break
                         time.sleep(interval)
+                elif args.rssi_stats:
+                    print(rssistats.format_waiting(self.rssi_multi), flush=True)
+                    while not self.rssi_done(clients, scans):
+                        if loops_completed:
+                            time.sleep(interval)
+                        self.scan_index = loops_completed + 1
+                        self.scan(
+                            clients,
+                            is_caching_acknowledged,
+                            csv_file_name,
+                            json_file_name,
+                            args,
+                        )
+                        loops_completed += 1
                 else:  # we're scanning a given number of times
                     _first = True
                     for _index in range(scans):
@@ -306,6 +359,7 @@ class lswifi:
                             _first = False
                         else:
                             time.sleep(interval)
+                        self.scan_index = loops_completed + 1
                         self.scan(
                             clients,
                             is_caching_acknowledged,
@@ -315,13 +369,33 @@ class lswifi:
                         )
                         loops_completed += 1
 
-                if loops_completed > 1:
+                if loops_completed > 1 and not args.rssi_stats:
                     log.info(f"total number of completed scans is {loops_completed}")
+
+                if args.rssi_stats:
+                    self.warn_rssi_misses()
+                    if args.json:
+                        self.write_scans_json(args.json, self.rssi_json_out, args)
+                    summaries = self.report_rssi_stats(args)
+                    if not summaries:
+                        sys.exit(2)
+                    if (
+                        args.json
+                        and summaries
+                        and rssistats.append_to_json_file(
+                            args.json, summaries, args.json_indent
+                        )
+                    ):
+                        log.info(f"exporting rssi_stats as JSON to {args.json}")
         except KeyboardInterrupt:
-            if not args.event_watcher and loops_completed > 1:
+            if not args.event_watcher and not args.rssi_stats and loops_completed > 1:
                 log.info(
                     f"total number of completed scans during this session is {loops_completed}"
                 )
+            if args.rssi_stats and not args.event_watcher:
+                if args.json:
+                    self.write_scans_json(args.json, self.rssi_json_out, args)
+                self.report_rssi_stats(args)
             log.warning("keyboard interruption detected... stopping...")
             logging.shutdown()
             with contextlib.suppress(OSError):
@@ -380,10 +454,25 @@ class lswifi:
             clients = {
                 k: clients[k] for k in sorted(clients)
             }  # sort by key (index) numerically
+            if args.rssi_stats:
+                for client in clients.values():
+                    if getattr(client, "redacted", False):
+                        if not self.rssi_samples:
+                            log.error(client.hidden_bssid_message())
+                            sys.exit(2)
+                        log.warning(client.hidden_bssid_message())
+                        self.rssi_stopped = True
+                        return
             for _idx, client in clients.items():
                 if client.data is None:
                     log.warning(f"no scan data for {client.mac}")
+                    if args.rssi_stats:
+                        self.rssi_readings[client.mac] = []
+                        self.observe_rssi_scan(client)
+                        self.report_rssi_progress(client, args)
                 else:
+                    if args.rssi_stats:
+                        self.observe_rssi_scan(client)
                     (
                         out_results,
                         rnr_results,
@@ -402,7 +491,11 @@ class lswifi:
 
                     if args.ies or args.bytes or args.export:
                         return
-                    if args.rnr:
+                    if args.rssi_stats:
+                        self.report_rssi_progress(client, args)
+                        if args.apnames and is_caching_acknowledged:
+                            self.updateAPNames(json_names, newapnames)
+                    elif args.rnr:
                         self.print_rnr_list(rnr_results, client.mac, args)
                     else:
                         self.print_bss_list(
@@ -443,6 +536,227 @@ class lswifi:
 
         except KeyboardInterrupt:
             raise
+
+    def rssi_done(self, clients, scans: int) -> bool:
+        if self.rssi_stopped:
+            return True
+        trackers = [self.rssi_fresh.get(client.mac) for client in clients.values()]
+        if self.rssi_multi:
+            return all(
+                tracker is not None
+                and (
+                    tracker.real_scans >= scans
+                    or tracker.idle_streak >= rssistats.IDLE_LIMIT
+                )
+                for tracker in trackers
+            )
+        return all(
+            tracker is not None
+            and (
+                tracker.samples >= scans
+                or tracker.miss_streak >= rssistats.MISS_LIMIT
+                or tracker.idle_streak >= rssistats.IDLE_LIMIT
+            )
+            for tracker in trackers
+        )
+
+    def warn_rssi_misses(self) -> None:
+        for mac, tracker in self.rssi_fresh.items():
+            if not self.rssi_multi and tracker.miss_streak >= rssistats.MISS_LIMIT:
+                logging.getLogger(__name__).warning(
+                    "not heard in the last %s scans on %s; stopping",
+                    rssistats.MISS_LIMIT,
+                    mac,
+                )
+            if tracker.idle_streak >= rssistats.IDLE_LIMIT:
+                logging.getLogger(__name__).warning(
+                    "the OS returned no new scan in the last %s scan calls on %s; stopping",
+                    rssistats.IDLE_LIMIT,
+                    mac,
+                )
+
+    def observe_rssi_scan(self, client) -> None:
+        self.rssi_iface_names[client.mac] = str(
+            getattr(getattr(client, "iface", None), "connection_name", "") or ""
+        )
+        markers = {
+            rssi_marker_key(bss): getattr(bss, "last_seen", None)
+            for bss in client.data or []
+        }
+        tracker = self.rssi_fresh.setdefault(client.mac, rssistats.Freshness())
+        self.rssi_call_fresh[client.mac] = tracker.observe(
+            markers,
+            time.perf_counter(),
+            getattr(client, "real_scan", None),
+            client.last_scan_time_iso
+            or datetime.datetime.now().astimezone().isoformat(timespec="milliseconds"),
+        )
+        if not tracker.has_markers and not self.rssi_every_scan_noted:
+            self.rssi_every_scan_noted = True
+            logging.getLogger(__name__).info(rssistats.EVERY_SCAN_NOTE)
+
+    def is_fresh_rssi_reading(self, client_mac: str, bss) -> bool:
+        if not self.rssi_call_fresh.get(client_mac, True):
+            return False
+        tracker = self.rssi_fresh.get(client_mac)
+        if tracker is None:
+            return True
+        return tracker.is_fresh_reading(
+            rssi_marker_key(bss), getattr(bss, "last_seen", None)
+        )
+
+    def print_rssi_target(self, client_mac: str, args) -> None:
+        if client_mac in self.rssi_targets_printed:
+            return
+        targets = sorted(key for key in self.rssi_labels if key[0] == client_mac)
+        if not targets:
+            return
+        self.rssi_targets_printed.add(client_mac)
+        duration = int(args.time) if args.time else None
+        if self.rssi_multi:
+            print(
+                rssistats.format_plan(
+                    len(targets),
+                    len({band for _mac, _bssid, band in targets}),
+                    self.scan_total,
+                    duration,
+                ),
+                flush=True,
+            )
+            return
+        for key in targets:
+            print(
+                rssistats.format_target(
+                    *key,
+                    self.rssi_labels[key],
+                    self.rssi_iface_names.get(client_mac, ""),
+                ),
+                flush=True,
+            )
+        print(rssistats.format_measuring(self.scan_total, duration), flush=True)
+
+    def report_rssi_progress(self, client, args) -> None:
+        client_mac = client.mac
+        self.print_rssi_target(client_mac, args)
+        if not self.rssi_call_fresh.get(client_mac, True):
+            return
+        tracker = self.rssi_fresh.get(client_mac, rssistats.Freshness())
+        at = tracker.ended_at
+        readings = self.rssi_readings.get(client_mac, [])
+        if self.rssi_multi:
+            matched = {key for key in self.rssi_labels if key[0] == client_mac}
+            tracker.record(True)
+            text = rssistats.format_multi_progress(
+                at,
+                tracker.real_scans,
+                self.scan_total,
+                len(readings),
+                len(matched),
+                tracker.sample_gap,
+            )
+        else:
+            tracker.record(bool(readings))
+            show_band = len({band for band, _rssi in readings}) > 1
+            text = (
+                rssistats.format_progress(
+                    at,
+                    tracker.samples,
+                    self.scan_total,
+                    [
+                        rssistats.format_reading(band, rssi, show_band)
+                        for band, rssi in readings
+                    ],
+                    tracker.sample_gap,
+                )
+                if readings
+                else rssistats.format_miss(at, tracker.misses)
+            )
+        if len(self.rssi_readings) > 1:
+            text += f" on {client_mac}"
+        print(text, flush=True)
+
+    def report_rssi_stats(self, args) -> list[rssistats.RssiSummary]:
+        log = logging.getLogger(__name__)
+        fresh = {mac: tracker.real_scans for mac, tracker in self.rssi_fresh.items()}
+        completed_scans = max(fresh.values(), default=0)
+        for mac, tracker in self.rssi_fresh.items():
+            log.debug(
+                "%s: %s real scans from %s scan calls",
+                mac,
+                tracker.real_scans,
+                tracker.scan_calls,
+            )
+        summaries = rssistats.summarize(
+            self.rssi_samples,
+            fresh,
+            self.rssi_labels,
+            {
+                mac: rssistats.RunInfo(
+                    scan_calls=tracker.scan_calls,
+                    duration_s=tracker.duration_s(),
+                    every_scan=not tracker.has_markers,
+                    started_at=tracker.started_at,
+                    ended_at=tracker.ended_at,
+                )
+                for mac, tracker in self.rssi_fresh.items()
+            },
+        )
+        if not summaries and rssistats.picks_targets(args):
+            log.error(
+                "no samples matched %s in %s scans",
+                rssistats.describe_targets(args),
+                completed_scans,
+            )
+        elif not summaries:
+            log.error("the connected BSSID was not seen in %s scans", completed_scans)
+        else:
+            repeated = rssistats.repeated_bssids(summaries)
+            print(
+                (
+                    rssistats.format_table(summaries, self.rssi_iface_names)
+                    if self.rssi_multi
+                    else "\n\n".join(
+                        rssistats.format_summary(summary) for summary in summaries
+                    )
+                ),
+                flush=True,
+            )
+            warned = set()
+            for summary in summaries:
+                key = (summary.interface_mac, summary.bssid)
+                if key in repeated and key not in warned:
+                    warned.add(key)
+                    log.warning(
+                        rssistats.format_band_warning(
+                            *key, repeated[key], self.rssi_multi
+                        )
+                    )
+        return summaries
+
+    def write_scans_json(self, json_file_name, json_out, args) -> None:
+        log = logging.getLogger(__name__)
+        if not json_out:
+            log.info(f"nothing found to export as JSON to {json_file_name}")
+            return
+        log.info(f"exporting scans as JSON to {json_file_name}")
+        if os.path.exists(json_file_name):
+            with open(json_file_name) as file:
+                file_data = json.load(file)
+            flat = []
+            for item in file_data["scan_data"]:
+                if isinstance(item, list):
+                    flat.extend(item)
+                else:
+                    flat.append(item)
+            flat.extend(json_out)
+            file_data["scan_data"] = flat
+        else:
+            file_data = {
+                "lswifi": {"version": f"lswifi {__version__}"},
+                "scan_data": json_out,
+            }
+        with open(json_file_name, "w") as file:
+            json.dump(file_data, file, indent=args.json_indent)
 
     def displayEthers(self):
         log = logging.getLogger(__name__)
@@ -652,6 +966,8 @@ class lswifi:
         newapnames = {}
 
         bss_len = len(wireless_network_bss_list)
+        if args.rssi_stats:
+            self.rssi_readings[client.mac] = []
 
         if args.bytes:
             for _index, bss in enumerate(wireless_network_bss_list):
@@ -778,9 +1094,18 @@ class lswifi:
                     input_mac = strip_mac_address_format(args.bssid)
                     bss_mac = strip_mac_address_format(str(bss.bssid))
                 # print("{} {}".format(input_mac, bss_mac))
-                if args.bssid is None or input_mac in bss_mac:
-                    pass
-                else:
+                if args.bssid is not None and not (
+                    rssistats.matches_bssid(args.bssid, str(bss.bssid))
+                    if args.rssi_stats
+                    else input_mac in bss_mac
+                ):
+                    continue
+
+                if (
+                    args.rssi_stats
+                    and not rssistats.picks_targets(args)
+                    and not bss.bssid.connected
+                ):
                     continue
 
                 if args.rnr:
@@ -820,6 +1145,37 @@ class lswifi:
                         newapnames[scan_bssid] = (
                             scan_apname  # then 1) update new hash table with new AP name
                         )
+
+                if args.rssi_stats:
+                    bssid = str(bss.bssid).strip()
+                    band = rssistats.band_of(str(bss.channel_frequency.value))
+                    fresh_reading = self.is_fresh_rssi_reading(client.mac, bss)
+                if args.rssi_stats and fresh_reading:
+                    rssistats.add_sample(
+                        self.rssi_samples,
+                        client.mac,
+                        bssid,
+                        band,
+                        client.last_scan_time_iso,
+                        bss.rssi.value,
+                    )
+                if args.rssi_stats:
+                    rssistats.add_label(
+                        self.rssi_labels,
+                        client.mac,
+                        bssid,
+                        band,
+                        rssistats.RssiLabel(
+                            ssid=str(bss.ssid).strip(),
+                            ap_name=remove_control_chars(
+                                str(bss.apname.value or "")
+                            ).strip(),
+                            channel=str(bss.channel_number.value or "").strip(),
+                            channel_width=str(bss.channel_width.value or "").strip(),
+                        ),
+                    )
+                    if fresh_reading and isinstance(bss.rssi.value, int):
+                        self.rssi_readings[client.mac].append((band, bss.rssi.value))
 
                 # bss.element.out() contains a tuple with the following values
                 #   1. value, 2. header and alignment (left, center, right), 3. subheader
@@ -969,30 +1325,10 @@ class lswifi:
             csv_out = sorted(csv_out, key=export_rssi_sort_key, reverse=True)
             json_out = sorted(json_out, key=export_rssi_sort_key, reverse=True)
 
-        if args.json:
-            json_file_exists = os.path.exists(json_file_name)
-            if not json_out:
-                log.info(f"nothing found to export as JSON to {json_file_name}")
-            else:
-                log.info(f"exporting scans as JSON to {json_file_name}")
-                if json_file_exists:
-                    with open(json_file_name) as file:
-                        file_data = json.load(file)
-                    flat = []
-                    for item in file_data["scan_data"]:
-                        if isinstance(item, list):
-                            flat.extend(item)
-                        else:
-                            flat.append(item)
-                    flat.extend(json_out)
-                    file_data["scan_data"] = flat
-                else:
-                    file_data = {
-                        "lswifi": {"version": f"lswifi {__version__}"},
-                        "scan_data": json_out,
-                    }
-                with open(json_file_name, "w") as file:
-                    json.dump(file_data, file, indent=args.json_indent)
+        if args.json and args.rssi_stats:
+            self.rssi_json_out.extend(json_out)
+        elif args.json:
+            self.write_scans_json(json_file_name, json_out, args)
 
         if args.csv:
             has_headings = False

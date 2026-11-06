@@ -48,6 +48,11 @@ class TestCompletions:
         assert "--debug" not in result
         assert "--version" in result
 
+    def test_rssi_stats_completion(self):
+        """--rssi-stats is offered as a completion."""
+        result = completions.get_completions([], "--rs")
+        assert "--rssi-stats" in result
+
     def test_filter_completions_no_prefix(self):
         """No prefix returns all options."""
         options = ["--foo", "--bar", "--baz"]

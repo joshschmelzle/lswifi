@@ -65,6 +65,7 @@ class BssRecord:
     # width the OS reports, for when there are no IEs; IE-derived width wins
     channel_width_mhz: int | None = None
     seen_ms_ago: int | None = None
+    last_seen: int | None = None
 
 
 @dataclass
@@ -124,6 +125,7 @@ class RecordScanSession:
         self.scan_finished = False
         self.last_scan_time_iso = ""
         self.last_scan_time_epoch = 0.0
+        self.real_scan: bool | None = None
 
     async def scan(self) -> None:
         from lswifi.elements import WirelessNetworkBss
@@ -131,6 +133,7 @@ class RecordScanSession:
         self.scan_finished = False
         is_bytes_arg = bool(getattr(self.args, "bytes", None))
         records = self.backend.scan(self.iface)
+        self.real_scan = getattr(self.backend, "last_scan_real", None)
         parsed = []
         for record in records:
             try:

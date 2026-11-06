@@ -334,6 +334,15 @@ def setup_parser() -> argparse.ArgumentParser:
             Print and add QBSS stations and utilization columns in output:
               >lswifi --qbss
 
+            Measure signal strength mean, stdev, and range of the connected AP (keep the device and AP still):
+              >lswifi --rssi-stats
+              >lswifi --rssi-stats -n 60
+
+            Measure signal strength stats of other BSSIDs by exact BSSID, BSSID prefix, or SSID:
+              >lswifi --rssi-stats -bssid 06:6D:15:88:81:59
+              >lswifi --rssi-stats -bssid 06:6D:15
+              >lswifi --rssi-stats -include Aperture_Science
+
             Watch event notifications (inc. roaming, connection, scanning, etc.):
               >lswifi --watchevents
 
@@ -444,6 +453,12 @@ def setup_parser() -> argparse.ArgumentParser:
         dest="bssid",
         metavar="BSSID",
         help="display filter to limit results by specified BSSIDs (partial matching supported)",
+    )
+    parser.add_argument(
+        "--rssi-stats",
+        dest="rssi_stats",
+        action="store_true",
+        help="special mode to measure signal strength mean, stdev, and range of the connected BSSID over 10 samples, or of -bssid/-include matches. keep the device still; a run may take several minutes",
     )
     parser.add_argument(
         "--ap-names",

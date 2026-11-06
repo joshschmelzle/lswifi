@@ -117,6 +117,7 @@ class WirelessNetworkBss:
             self.has_country_code = bss.in_reg_domain
             self.timestamp = bss.tsf
             self.host_timestamp = bss.host_timestamp
+            self.last_seen = bss.last_seen
             self.uptime = OutObject(
                 value=self.convert_timestamp_to_uptime(self.timestamp),
                 header="AP UPTIME",
