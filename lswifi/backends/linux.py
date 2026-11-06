@@ -24,6 +24,7 @@ Nothing here opens a socket at import time, so the mapping functions are
 tested on any OS with synthetic netlink attributes.
 """
 
+import enum
 import errno
 import json
 import logging
@@ -60,6 +61,19 @@ PERMISSION_HELP = (
 STATION_IFTYPES = (nl.IFTYPE_STATION, nl.IFTYPE_P2P_CLIENT)
 
 _permission_warned = False
+
+
+class ScanStart(enum.Enum):
+    REQUESTED = enum.auto()
+    BUSY = enum.auto()
+    DENIED = enum.auto()
+
+
+class ScanEnd(enum.Enum):
+    RESULTS = enum.auto()
+    ABORTED = enum.auto()
+    OTHER_FINISHED = enum.auto()
+    TIMED_OUT = enum.auto()
 
 
 def drop_queued_events(events: nl.GenericNetlink) -> None:
@@ -1464,67 +1478,107 @@ class LinuxBackend:
                     "%s is associated; the scan may briefly pause its traffic",
                     native.name,
                 )
-            drop_queued_events(events)
-            busy = False
-            try:
-                try:
-                    self._request_scan(native, request, colocated)
-                except nl.NetlinkError as error:
-                    if not colocated or error.errno not in (
-                        errno.EINVAL,
-                        errno.EOPNOTSUPP,
-                    ):
-                        raise
-                    log.debug(
-                        "%s: colocated 6 GHz scan flag rejected (%s); retrying without",
-                        native.name,
-                        error.strerror,
-                    )
-                    if native.wiphy is not None:
-                        self._six_ghz[native.wiphy] = False
-                    self._request_scan(native, request, False)
-            except nl.NetlinkError as error:
-                if error.errno in (errno.EPERM, errno.EACCES):
-                    warn_permission_once()
-                    return False
-                if error.errno == errno.ENETDOWN:
-                    raise BackendError(
-                        f"{native.name} is down; bring it up first "
-                        f"(sudo ip link set {native.name} up)"
-                    ) from error
-                if error.errno != errno.EBUSY:
-                    raise BackendError(
-                        f"scan request failed on {native.name}: {error.strerror}"
-                    ) from error
-                # another scan (wpa_supplicant, NetworkManager) is running;
-                # its results are just as fresh
-                log.debug("%s: scan already in progress; waiting for it", native.name)
-                busy = True
-            # results count only after the kernel announces our scan started
-            # (TRIGGER_SCAN event); a busy scan has already started
-            started = busy
             deadline = time.monotonic() + self.scan_timeout
-            while (remaining := deadline - time.monotonic()) > 0:
-                for message in events.events(remaining):
-                    if nl.get_uint(message.attrs, nl.ATTR_IFINDEX) != native.ifindex:
-                        continue
-                    if message.cmd == nl.CMD_TRIGGER_SCAN:
-                        started = True
-                    if not started:
-                        continue
-                    if message.cmd == nl.CMD_NEW_SCAN_RESULTS:
-                        return True
-                    if message.cmd == nl.CMD_SCAN_ABORTED:
-                        log.warning(
-                            "scan aborted on %s; showing cached results", native.name
-                        )
-                        return False
-        log.warning(
-            "scan on %s did not finish within %gs; showing cached results",
-            native.name,
-            self.scan_timeout,
-        )
+            drop_queued_events(events)
+            start = self._start_scan(native, request, colocated)
+            while start is not ScanStart.DENIED:
+                end = self._wait_for_scan(events, native, deadline, start)
+                if end is ScanEnd.RESULTS:
+                    return True
+                if end is ScanEnd.ABORTED:
+                    log.warning(
+                        "scan aborted on %s; showing cached results", native.name
+                    )
+                    return False
+                if end is ScanEnd.TIMED_OUT:
+                    log.warning(
+                        "scan on %s did not finish within %gs; showing cached results",
+                        native.name,
+                        self.scan_timeout,
+                    )
+                    return False
+                log.debug(
+                    "%s: the other scan on this radio finished; requesting ours",
+                    native.name,
+                )
+                start = self._start_scan(native, request, colocated)
         return False
+
+    def _start_scan(
+        self, native: LinuxInterface, request: bytes, colocated: bool
+    ) -> ScanStart:
+        try:
+            try:
+                self._request_scan(native, request, colocated)
+            except nl.NetlinkError as error:
+                if not colocated or error.errno not in (errno.EINVAL, errno.EOPNOTSUPP):
+                    raise
+                log.debug(
+                    "%s: colocated 6 GHz scan flag rejected (%s); retrying without",
+                    native.name,
+                    error.strerror,
+                )
+                if native.wiphy is not None:
+                    self._six_ghz[native.wiphy] = False
+                self._request_scan(native, request, False)
+        except nl.NetlinkError as error:
+            if error.errno in (errno.EPERM, errno.EACCES):
+                warn_permission_once()
+                return ScanStart.DENIED
+            if error.errno == errno.ENETDOWN:
+                raise BackendError(
+                    f"{native.name} is down; bring it up first "
+                    f"(sudo ip link set {native.name} up)"
+                ) from error
+            if error.errno != errno.EBUSY:
+                raise BackendError(
+                    f"scan request failed on {native.name}: {error.strerror}"
+                ) from error
+            log.debug("%s: the radio is already scanning; waiting for it", native.name)
+            return ScanStart.BUSY
+        return ScanStart.REQUESTED
+
+    def _wait_for_scan(
+        self,
+        events: nl.GenericNetlink,
+        native: LinuxInterface,
+        deadline: float,
+        start: ScanStart,
+    ) -> ScanEnd:
+        """REQUESTED waits for our scan's events, which only count once the
+        kernel announces our scan started. BUSY waits for whichever scan is
+        running on this radio: on this interface (wpa_supplicant,
+        NetworkManager) its results are ours too; on another one, such as a
+        P2P device that scans a few channels, ours still has to run."""
+        started = start is ScanStart.BUSY
+        while (remaining := deadline - time.monotonic()) > 0:
+            for message in events.events(remaining):
+                ours = nl.get_uint(message.attrs, nl.ATTR_IFINDEX) == native.ifindex
+                same_radio = (
+                    native.wiphy is not None
+                    and nl.get_uint(message.attrs, nl.ATTR_WIPHY) == native.wiphy
+                )
+                if not ours:
+                    if (
+                        start is ScanStart.BUSY
+                        and same_radio
+                        and message.cmd
+                        in (
+                            nl.CMD_NEW_SCAN_RESULTS,
+                            nl.CMD_SCAN_ABORTED,
+                        )
+                    ):
+                        return ScanEnd.OTHER_FINISHED
+                    continue
+                if message.cmd == nl.CMD_TRIGGER_SCAN:
+                    started = True
+                if not started:
+                    continue
+                if message.cmd == nl.CMD_NEW_SCAN_RESULTS:
+                    return ScanEnd.RESULTS
+                if message.cmd == nl.CMD_SCAN_ABORTED:
+                    return ScanEnd.ABORTED
+        return ScanEnd.TIMED_OUT
 
     def _request_scan(
         self, native: LinuxInterface, request: bytes, colocated: bool
