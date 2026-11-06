@@ -2911,9 +2911,7 @@ class TestEvents:
         assert associated.record["ssid"] == "wlanpiwlanpi"
         assert [item["id"] for item in associated.record["links"]] == [0, 2]
 
-        watcher.handle(
-            self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1))
-        )
+        watcher.handle(self.msg(nl.CMD_DISCONNECT, nl.attr_u16(nl.ATTR_REASON_CODE, 1)))
         hidden = (
             "bssid",
             "ssid",
@@ -3580,7 +3578,7 @@ class TestUnknownSignal:
             ["-t", "-60", "--json", str(tmp_path / "out.json")]
         )
         out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
-            Session(), False, "", args.json, args
+            Session(), app.ApNames.OFF, "", args.json, args
         )
         assert {row["bssid"] for row in json_out} == {
             "02:00:00:00:00:31",

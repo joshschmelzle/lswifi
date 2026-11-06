@@ -1174,15 +1174,7 @@ def _state(native: LinuxInterface, up: bool | None) -> str:
 
 
 class LinuxScanSession(RecordScanSession):
-    async def scan(self) -> None:
-        try:
-            await super().scan()
-        except BackendError as error:
-            # the app runs sessions in worker threads and drops exceptions;
-            # say what went wrong instead of only "no scan data"
-            log.error("%s", error)
-            self.data = None
-            self.scan_finished = True
+    pass
 
 
 class LinuxBackend:

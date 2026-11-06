@@ -319,7 +319,7 @@ class TestParseBssListSampling:
         scanner = app.lswifi()
         args = stats_args()
         session = self._session([record(-60, connected=True)])
-        scanner.parse_bss_list(session, False, "", "", args)
+        scanner.parse_bss_list(session, app.ApNames.OFF, "", "", args)
         assert (IFACE_MAC, BSSID_A, "5 GHz") in scanner.rssi_samples
         assert (IFACE_MAC, f"{BSSID_A}(*)", "5 GHz") not in scanner.rssi_samples
 
@@ -327,27 +327,27 @@ class TestParseBssListSampling:
         scanner = app.lswifi()
         args = stats_args()
         session = self._session([record(None)])
-        scanner.parse_bss_list(session, False, "", "", args)
+        scanner.parse_bss_list(session, app.ApNames.OFF, "", "", args)
         assert scanner.rssi_samples == {}
 
     def test_without_rssi_stats_store_stays_empty(self):
         scanner = app.lswifi()
         args = parse(["-bssid", BSSID_A, "-all"])
         session = self._session([record(-60)])
-        scanner.parse_bss_list(session, False, "", "", args)
+        scanner.parse_bss_list(session, app.ApNames.OFF, "", "", args)
         assert scanner.rssi_samples == {}
 
     def test_bssid_matches_exactly_and_ignores_case(self):
         scanner = app.lswifi()
         args = parse(["-bssid", BSSID_A.upper(), "-all", "--rssi-stats"])
         records = [record(-60, bssid=BSSID_A), record(-62, bssid="00:00:5e:00:53:011")]
-        scanner.parse_bss_list(self._session(records), False, "", "", args)
+        scanner.parse_bss_list(self._session(records), app.ApNames.OFF, "", "", args)
         assert set(scanner.rssi_samples) == {(IFACE_MAC, BSSID_A, "5 GHz")}
 
     def test_label_keeps_channel_and_width(self):
         scanner = app.lswifi()
         session = self._session([record(-60, connected=True)])
-        scanner.parse_bss_list(session, False, "", "", stats_args())
+        scanner.parse_bss_list(session, app.ApNames.OFF, "", "", stats_args())
         label = scanner.rssi_labels[(IFACE_MAC, BSSID_A, "5 GHz")]
         assert (label.ssid, label.channel, label.channel_width) == (
             "ExampleNet",

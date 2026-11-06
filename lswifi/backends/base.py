@@ -126,13 +126,23 @@ class RecordScanSession:
         self.last_scan_time_iso = ""
         self.last_scan_time_epoch = 0.0
         self.real_scan: bool | None = None
+        self.failed = False
 
     async def scan(self) -> None:
         from lswifi.elements import WirelessNetworkBss
 
         self.scan_finished = False
+        self.failed = False
         is_bytes_arg = bool(getattr(self.args, "bytes", None))
-        records = self.backend.scan(self.iface)
+        try:
+            records = self.backend.scan(self.iface)
+        except BackendError as error:
+            log.error("%s", error)
+            self.data = None
+            self.real_scan = None
+            self.failed = True
+            self.scan_finished = True
+            return
         self.real_scan = getattr(self.backend, "last_scan_real", None)
         parsed = []
         for record in records:

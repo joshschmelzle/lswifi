@@ -30,3 +30,7 @@ class BSSID(OutObject):
         self.connected = connected
         self.header = Header(kwargs.get("header", ""), align=kwargs.get("align"))
         self.subheader = SubHeader(kwargs.get("subheader", ""))
+
+    def out(self):
+        text = f"{self}(*)" if self.connected else str(self)
+        return OUT_TUPLE(text, self.header, self.subheader)

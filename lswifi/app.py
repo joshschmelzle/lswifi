@@ -21,6 +21,7 @@ import concurrent.futures
 import contextlib
 import csv
 import datetime
+import enum
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ import sys
 import time
 import traceback
 from ctypes import POINTER, cast, create_string_buffer
+from dataclasses import dataclass
 from time import sleep
 
 # app imports
@@ -57,6 +59,10 @@ from lswifi.schemas.out import OUT_TUPLE, SubHeader
 def rssi_sort_key(rssi):
     """Sort key for RSSI; unknown (None, e.g. Linux drivers without dBm) sorts weakest"""
     return -1000 if rssi is None else rssi
+
+
+def now_iso() -> str:
+    return datetime.datetime.now().astimezone().isoformat(timespec="milliseconds")
 
 
 def rssi_marker_key(bss) -> tuple[str, str]:
@@ -94,12 +100,97 @@ def exportraw_dir(path: str) -> str:
     return target
 
 
+class RunMode(enum.Enum):
+    DECODE_RAW = enum.auto()
+    DECODE_PCAP = enum.auto()
+    WATCH = enum.auto()
+    LIST_INTERFACES = enum.auto()
+    APPEND_ETHERS = enum.auto()
+    DISPLAY_ETHERS = enum.auto()
+    INTERFACE_INFO = enum.auto()
+    SCAN = enum.auto()
+
+
+def run_mode(args) -> RunMode:
+    if args.decoderaw:
+        return RunMode.DECODE_RAW
+    if args.decode:
+        return RunMode.DECODE_PCAP
+    if args.event_watcher:
+        return RunMode.WATCH
+    if args.list_interfaces:
+        return RunMode.LIST_INTERFACES
+    if args.append:
+        return RunMode.APPEND_ETHERS
+    if args.display_ethers:
+        return RunMode.DISPLAY_ETHERS
+    if (
+        args.get_interface_info
+        or args.get_current_ap
+        or args.get_current_channel
+        or args.supported
+    ):
+        return RunMode.INTERFACE_INFO
+    return RunMode.SCAN
+
+
+class ApNames(enum.Enum):
+    """Where the AP NAME column comes from, if there is one"""
+
+    OFF = enum.auto()
+    ETHERS = enum.auto()
+    CACHE = enum.auto()
+
+
+def ap_names_mode(args, acknowledged: bool) -> ApNames:
+    if args.ethers:
+        return ApNames.ETHERS
+    if args.apnames and acknowledged:
+        return ApNames.CACHE
+    return ApNames.OFF
+
+
+class RssiStage(enum.Enum):
+    COLLECTING = enum.auto()
+    SCANS_WRITTEN = enum.auto()
+    REPORTED = enum.auto()
+
+
+@dataclass(frozen=True)
+class ScanPlan:
+    scans: int = 1
+    interval: float = 0.1
+    duration: int = 0
+
+    @property
+    def timed(self) -> bool:
+        return self.duration > 0
+
+    @classmethod
+    def from_args(cls, args) -> "ScanPlan":
+        log = logging.getLogger(__name__)
+        plan = cls(
+            scans=int(args.scans) if args.scans else 1,
+            interval=int(args.interval) if args.interval else 0.1,
+            duration=int(args.time) if args.time else 0,
+        )
+        if args.interval:
+            log.debug(f"interval between scans is {plan.interval}")
+        if args.scans:
+            log.debug(f"number of scans requested is {plan.scans}")
+        if args.time:
+            log.debug(
+                f"duration of time for recurring scans is {plan.duration} seconds"
+            )
+        return plan
+
+
 class lswifi:
     def __init__(self) -> None:
         self.rssi_samples: rssistats.RssiSamples = {}
         self.rssi_labels: rssistats.RssiLabels = {}
         self.rssi_readings: dict[str, list[tuple[str, int]]] = {}
-        self.scan_index = 0
+        self.scans_completed = 0
         self.scan_total: int | None = None
         self.rssi_multi = False
         self.rssi_fresh: dict[str, rssistats.Freshness] = {}
@@ -109,31 +200,26 @@ class lswifi:
         self.rssi_iface_names: dict[str, str] = {}
         self.rssi_every_scan_noted = False
         self.rssi_stopped = False
+        self.rssi_stage = RssiStage.COLLECTING
 
     def run(self, args, **kwargs):
         log = logging.getLogger(__name__)
-        loops_completed = 0
-        is_caching_acknowledged = False
-
-        if kwargs is not None:
-            for key, value in kwargs.items():
-                if args.apnames and "stored" in key:
-                    log.debug(
-                        f"has user provided ack for caching AP names on their local machine? {'Yes' if value else 'No'}"
-                    )
-                    if value:
-                        is_caching_acknowledged = value
-
-        watching_events = True
+        mode = run_mode(args)
+        acknowledged = bool(args.apnames and kwargs.get("storedack"))
+        if args.apnames:
+            log.debug(
+                f"has user provided ack for caching AP names on their local machine? {'Yes' if acknowledged else 'No'}"
+            )
+        ap_names = ap_names_mode(args, acknowledged)
         try:
             # Decoding a capture does not need a local adapter. Do it before
             # WlanOpenHandle, which fails when the WLAN service is stopped.
-            if args.decoderaw:
+            if mode is RunMode.DECODE_RAW:
                 self.decode_bytefile(args)
                 sys.exit(0)
 
-            if args.decode:
-                self.decode_pcap_file(args)
+            if mode is RunMode.DECODE_PCAP:
+                self.decode_pcap_file(args, ap_names)
                 sys.exit(0)
 
             backend = kwargs.get("backend")
@@ -142,37 +228,13 @@ class lswifi:
 
                 backend = get_backend()
 
+            if mode is RunMode.WATCH:
+                self.watch_events(backend, args)
+                sys.exit(0)
+
             iface_infos = {}
             clients = {}
             try:
-                if args.event_watcher:
-                    if not backend.supports_events:
-                        log.error(
-                            "--watchevents is unsupported on %s",
-                            getattr(backend, "platform_name", backend.name),
-                        )
-                        sys.exit(-1)
-                    if args.json:
-                        from lswifi.appsetup import BOOT_TIME
-
-                        # --watchevents --json is NDJSON on stdout, no file
-                        if args.json != f"lswifi_{BOOT_TIME}.json":
-                            log.warning(
-                                "--watchevents --json writes events to stdout; "
-                                "ignoring %s (redirect stdout to save them)",
-                                args.json,
-                            )
-                    if hasattr(backend, "watch_events"):
-                        # macOS: blocks on a run loop until Ctrl-C
-                        backend.watch_events(args)
-                        sys.exit(0)
-                    while watching_events:
-                        for iface in backend.list_interfaces():
-                            if "disabled" not in iface.mac and iface.mac not in clients:
-                                client = backend.open_session(args, iface)
-                                clients[iface.mac] = client
-                        sleep(2)
-
                 for index, iface in enumerate(backend.list_interfaces()):
                     iface_infos[index] = iface
                     clients[index] = backend.open_session(args, iface)
@@ -183,219 +245,19 @@ class lswifi:
                 log.error("no wireless interfaces found")
                 sys.exit(-1)
 
-            if args.list_interfaces:
-                if args.json:
-                    interfaces = []
-                    for _index, client in clients.items():
-                        interfaces.append(
-                            {
-                                "connection_name": client.iface.connection_name,
-                                "description": client.iface.description,
-                                "guid": (
-                                    client.iface.guid_string.replace("{", "")
-                                    .replace("}", "")
-                                    .lower()
-                                    or None
-                                ),
-                                "mac": client.iface.mac,
-                                "state": client.iface.state_string,
-                            }
-                        )
-                    print(
-                        json.dumps({"interfaces": interfaces}, indent=args.json_indent)
-                    )
-                else:
-                    print(f"There are {len(clients)} interfaces on this system:")
-                    for _index, client in clients.items():
-                        guid = (
-                            client.iface.guid_string.replace("{", "")
-                            .replace("}", "")
-                            .lower()
-                        )
-                        lines = (
-                            f"    Connection Name: {client.iface.connection_name}\n"
-                            f"    Description: {client.iface.description}\n"
-                        )
-                        if guid:
-                            lines += f"    GUID: {guid}\n"
-                        lines += (
-                            f"    MAC: {client.iface.mac}\n"
-                            f"    State: {client.iface.state_string}\n"
-                        )
-                        print(lines)
-                sys.exit(0)
-
-            if args.append:
+            if mode is RunMode.LIST_INTERFACES:
+                self.list_interfaces(clients, args)
+            elif mode is RunMode.APPEND_ETHERS:
                 self.appendEthers(args.append)
-                sys.exit(0)
-
-            if args.display_ethers:
+            elif mode is RunMode.DISPLAY_ETHERS:
                 self.displayEthers()
-                sys.exit(0)
-
-            scanning = True
-            explicit_json = None
-            if getattr(args, "json", None):
-                from lswifi.appsetup import BOOT_TIME
-
-                if args.json != f"lswifi_{BOOT_TIME}.json":
-                    explicit_json = args.json
-            json_documents = []
-
-            # for _index, interface in interfaces.items():
-            #     if (
-            #         args.get_interface_info
-            #         or args.get_current_ap
-            #         or args.get_current_channel
-            #         or args.supported
-            #     ):
-            #         scanning = False
-            #         print(get_interface_info(args, interface))
-            for _index in clients:
-                if (
-                    args.get_interface_info
-                    or args.get_current_ap
-                    or args.get_current_channel
-                    or args.supported
-                ):
-                    scanning = False
-                    text = backend.interface_info(args, iface_infos[_index])
-                    parsed = None
-                    if args.json and (
-                        args.get_interface_info
-                        or args.get_current_ap
-                        or args.get_current_channel
-                    ):
-                        with contextlib.suppress(json.JSONDecodeError):
-                            parsed = json.loads(text)
-                    if parsed is None:
-                        print(text)
-                    else:
-                        json_documents.append(parsed)
-
-            if json_documents:
-                body = json_documents[0] if len(json_documents) == 1 else json_documents
-                print(json.dumps(body, indent=args.json_indent))
-                if explicit_json:
-                    log.info(f"exporting interface info as JSON to {explicit_json}")
-                    with open(explicit_json, "w") as file:
-                        json.dump(body, file, indent=args.json_indent)
-
-            # TODO move other non-scanning functions here
-
-            if (
-                scanning
-                and args.rssi_stats
-                and not rssistats.picks_targets(args)
-                and not any(
-                    iface.state_string == "connected" for iface in iface_infos.values()
-                )
-            ):
-                log.error(
-                    "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid or -include to pick BSSIDs"
-                )
-                sys.exit(2)
-
-            if scanning:
-                scans = 1
-                interval = 0.1
-                timeout = 0
-                if args.interval:
-                    interval = int(args.interval)
-                    log.debug(f"interval between scans is {interval}")
-                if args.scans:
-                    scans = int(args.scans)
-                    log.debug(f"number of scans requested is {scans}")
-                if args.time:
-                    timeout = int(args.time)
-                    log.debug(
-                        f"duration of time for recurring scans is {timeout} seconds"
-                    )
-
-                csv_file_name = ""
-                json_file_name = ""
-                if args.csv or args.json:
-                    csv_file_name = args.csv
-                    json_file_name = args.json
-
-                self.scan_total = None if timeout > 0 else scans
-                self.rssi_multi = args.include is not None or (
-                    args.bssid is not None and not rssistats.is_full_bssid(args.bssid)
-                )
-                if timeout > 0:  # we're scanning during a given time period
-                    timeout_start = time.time()
-
-                    while time.time() < timeout_start + timeout:
-                        self.scan_index = loops_completed + 1
-                        self.scan(
-                            clients,
-                            is_caching_acknowledged,
-                            csv_file_name,
-                            json_file_name,
-                            args,
-                        )
-                        loops_completed += 1
-                        if self.rssi_stopped:
-                            break
-                        time.sleep(interval)
-                elif args.rssi_stats:
-                    print(rssistats.format_waiting(self.rssi_multi), flush=True)
-                    while not self.rssi_done(clients, scans):
-                        if loops_completed:
-                            time.sleep(interval)
-                        self.scan_index = loops_completed + 1
-                        self.scan(
-                            clients,
-                            is_caching_acknowledged,
-                            csv_file_name,
-                            json_file_name,
-                            args,
-                        )
-                        loops_completed += 1
-                else:  # we're scanning a given number of times
-                    _first = True
-                    for _index in range(scans):
-                        if _first:
-                            _first = False
-                        else:
-                            time.sleep(interval)
-                        self.scan_index = loops_completed + 1
-                        self.scan(
-                            clients,
-                            is_caching_acknowledged,
-                            csv_file_name,
-                            json_file_name,
-                            args,
-                        )
-                        loops_completed += 1
-
-                if loops_completed > 1 and not args.rssi_stats:
-                    log.info(f"total number of completed scans is {loops_completed}")
-
-                if args.rssi_stats:
-                    self.warn_rssi_misses()
-                    if args.json:
-                        self.write_scans_json(args.json, self.rssi_json_out, args)
-                    summaries = self.report_rssi_stats(args)
-                    if not summaries:
-                        sys.exit(2)
-                    if (
-                        args.json
-                        and summaries
-                        and rssistats.append_to_json_file(
-                            args.json, summaries, args.json_indent
-                        )
-                    ):
-                        log.info(f"exporting rssi_stats as JSON to {args.json}")
+            elif mode is RunMode.INTERFACE_INFO:
+                self.interface_info(backend, iface_infos, args)
+            else:
+                self.run_scans(clients, iface_infos, ap_names, args)
         except KeyboardInterrupt:
-            if not args.event_watcher and not args.rssi_stats and loops_completed > 1:
-                log.info(
-                    f"total number of completed scans during this session is {loops_completed}"
-                )
-            if args.rssi_stats and not args.event_watcher:
-                if args.json:
-                    self.write_scans_json(args.json, self.rssi_json_out, args)
-                self.report_rssi_stats(args)
+            if mode is RunMode.SCAN:
+                self.report_interrupted_scans(args)
             log.warning("keyboard interruption detected... stopping...")
             logging.shutdown()
             with contextlib.suppress(OSError):
@@ -406,20 +268,199 @@ class lswifi:
 
         sys.exit(0)
 
-    def scan(
-        self, clients, is_caching_acknowledged, csv_file_name, json_file_name, args
-    ):
+    def watch_events(self, backend, args) -> None:
+        log = logging.getLogger(__name__)
+        if not backend.supports_events:
+            log.error(
+                "--watchevents is unsupported on %s",
+                getattr(backend, "platform_name", backend.name),
+            )
+            sys.exit(-1)
+        if args.json:
+            from lswifi.appsetup import BOOT_TIME
+
+            # --watchevents --json is NDJSON on stdout, no file
+            if args.json != f"lswifi_{BOOT_TIME}.json":
+                log.warning(
+                    "--watchevents --json writes events to stdout; "
+                    "ignoring %s (redirect stdout to save them)",
+                    args.json,
+                )
+        if hasattr(backend, "watch_events"):
+            # macOS and Linux: blocks until Ctrl-C
+            backend.watch_events(args)
+            return
+        sessions = {}
+        while True:
+            try:
+                for iface in backend.list_interfaces():
+                    if "disabled" not in iface.mac and iface.mac not in sessions:
+                        sessions[iface.mac] = backend.open_session(args, iface)
+            except Exception as error:
+                log.error("%s", error)
+                if not sessions:
+                    log.error("no wireless interfaces found")
+                    sys.exit(-1)
+            sleep(2)
+
+    def list_interfaces(self, clients, args) -> None:
+        if args.json:
+            interfaces = []
+            for _index, client in clients.items():
+                interfaces.append(
+                    {
+                        "connection_name": client.iface.connection_name,
+                        "description": client.iface.description,
+                        "guid": (
+                            client.iface.guid_string.replace("{", "")
+                            .replace("}", "")
+                            .lower()
+                            or None
+                        ),
+                        "mac": client.iface.mac,
+                        "state": client.iface.state_string,
+                    }
+                )
+            print(json.dumps({"interfaces": interfaces}, indent=args.json_indent))
+            return
+        print(f"There are {len(clients)} interfaces on this system:")
+        for _index, client in clients.items():
+            guid = client.iface.guid_string.replace("{", "").replace("}", "").lower()
+            lines = (
+                f"    Connection Name: {client.iface.connection_name}\n"
+                f"    Description: {client.iface.description}\n"
+            )
+            if guid:
+                lines += f"    GUID: {guid}\n"
+            lines += (
+                f"    MAC: {client.iface.mac}\n    State: {client.iface.state_string}\n"
+            )
+            print(lines)
+
+    def interface_info(self, backend, iface_infos, args) -> None:
+        log = logging.getLogger(__name__)
+        explicit_json = None
+        if getattr(args, "json", None):
+            from lswifi.appsetup import BOOT_TIME
+
+            if args.json != f"lswifi_{BOOT_TIME}.json":
+                explicit_json = args.json
+        json_documents = []
+        for iface in iface_infos.values():
+            text = backend.interface_info(args, iface)
+            parsed = None
+            if args.json and (
+                args.get_interface_info
+                or args.get_current_ap
+                or args.get_current_channel
+            ):
+                with contextlib.suppress(json.JSONDecodeError):
+                    parsed = json.loads(text)
+            if parsed is None:
+                print(text)
+            else:
+                json_documents.append(parsed)
+
+        if json_documents:
+            body = json_documents[0] if len(json_documents) == 1 else json_documents
+            print(json.dumps(body, indent=args.json_indent))
+            if explicit_json:
+                log.info(f"exporting interface info as JSON to {explicit_json}")
+                helpers.write_json(explicit_json, body, args.json_indent)
+
+    def run_scans(self, clients, iface_infos, ap_names, args) -> None:
+        log = logging.getLogger(__name__)
+        if (
+            args.rssi_stats
+            and not rssistats.picks_targets(args)
+            and not any(
+                iface.state_string == "connected" for iface in iface_infos.values()
+            )
+        ):
+            log.error(
+                "--rssi-stats measures the connected BSSID, but no Wi-Fi interface is connected. connect to Wi-Fi, or add -bssid or -include to pick BSSIDs"
+            )
+            sys.exit(2)
+
+        plan = ScanPlan.from_args(args)
+        csv_file_name = ""
+        json_file_name = ""
+        if args.csv or args.json:
+            csv_file_name = args.csv
+            json_file_name = args.json
+
+        self.scan_total = None if plan.timed else plan.scans
+        self.rssi_multi = args.include is not None or (
+            args.bssid is not None and not rssistats.is_full_bssid(args.bssid)
+        )
+        if args.rssi_stats:
+            print(rssistats.format_waiting(self.rssi_multi), flush=True)
+
+        started = time.time()
+        while self.keep_scanning(plan, started, clients, args):
+            if self.scans_completed and not plan.timed:
+                time.sleep(plan.interval)
+            self.scan(clients, ap_names, csv_file_name, json_file_name, args)
+            self.scans_completed += 1
+            if plan.timed and not self.rssi_stopped:
+                time.sleep(plan.interval)
+
+        if not args.rssi_stats:
+            if self.scans_completed > 1:
+                log.info(f"total number of completed scans is {self.scans_completed}")
+            return
+
+        if not plan.timed:
+            self.warn_rssi_limits()
+        summaries = self.finish_rssi_run(args)
+        if not summaries:
+            sys.exit(2)
+        if args.json and rssistats.append_to_json_file(
+            args.json, summaries, args.json_indent
+        ):
+            log.info(f"exporting rssi_stats as JSON to {args.json}")
+
+    def keep_scanning(self, plan, started: float, clients, args) -> bool:
+        if self.rssi_stopped:
+            return False
+        if plan.timed:
+            return time.time() < started + plan.duration
+        if args.rssi_stats:
+            return not self.rssi_done(clients, plan.scans)
+        return self.scans_completed < plan.scans
+
+    def report_interrupted_scans(self, args) -> None:
+        if not args.rssi_stats:
+            if self.scans_completed > 1:
+                logging.getLogger(__name__).info(
+                    f"total number of completed scans during this session is {self.scans_completed}"
+                )
+            return
+        if self.scans_completed:
+            self.finish_rssi_run(args)
+
+    def finish_rssi_run(self, args) -> list[rssistats.RssiSummary]:
+        if self.rssi_stage is RssiStage.REPORTED:
+            return []
+        if self.rssi_stage is RssiStage.COLLECTING:
+            if args.json:
+                self.write_scans_json(args.json, self.rssi_json_out, args)
+            self.rssi_stage = RssiStage.SCANS_WRITTEN
+        summaries = self.report_rssi_stats(args)
+        self.rssi_stage = RssiStage.REPORTED
+        return summaries
+
+    def scan(self, clients, ap_names, csv_file_name, json_file_name, args):
         """
         async func to perform a scan
         """
         log = logging.getLogger(__name__)
         try:
-            background_tasks = set()
             iface_count = len(clients)
             if iface_count > 1:
                 log.info(f"starting scans on {iface_count} interfaces")
 
-            async def scanfunc(index, client):
+            async def scanfunc(client):
                 log.debug(
                     f"initializing scan on {client.iface.description} {client.iface.guid_string}"
                 )
@@ -427,33 +468,39 @@ class lswifi:
                 log.debug(
                     f"initialized scan on {client.iface.description} {client.iface.guid_string}"
                 )
-                try:
-                    while not client.scan_finished:
-                        time.sleep(0.1)
-                except Exception:
-                    raise
-                clients[index] = client
+                while not client.scan_finished:
+                    time.sleep(0.1)
 
-            for _index, client in clients.items():
-                task = scanfunc(_index, client)
-                background_tasks.add(task)
-                log.debug(f"added background task for {client}")
-
-            if len(clients.items()) > 0:
+            failed = set()
+            if clients:
                 executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=len(clients.items())
+                    max_workers=len(clients)
                 )
-                pending = {
-                    executor.submit(asyncio.run, task) for task in background_tasks
+                futures = {
+                    executor.submit(asyncio.run, scanfunc(client)): index
+                    for index, client in clients.items()
                 }
+                pending = set(futures)
                 try:
                     while pending:
                         _, pending = concurrent.futures.wait(pending, timeout=0.5)
                 finally:
                     executor.shutdown(wait=not pending, cancel_futures=True)
+                for future, index in futures.items():
+                    error = future.exception()
+                    if error is not None:
+                        log.error("scan failed on %s: %s", clients[index].mac, error)
+                        failed.add(index)
             clients = {
                 k: clients[k] for k in sorted(clients)
             }  # sort by key (index) numerically
+            failed |= {
+                index
+                for index, client in clients.items()
+                if getattr(client, "failed", False)
+            }
+            for index in failed:
+                clients[index].data = None
             if args.rssi_stats:
                 for client in clients.values():
                     if getattr(client, "redacted", False):
@@ -463,8 +510,13 @@ class lswifi:
                         log.warning(client.hidden_bssid_message())
                         self.rssi_stopped = True
                         return
-            for _idx, client in clients.items():
-                if client.data is None:
+            for index, client in clients.items():
+                if index in failed:
+                    if args.rssi_stats:
+                        self.rssi_fresh.setdefault(
+                            client.mac, rssistats.Freshness()
+                        ).failed_call(time.perf_counter(), now_iso())
+                elif client.data is None:
                     log.warning(f"no scan data for {client.mac}")
                     if args.rssi_stats:
                         self.rssi_readings[client.mac] = []
@@ -483,7 +535,7 @@ class lswifi:
                         newapnames,
                     ) = self.parse_bss_list(
                         client,
-                        is_caching_acknowledged,
+                        ap_names,
                         csv_file_name,
                         json_file_name,
                         args,
@@ -493,7 +545,7 @@ class lswifi:
                         return
                     if args.rssi_stats:
                         self.report_rssi_progress(client, args)
-                        if args.apnames and is_caching_acknowledged:
+                        if ap_names is ApNames.CACHE:
                             self.updateAPNames(json_names, newapnames)
                     elif args.rnr:
                         self.print_rnr_list(rnr_results, client.mac, args)
@@ -503,7 +555,7 @@ class lswifi:
                             bss_len,
                             client.mac,
                             bssid_list,
-                            is_caching_acknowledged,
+                            ap_names is ApNames.CACHE,
                             json_names,
                             json_out,
                             newapnames,
@@ -538,8 +590,6 @@ class lswifi:
             raise
 
     def rssi_done(self, clients, scans: int) -> bool:
-        if self.rssi_stopped:
-            return True
         trackers = [self.rssi_fresh.get(client.mac) for client in clients.values()]
         if self.rssi_multi:
             return all(
@@ -560,7 +610,7 @@ class lswifi:
             for tracker in trackers
         )
 
-    def warn_rssi_misses(self) -> None:
+    def warn_rssi_limits(self) -> None:
         for mac, tracker in self.rssi_fresh.items():
             if not self.rssi_multi and tracker.miss_streak >= rssistats.MISS_LIMIT:
                 logging.getLogger(__name__).warning(
@@ -588,8 +638,7 @@ class lswifi:
             markers,
             time.perf_counter(),
             getattr(client, "real_scan", None),
-            client.last_scan_time_iso
-            or datetime.datetime.now().astimezone().isoformat(timespec="milliseconds"),
+            client.last_scan_time_iso or now_iso(),
         )
         if not tracker.has_markers and not self.rssi_every_scan_noted:
             self.rssi_every_scan_noted = True
@@ -755,8 +804,7 @@ class lswifi:
                 "lswifi": {"version": f"lswifi {__version__}"},
                 "scan_data": json_out,
             }
-        with open(json_file_name, "w") as file:
-            json.dump(file_data, file, indent=args.json_indent)
+        helpers.write_json(json_file_name, file_data, args.json_indent)
 
     def displayEthers(self):
         log = logging.getLogger(__name__)
@@ -830,8 +878,17 @@ class lswifi:
         ethers = {}
         if os.path.isfile(file):
             with open(file) as infile:
-                for line in infile:
-                    mac, name = line.split(" ", 1)
+                for number, line in enumerate(infile, start=1):
+                    mac, _, name = line.strip().partition(" ")
+                    if not mac:
+                        continue
+                    if not name.strip():
+                        logging.getLogger(__name__).warning(
+                            "skipping %s line %s: expected a BSSID and an AP name",
+                            file,
+                            number,
+                        )
+                        continue
                     ethers[mac] = name.strip()
 
         return ethers
@@ -891,9 +948,7 @@ class lswifi:
         else:
             log.debug("<updateAPNames> nothing to update")
 
-    def parse_bss_list(
-        self, client, is_caching_acknowledged, csv_file_name, json_file_name, args
-    ):
+    def parse_bss_list(self, client, ap_names, csv_file_name, json_file_name, args):
         rnr_results = []
         out_results = []
         bssid_list = []
@@ -905,12 +960,12 @@ class lswifi:
         log = logging.getLogger(__name__)
         show_uptime = helpers.uptime_available()
 
-        if args.ethers:
+        if ap_names is ApNames.ETHERS:
             ethers = self.loadEthers()
 
         json_names = {}
 
-        if is_caching_acknowledged:
+        if ap_names is ApNames.CACHE:
             json_names = self.loadAPNames()
 
         exportpath = None
@@ -1119,10 +1174,10 @@ class lswifi:
                 # this is a list to check for dup bssids (may be expected for some APs which share same BSSID on 2.4 and 5 GHz radios - Cisco for example)
                 bssid_list.append(str(bss.bssid))
 
-                if args.ethers:
+                if ap_names is ApNames.ETHERS:
                     if bss.bssid.value in ethers:
                         bss.apname.value = ethers[bss.bssid.value]
-                elif args.apnames and is_caching_acknowledged:
+                elif ap_names is ApNames.CACHE:
                     scan_bssid = bss.bssid.value
                     scan_apname = remove_control_chars(bss.apname.value)
 
@@ -1179,10 +1234,6 @@ class lswifi:
 
                 # bss.element.out() contains a tuple with the following values
                 #   1. value, 2. header and alignment (left, center, right), 3. subheader
-
-                if bss.bssid.connected and not args.json and not args.csv:
-                    # if "(*)" not in bss.bssid.value:
-                    bss.bssid.value += "(*)"
 
                 if args.json:
                     json_out.append(
@@ -1298,7 +1349,7 @@ class lswifi:
                     out_results[-1].append(bss.stations.out())
                     out_results[-1].append(bss.utilization.out())
 
-                if (args.apnames or args.ethers) and is_caching_acknowledged:
+                if ap_names is not ApNames.OFF:
                     out_results[-1].append(bss.apname.out())
 
         rnr_results = sorted(
@@ -1363,7 +1414,7 @@ class lswifi:
             for bss in wireless_network_bss_list:
                 if (
                     args.export != "all"
-                    and str(bss.bssid).lower().replace("(*)", "") != args.export.lower()
+                    and str(bss.bssid).lower() != args.export.lower()
                 ):
                     continue
 
@@ -1431,8 +1482,7 @@ class lswifi:
 
         if args.exportraw:
             for index, bss in enumerate(wireless_network_bss_list):
-                wlanapi_bss = str(bss.bssid).lower()
-                clean_wlanapi_bss = wlanapi_bss.replace("(*)", "")
+                clean_wlanapi_bss = str(bss.bssid).lower()
                 if args.exportraw != "all":
                     user_bss = args.exportraw
                     if clean_wlanapi_bss != user_bss:
@@ -1528,9 +1578,11 @@ class lswifi:
 
         return True
 
-    def decode_pcap_file(self, args):
+    def decode_pcap_file(self, args, ap_names=None):
         """Parse scan results from a pcap/pcapng file"""
         log = logging.getLogger(__name__)
+        if ap_names is None:
+            ap_names = ap_names_mode(args, acknowledged=False)
 
         if not os.path.isfile(args.decode):
             print(f"{args.decode} file does not exist on file system... exiting...")
@@ -1707,7 +1759,7 @@ class lswifi:
                     newapnames,
                 ) = self.parse_bss_list(
                     client,
-                    args.apnames,
+                    ap_names,
                     args.csv if hasattr(args, "csv") else "",
                     args.json if hasattr(args, "json") else "",
                     args,
@@ -1809,7 +1861,7 @@ class lswifi:
         bss_len,
         client_mac,
         bssid_list,
-        is_caching_acknowledged,
+        update_cache,
         json_names,
         json_out,
         newapnames,
@@ -1905,7 +1957,7 @@ class lswifi:
             log.warning(duplicates)
             log.warning("***BSSIDS WITH DUPLICATE MACs***")
 
-        if args.apnames and is_caching_acknowledged:
+        if update_cache:
             self.updateAPNames(json_names, newapnames)
 
     def decode_bytefile(self, args):

@@ -110,7 +110,7 @@ def json_rows(records, tmp_path, extra=()):
     args = parse(["--json", str(tmp_path / "out.json"), *extra])
     data = [WirelessNetworkBss(r) for r in records]
     _out, _rnr, _len, _bssids, _names, json_out, _new = app.lswifi().parse_bss_list(
-        Session(data), False, "", args.json, args
+        Session(data), app.ApNames.OFF, "", args.json, args
     )
     return json_out
 

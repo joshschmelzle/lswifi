@@ -23,7 +23,7 @@ def test_two_scans_keep_scan_data_flat(tmp_path):
     for timestamp in (first, second):
         session = Session([WirelessNetworkBss(record)])
         session.last_scan_time_iso = timestamp
-        scanner.parse_bss_list(session, False, "", str(path), args)
+        scanner.parse_bss_list(session, app.ApNames.OFF, "", str(path), args)
 
     document = json.loads(path.read_text())
     assert document["lswifi"] == {"version": f"lswifi {__version__}"}
@@ -48,7 +48,7 @@ def test_json_append_flattens_legacy_nesting_and_truncates(tmp_path):
     args = parse(["-all", "--json", str(path)])
     record = BssRecord(**ARUBA, connected=True, ie_source="beacon")
     session = Session([WirelessNetworkBss(record)])
-    app.lswifi().parse_bss_list(session, False, "", str(path), args)
+    app.lswifi().parse_bss_list(session, app.ApNames.OFF, "", str(path), args)
 
     text = path.read_text()
     document = json.loads(text)
@@ -88,7 +88,7 @@ def test_uptime_sorts_by_elapsed_time_and_keeps_unknown(tmp_path, monkeypatch):
     path = tmp_path / "uptime.json"
     args = parse(["-all", "--uptime", "--json", str(path)])
     out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
-        Session(rows), False, "", str(path), args
+        Session(rows), app.ApNames.OFF, "", str(path), args
     )
     expected = [
         "02d 2:00:00",
@@ -137,7 +137,7 @@ def test_uptime_hidden_off_windows(tmp_path, monkeypatch):
     )
     scanner = app.lswifi()
     out, *_rest, json_out, _new = scanner.parse_bss_list(
-        Session([short, long]), False, str(csv_path), str(json_path), args
+        Session([short, long]), app.ApNames.OFF, str(csv_path), str(json_path), args
     )
     assert [col.header.value for col in out[0] if "UPTIME" in col.header.value] == []
     assert [row["uptime"] for row in json_out] == [None, None]
@@ -188,7 +188,7 @@ def test_export_width_20_excludes_320(tmp_path, caplog):
     session.iface = type("Iface", (), {"description": "Fake Adapter"})()
     session.last_scan_time_epoch = 1_700_000_000.0
     caplog.set_level(logging.INFO)
-    app.lswifi().parse_bss_list(session, False, "", "", args)
+    app.lswifi().parse_bss_list(session, app.ApNames.OFF, "", "", args)
     assert "Exported 1 networks" in caplog.text
 
 
@@ -206,7 +206,7 @@ def test_export_width_skips_80_plus_80(tmp_path, caplog):
         session = Session([bss])
         session.iface = type("Iface", (), {"description": "Fake Adapter"})()
         session.last_scan_time_epoch = 1_700_000_000.0
-        app.lswifi().parse_bss_list(session, False, "", "", args)
+        app.lswifi().parse_bss_list(session, app.ApNames.OFF, "", "", args)
         assert not path.exists()
     assert "Exported" not in caplog.text
     assert "Error exporting" not in caplog.text
@@ -218,7 +218,7 @@ def _raw_export(tmp_path, monkeypatch, argv):
         ssid=b"ExampleNet", bssid="02:00:00:00:00:21", frequency_mhz=5180, ies=b""
     )
     session = Session([WirelessNetworkBss(record)])
-    app.lswifi().parse_bss_list(session, False, "", "", parse(argv))
+    app.lswifi().parse_bss_list(session, app.ApNames.OFF, "", "", parse(argv))
     return sorted(
         p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*") if p.is_file()
     )
@@ -286,7 +286,7 @@ def _two_bss_export(tmp_path, argv):
     ]
     session = Session([WirelessNetworkBss(record) for record in records])
     app.lswifi().parse_bss_list(
-        session, False, "", "", parse([*argv, "-path", str(tmp_path)])
+        session, app.ApNames.OFF, "", "", parse([*argv, "-path", str(tmp_path)])
     )
     return sorted(p.name for p in tmp_path.iterdir())
 
