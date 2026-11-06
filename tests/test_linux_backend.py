@@ -3624,7 +3624,7 @@ class TestUnknownSignal:
             ["-t", "-60", "--json", str(tmp_path / "out.json")]
         )
         out, *_rest, json_out, _new = app.lswifi().parse_bss_list(
-            Session(), False, "", args.json, args
+            Session(), app.ApNames.OFF, "", args.json, args
         )
         assert {row["bssid"] for row in json_out} == {
             "02:00:00:00:00:31",

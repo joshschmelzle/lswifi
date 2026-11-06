@@ -15,12 +15,15 @@ lswifi.helpers
 Provides helper functions that are consumed internally.
 """
 
+import contextlib
 import itertools
 import json
 import os
 import random
 import re
+import stat
 import sys
+import tempfile
 from base64 import b64encode
 
 from lswifi.__version__ import __title__
@@ -48,6 +51,28 @@ def format_mbps(rate) -> str:
     text = f"{float(rate):.1f}"
     whole, frac = text.split(".", 1)
     return whole if frac == "0" else text
+
+
+def write_json(path: str, document, indent: int | None) -> None:
+    """Write document to path. An existing file is replaced only once the new
+    content is fully written, so a failure or Ctrl-C leaves it intact."""
+    if not os.path.exists(path):
+        with open(path, "w") as file:
+            json.dump(document, file, indent=indent)
+        return
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+    fd, tmp = tempfile.mkstemp(
+        dir=os.path.dirname(os.path.abspath(path)), suffix=".tmp"
+    )
+    try:
+        with os.fdopen(fd, "w") as file:
+            json.dump(document, file, indent=indent)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+        raise
 
 
 def escape_control_chars(text: str) -> str:

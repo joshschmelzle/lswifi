@@ -75,6 +75,20 @@ def main():
             parser.error(
                 f"{', '.join(filters)} {'is' if len(filters) == 1 else 'are'} incompatible with --rssi-stats: this mode measures every band and channel width, and each band gets its own summary"
             )
+        outputs = [
+            flag
+            for flag, given in (
+                ("-ies", args.ies is not None),
+                ("--bytes", args.bytes is not None),
+                ("-export", args.export is not None),
+                ("-exportraw", args.exportraw is not None),
+            )
+            if given
+        ]
+        if outputs:
+            parser.error(
+                f"{', '.join(outputs)} {'is' if len(outputs) == 1 else 'are'} incompatible with --rssi-stats: run them without --rssi-stats"
+            )
         if args.bssid is not None and not rssistats.is_bssid_prefix(args.bssid):
             parser.error(
                 f"--rssi-stats needs a BSSID or a prefix of 1 to 6 octets for -bssid, such as 00:00:5e:00:53:01 or 00:00:5e, not {args.bssid}"
@@ -164,6 +178,12 @@ def user_ack_apnames_disclaimer():
         except KeyboardInterrupt:
             print("\n\nDetected KeyboardInterrupt... Exiting...")
             sys.exit(-1)
+        except EOFError:
+            print()
+            logger.warning(
+                "no answer to the AP name caching prompt (input is not interactive); AP name caching stays off. run lswifi --ap-names once in a terminal to enable it"
+            )
+            return False
         if "y" in text.lower()[:1]:
             with open(ack, "w"):
                 pass  # we only need a placeholder file

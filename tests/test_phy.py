@@ -222,7 +222,7 @@ def _exported(record, tmp_path):
     csv_path = tmp_path / "out.csv"
     args = parse(["-all", "--json", str(json_path), "--csv", str(csv_path)])
     out, _rnr, _length, _bssids, _names, json_out, _new = app.lswifi().parse_bss_list(
-        Session([bss]), False, str(csv_path), str(json_path), args
+        Session([bss]), app.ApNames.OFF, str(csv_path), str(json_path), args
     )
     table = next(cell.value for cell in out[0] if str(cell.header) == "PHY")
     with csv_path.open(newline="") as handle:
@@ -289,7 +289,7 @@ class TestPhyFromIes:
         )
         assert str(bss.phy_type) == "n"
         args = parse(["-ies", bssid])
-        app.lswifi().parse_bss_list(Session([bss]), False, "", "", args)
+        app.lswifi().parse_bss_list(Session([bss]), app.ApNames.OFF, "", "", args)
         output = capsys.readouterr().out
         assert any(
             "191" in line and "VHT Capabilities" in line for line in output.splitlines()
