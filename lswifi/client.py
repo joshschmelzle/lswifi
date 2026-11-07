@@ -1011,18 +1011,7 @@ class Client:
 
                 # if the list is updated, grab the results
                 if str(wlan_event).strip() == "scan_list_refresh":
-                    self.log.debug(f"({self.mac}), start get_bss_list...")
-                    self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
-                    self.scan_finished = True
-                    now = datetime.datetime.now()
-                    nowutc = now.now(datetime.UTC)
-                    self.last_scan_time_epoch = now.timestamp()
-                    self.last_scan_time_epoch_utc = nowutc.timestamp()
-                    self.last_scan_time_iso = now.astimezone().isoformat(
-                        timespec="milliseconds"
-                    )
-                    self.last_scan_time_utc = nowutc
-                    self.log.debug(f"({self.mac}), finish get_bss_list...")
+                    self.finish_scan()
 
                 # if str(wlan_event).strip() == "network_available":
                 #    pass
@@ -1066,7 +1055,18 @@ class Client:
         self.log.info(
             f"timeout interval ({self.timeout_interval} seconds) for {self.mac} exceeded..."
         )
+        self.finish_scan()
+
+    def finish_scan(self) -> None:
+        """Fetch the results and stamp them, then mark the scan finished:
+        the app reads data and the timestamp as soon as scan_finished flips"""
         self.log.debug(f"({self.mac}), start get_bss_list...")
         self.data = self.get_bss_list(self.iface, bytes=self.args.bytes)
-        self.log.debug(f"({self.mac}), finish get_bss_list...")
+        now = datetime.datetime.now()
+        nowutc = now.now(datetime.UTC)
+        self.last_scan_time_epoch = now.timestamp()
+        self.last_scan_time_epoch_utc = nowutc.timestamp()
+        self.last_scan_time_iso = now.astimezone().isoformat(timespec="milliseconds")
+        self.last_scan_time_utc = nowutc
         self.scan_finished = True
+        self.log.debug(f"({self.mac}), finish get_bss_list...")

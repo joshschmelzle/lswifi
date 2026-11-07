@@ -1,9 +1,11 @@
 """--watchevents --json (NDJSON) for both backends; fakes only, any OS."""
 
 import datetime
+import errno
 import io
 import json
 import logging
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -240,6 +242,28 @@ class TestHelper:
         writer.write(event_record(MAC, "a"))
         writer.write(event_record(MAC, "b"))
         assert writer.closed
+
+    @pytest.mark.parametrize(
+        ("code", "logged"), [(errno.EINVAL, False), (errno.ENOSPC, True)]
+    )
+    def test_writer_stops_once_on_a_failed_flush(self, caplog, code, logged):
+        class Failing:
+            flushes = 0
+
+            def write(self, _):
+                pass
+
+            def flush(self):
+                self.flushes += 1
+                raise OSError(code, os.strerror(code))
+
+        stream = Failing()
+        writer = NDJSONWriter(stream)
+        writer.write(event_record(MAC, "a"))
+        writer.write(event_record(MAC, "b"))
+        assert writer.closed
+        assert stream.flushes == 1
+        assert ("stopped writing" in caplog.text) is logged
 
 
 # ---------------------------------------------------------------- macOS

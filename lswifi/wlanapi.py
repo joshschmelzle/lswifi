@@ -1450,16 +1450,12 @@ class WLAN:
     def get_connected_bssid(interface):
         """Returns the BSSID of the current connection"""
         query_result = WLAN.query_interface(interface, "current_connection")
-
-        if (
-            interface.state
-            is list(WLAN_INTERFACE_STATE_DICT.keys())[
-                list(WLAN_INTERFACE_STATE_DICT.values()).index("connected")
-            ]
-        ):
-            return query_result[1]["wlanAssociationAttributes"]["dot11Bssid"]
-        else:
+        if not isinstance(query_result, tuple):
             return None
+        attributes = query_result[1]
+        if attributes["isState"] != "connected":
+            return None
+        return attributes["wlanAssociationAttributes"]["dot11Bssid"]
 
     @staticmethod
     def open_handle() -> HANDLE:

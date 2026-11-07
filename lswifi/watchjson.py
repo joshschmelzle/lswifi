@@ -31,11 +31,15 @@ messages stay on stderr; only these objects go to stdout.
 """
 
 import datetime
+import errno
 import json
+import logging
 import math
 import sys
 import threading
 from typing import Any, TextIO
+
+log = logging.getLogger(__name__)
 
 # key order of the common fields; event-specific keys follow
 COMMON_KEYS = (
@@ -234,6 +238,11 @@ class NDJSONWriter:
                 stream.flush()
             except BrokenPipeError:  # e.g. `| head`; stop writing, keep running
                 self.closed = True
+            except OSError as error:
+                # Windows reports a closed pipe as EINVAL
+                self.closed = True
+                if error.errno != errno.EINVAL:
+                    log.error("stopped writing --watchevents --json: %s", error)
 
 
 _writer: NDJSONWriter | None = None
