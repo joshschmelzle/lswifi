@@ -1,7 +1,9 @@
 # -*- encoding: utf-8
 
+import asyncio
 import csv
 import json
+import logging
 import sys
 
 import pytest
@@ -10,7 +12,7 @@ import lswifi
 import lswifi.elements
 from lswifi import app
 from lswifi.backends.base import BssRecord
-from tests.test_backends import ARUBA, JSON_KEYS, UNIFI, Session, parse
+from tests.test_backends import ARUBA, JSON_KEYS, UNIFI, FakeBackend, Session, parse
 
 # WirelessNetworkBss
 
@@ -26,6 +28,37 @@ def _bss_with_ies(ssid, ie_bytes, capability=0x0011):
             ies=ies,
         )
     )
+
+
+SELECTORS = (
+    (127, "HT PHY"),
+    (126, "VHT PHY"),
+    (125, "GLK"),
+    (124, "EPD"),
+    (123, "SAE-H2E"),
+    (122, "HE PHY"),
+    (121, "EHT PHY"),
+)
+
+
+def _rates_record(elements, bssid="02:00:00:00:00:20"):
+    ssid = b"rates"
+    ies = bytes([0, len(ssid)]) + ssid
+    for element_id, body in elements:
+        body = bytes(body)
+        ies += bytes([element_id, len(body)]) + body
+    return BssRecord(
+        ssid=ssid,
+        bssid=bssid,
+        frequency_mhz=2437,
+        capability=0x0011,
+        ies=ies,
+        rssi_dbm=-40,
+    )
+
+
+def _rates_bss(elements, bssid="02:00:00:00:00:20"):
+    return lswifi.elements.WirelessNetworkBss(_rates_record(elements, bssid))
 
 
 class TestElements:
@@ -52,6 +85,162 @@ class TestElements:
             lswifi.elements.WirelessNetworkBss.parse_rates(test3)
             == "6(B) 9 12(B) 18 24(B) 36 48 54"
         )
+
+    @pytest.mark.parametrize("name", [name for _, name in SELECTORS])
+    def test_parse_rates_places_selector_after_rates(self, name):
+        parsed = lswifi.elements.WirelessNetworkBss.parse_rates(
+            lswifi.elements.OutObject(value=f"54 {name} 6(b) 5.5(b) 9 12(b)")
+        )
+        assert parsed == f"5.5(B) 6(B) 9 12(B) 54 {name}"
+
+    def test_parse_rates_keeps_every_selector_name(self):
+        parsed = lswifi.elements.WirelessNetworkBss.parse_rates(
+            lswifi.elements.OutObject(
+                value="12(b) HT PHY 9 SAE-H2E 6(b) EHT PHY GLK 24 EPD VHT PHY HE PHY"
+            )
+        )
+        assert parsed == "6(B) 9 12(B) 24 HT PHY SAE-H2E EHT PHY GLK EPD VHT PHY HE PHY"
+
+    @pytest.mark.parametrize(("value", "name"), SELECTORS)
+    @pytest.mark.parametrize(
+        "element_id",
+        [1, 50],
+        ids=["supported-rates", "extended-supported-rates"],
+    )
+    def test_selector_in_rates_element(self, value, name, element_id):
+        octet = bytes([0x80 | value])
+        if element_id == 1:
+            elements = [(1, bytes.fromhex("8c1298") + octet)]
+            decoded = f"6(B), 9, 12(B), {name} Mbit/s"
+            element_name = "Supported Rates"
+        else:
+            elements = [
+                (1, bytes.fromhex("8c12")),
+                (50, bytes.fromhex("98") + octet),
+            ]
+            decoded = f"12(B), {name} Mbit/s"
+            element_name = "Extended Supported Rates"
+        bss = _rates_bss(elements)
+        assert bss.ie_rates.value == f"6(B) 9 12(B) {name}"
+        ie = next(ie for ie in bss.information_elements if ie.eid == element_id)
+        assert ie.name == element_name
+        assert ie.decoded == decoded
+        assert name in str(bss)
+
+    def test_numeric_rates_element_is_unchanged(self):
+        bss = _rates_bss([(1, bytes.fromhex("8c129824"))])
+        assert bss.ie_rates.value == "6(B) 9 12(B) 18"
+        ie = next(ie for ie in bss.information_elements if ie.eid == 1)
+        assert ie.decoded == "6(B), 9, 12(B), 18 Mbit/s"
+
+    def test_phy_selector_bss_stays_in_scan_results(self, tmp_path, capsys, caplog):
+        caplog.set_level(logging.ERROR)
+        sae = _rates_record([(1, bytes.fromhex("8c1298fb"))], "02:00:00:00:00:21")
+        ht = _rates_record([(1, bytes.fromhex("8c1298ff"))], "02:00:00:00:00:22")
+        extended = _rates_record(
+            [(1, bytes.fromhex("8c12")), (50, bytes.fromhex("98ff"))],
+            "02:00:00:00:00:23",
+        )
+        backend = FakeBackend([sae, ht, extended])
+        session = backend.open_session(parse(["-all"]), backend.list_interfaces()[0])
+        asyncio.run(session.scan())
+        assert "skipping BSS" not in caplog.text
+        assert [str(bss.bssid) for bss in session.data] == [
+            "02:00:00:00:00:21",
+            "02:00:00:00:00:22",
+            "02:00:00:00:00:23",
+        ]
+        by_bssid = {str(bss.bssid): bss for bss in session.data}
+        assert by_bssid["02:00:00:00:00:21"].ie_rates.value == "6(B) 9 12(B) SAE-H2E"
+        assert by_bssid["02:00:00:00:00:22"].ie_rates.value == "6(B) 9 12(B) HT PHY"
+        assert by_bssid["02:00:00:00:00:23"].ie_rates.value == "6(B) 9 12(B) HT PHY"
+        assert (
+            next(
+                ie.decoded
+                for ie in by_bssid["02:00:00:00:00:22"].information_elements
+                if ie.eid == 1
+            )
+            == "6(B), 9, 12(B), HT PHY Mbit/s"
+        )
+        assert (
+            next(
+                ie.decoded
+                for ie in by_bssid["02:00:00:00:00:23"].information_elements
+                if ie.eid == 50
+            )
+            == "12(B), HT PHY Mbit/s"
+        )
+
+        json_path = tmp_path / "scan.json"
+        csv_path = tmp_path / "scan.csv"
+        args = parse(["-all", "--json", str(json_path), "--csv", str(csv_path)])
+        scanner = app.lswifi()
+        out, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
+            Session(session.data),
+            app.ApNames.OFF,
+            str(csv_path),
+            str(json_path),
+            args,
+        )
+        listed = {cell.value for row in out for cell in row}
+        assert "02:00:00:00:00:21" in listed
+        assert "02:00:00:00:00:22" in listed
+        assert "02:00:00:00:00:23" in listed
+        rows = {row["bssid"]: row for row in json_out}
+        assert set(rows) == {
+            "02:00:00:00:00:21",
+            "02:00:00:00:00:22",
+            "02:00:00:00:00:23",
+        }
+        assert set(rows["02:00:00:00:00:22"]) == set(rows["02:00:00:00:00:21"])
+        for row in rows.values():
+            assert row["rates_basic"] == ["6", "12"]
+            assert row["rates_data"] == ["9"]
+            assert all(
+                value is not None for key, value in row.items() if key != "uptime"
+            )
+        scanner.print_bss_list(
+            out,
+            length,
+            "00:11:22:33:44:55",
+            bssids,
+            False,
+            names,
+            json_out,
+            new,
+            args,
+        )
+        printed = json.loads(capsys.readouterr().out)
+        assert {row["bssid"] for row in printed} == set(rows)
+        with csv_path.open(newline="") as handle:
+            csv_rows = list(csv.DictReader(handle))
+        assert {row["bssid"] for row in csv_rows} == set(rows)
+        for row in csv_rows:
+            assert row["rates_basic"] == "6/12"
+            assert row["rates_data"] == "9"
+
+        table_args = parse(["-all"])
+        table, _rnr, length, bssids, names, json_out, new = scanner.parse_bss_list(
+            Session(session.data),
+            app.ApNames.OFF,
+            "",
+            "",
+            table_args,
+        )
+        scanner.print_bss_list(
+            table,
+            length,
+            "00:11:22:33:44:55",
+            bssids,
+            False,
+            names,
+            json_out,
+            new,
+            table_args,
+        )
+        text = capsys.readouterr().out
+        assert "02:00:00:00:00:22" in text
+        assert "02:00:00:00:00:23" in text
 
     def test_convert_timestamp_to_uptime(self):
         assert (
