@@ -291,6 +291,34 @@ class WirelessNetworkBss:
     }
 
     @staticmethod
+    def _rate_items(text: str) -> list[str]:
+        names = sorted(
+            WirelessNetworkBss.BSS_MEMBERSHIP_SELECTOR_NAMES,
+            key=len,
+            reverse=True,
+        )
+        items: list[str] = []
+        remaining = text.strip()
+        while remaining:
+            lowered = remaining.lower()
+            for name in names:
+                if lowered.startswith(name) and (
+                    len(lowered) == len(name) or lowered[len(name)] == " "
+                ):
+                    items.append(remaining[: len(name)])
+                    remaining = remaining[len(name) :].strip()
+                    break
+            else:
+                token, _, rest = remaining.partition(" ")
+                items.append(token)
+                remaining = rest.strip()
+        return items
+
+    @staticmethod
+    def _format_rate_list(decoded: str) -> str:
+        return f"{', '.join(WirelessNetworkBss._rate_items(decoded))} Mbit/s"
+
+    @staticmethod
     def parse_rates(ie_rates) -> str:
         """
         takes a list of rates including basic rates, and orders them.
@@ -304,9 +332,8 @@ class WirelessNetworkBss:
             basics = []
             supported = []
             selectors = []
-            for rate in ie_rates.value.strip().split(" "):
+            for rate in WirelessNetworkBss._rate_items(ie_rates.value):
                 rate_lower = rate.lower()
-                # Check if this is a BSS membership selector
                 if rate_lower in WirelessNetworkBss.BSS_MEMBERSHIP_SELECTOR_NAMES:
                     selectors.append(rate)
                 elif "*" in rate_lower or "(b)" in rate_lower:
@@ -326,7 +353,6 @@ class WirelessNetworkBss:
             for index, value in enumerate(rates_out):
                 if value in basics_out:
                     rates_out[index] = f"{value}(B)"
-            # Append BSS membership selectors at the end
             if selectors:
                 rates_out.extend(selectors)
             return " ".join(rates_out)
@@ -1295,8 +1321,7 @@ class WirelessNetworkBss:
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
-                f"{', '.join([rate.strip() for rate in decoded.strip().split(' ')])} Mbit/s",
-                # decoded.strip(),
+                WirelessNetworkBss._format_rate_list(decoded),
                 element_data,
                 format_bytes_as_hex(element_data),
             )
@@ -1437,7 +1462,7 @@ class WirelessNetworkBss:
                 element_id,
                 WirelessNetworkBss.get_eid_name(element_id),
                 element_length,
-                f"{', '.join([rate.strip() for rate in decoded.strip().split(' ')])} Mbit/s",
+                WirelessNetworkBss._format_rate_list(decoded),
                 element_data,
                 format_bytes_as_hex(element_data),
             )
