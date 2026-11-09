@@ -155,3 +155,64 @@ class TestWindowsChannel:
         assert get_interface_info(parse(["-channel", "-raw"]), radio) == 44
         info = json.loads(get_interface_info(parse(["-channel", "--json"]), radio))
         assert "band" not in info and "freq_mhz" not in info
+
+
+class TestConnectedBssid:
+    def snapshot(self, state):
+        return SimpleNamespace(state=state, guid="{11111111}")
+
+    @pytest.mark.parametrize("snapshot_state", [1, 4])
+    def test_reads_the_current_connection_not_the_snapshot(
+        self, monkeypatch, snapshot_state
+    ):
+        monkeypatch.setattr(
+            wlanapi.WLAN,
+            "query_interface",
+            staticmethod(lambda _iface, _param: (None, connection())),
+        )
+        assert wlanapi.WLAN.get_connected_bssid(self.snapshot(snapshot_state)) == BSSID
+
+    @pytest.mark.parametrize(
+        "result",
+        ["query failed", (None, {**connection(), "isState": "disconnected"})],
+    )
+    def test_not_connected(self, monkeypatch, result):
+        monkeypatch.setattr(
+            wlanapi.WLAN, "query_interface", staticmethod(lambda _iface, _param: result)
+        )
+        assert wlanapi.WLAN.get_connected_bssid(self.snapshot(1)) is None
+
+
+@pytest.mark.parametrize("path", ["scan_list_refresh", "timeout"])
+def test_scan_timestamp_is_set_before_the_scan_is_marked_finished(monkeypatch, path):
+    from lswifi import client
+
+    order = []
+
+    class Recorder(SimpleNamespace):
+        def __setattr__(self, name, value):
+            order.append(name)
+            super().__setattr__(name, value)
+
+    fake = Recorder(
+        iface=SimpleNamespace(guid_string="{1}"),
+        args=SimpleNamespace(event_watcher=False, bytes=None),
+        get_bssid_args=None,
+        mac="02:00:00:00:00:01",
+        timeout_interval=7,
+        log=SimpleNamespace(
+            debug=lambda *_a: None, info=lambda *_a: None, warning=lambda *_a: None
+        ),
+        scan_timer=SimpleNamespace(cancel=lambda: None),
+        get_bss_list=lambda _iface, bytes=None: ["bss"],
+    )
+    fake.finish_scan = lambda: client.Client.finish_scan(fake)
+    order.clear()
+    monkeypatch.setattr(client, "get_interface_info", lambda _args, _iface: None)
+    if path == "timeout":
+        client.Client.scan_timeout(fake)
+    else:
+        client.Client.on_event_notification(fake, "scan_list_refresh", "{1}")
+    assert order.index("data") < order.index("scan_finished")
+    assert order.index("last_scan_time_iso") < order.index("scan_finished")
+    assert order[-1] == "scan_finished"
