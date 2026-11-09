@@ -126,6 +126,7 @@ class TestNotify:
             in caplog.text
         )
         assert "pip install --upgrade lswifi" in caplog.text
+        assert "--no-update-check" not in caplog.text
 
     def test_same_version_says_nothing(self, data_home, pypi, caplog):
         caplog.set_level(logging.INFO)

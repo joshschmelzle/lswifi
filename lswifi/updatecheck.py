@@ -116,9 +116,7 @@ def notify(args, now: Callable[[], float] = time.time) -> None:
     if latest and is_newer(latest, __version__):
         log.info(
             "lswifi %s is available (you have %s); upgrade with: "
-            "python -m pip install --upgrade lswifi. "
-            "Turn this check off with --no-update-check or %s=1",
+            "python -m pip install --upgrade lswifi",
             latest,
             __version__,
-            DISABLE_ENV,
         )
