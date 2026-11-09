@@ -52,6 +52,7 @@ GLOBAL_OPTIONS = [
     "--bytes",
     "--watchevents",
     "--syslog",
+    "--no-update-check",
     "--debug",
     "--version",
     "completion",

@@ -190,6 +190,11 @@ Then restart PowerShell or reload your profile:
 . $PROFILE
 ```
 
+Update check
+------------
+
+lswifi checks PyPI for a newer release at most once a day and, when there is one, prints a note on stderr with the upgrade command. It never writes to stdout, so `--json`, `--csv` and `-raw` output are unchanged, and it stays quiet when PyPI can't be reached. To turn it off, pass `--no-update-check` or set the `LSWIFI_NO_UPDATE_CHECK=1` environment variable.
+
 CLI options
 -----------
 
@@ -254,5 +259,6 @@ options:
   --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
   --watchevents         a special mode which watches for notification on a wireless interface such as connection and roaming events
   --syslog <server IP>  syslogs events from --watchevents to a remote syslog server
+  --no-update-check     don't check PyPI for a newer lswifi (checked at most once a day); the LSWIFI_NO_UPDATE_CHECK=1 environment variable does the same
   --debug               increase verbosity for debugging
 ```

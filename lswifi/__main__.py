@@ -29,7 +29,7 @@ if sys.version_info < (3, 11):  # noqa: UP036
     sys.exit(-1)
 
 # app imports
-from lswifi import app, appsetup, rssistats
+from lswifi import app, appsetup, rssistats, updatecheck
 from lswifi.backends.base import BackendError
 from lswifi.backends.factory import get_backend, needs_backend
 from lswifi.constants import APNAMEACKFILE, APNAMEJSONFILE
@@ -125,6 +125,8 @@ def main():
     if args.data_location:
         app_path()
         sys.exit()
+
+    updatecheck.notify(args)
 
     # parse args first; only commands that scan or query an adapter need a
     # backend. -decode and -decoderaw work on any OS.
