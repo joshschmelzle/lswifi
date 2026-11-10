@@ -247,6 +247,7 @@ def syslog_ip(value):
     try:
         servers = []
         for ip in value.split(","):
+            ip = ip.strip()
             ipaddress.ip_address(ip)
             servers.append(ip)
         slog.SYSLOG_SERVERS = servers

@@ -79,6 +79,11 @@ class TestSyslogIp:
         result = appsetup.syslog_ip("192.168.1.1,10.0.0.1")
         assert result == ["192.168.1.1", "10.0.0.1"]
 
+    def test_ips_with_surrounding_spaces(self):
+        """Spaces around commas should be ignored."""
+        result = appsetup.syslog_ip("192.168.1.1, 10.0.0.1 ,fd00::1")
+        assert result == ["192.168.1.1", "10.0.0.1", "fd00::1"]
+
     def test_none_ip(self):
         """'None' string should return None."""
         assert appsetup.syslog_ip("None") is None
