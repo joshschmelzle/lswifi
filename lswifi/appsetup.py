@@ -654,6 +654,12 @@ def setup_parser() -> argparse.ArgumentParser:
         help="syslogs events from --watchevents to a remote syslog server",
     )
     parser.add_argument(
+        "--no-update-check",
+        dest="no_update_check",
+        action="store_true",
+        help="don't check PyPI for a newer lswifi (checked at most once a day); the LSWIFI_NO_UPDATE_CHECK=1 environment variable does the same",
+    )
+    parser.add_argument(
         "--debug",
         action="store_const",
         help="increase verbosity for debugging",
