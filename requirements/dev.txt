@@ -106,7 +106,7 @@ scapy==2.8.0
     # via -r tests.in
 tomli-w==1.2.0
     # via tox
-tox==4.67.5
+tox==4.67.13
     # via -r dev.in
 typing-extensions==4.13.2
     # via mypy
