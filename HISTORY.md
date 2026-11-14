@@ -4,6 +4,11 @@ Release History
 RELEASED
 --------
 
+0.6.1 (2026-11-13)
+------------------
+
+- The README explains that zsh only loads a completion file named `_lswifi` from a directory on `$fpath`, and how to add that directory before `compinit` runs (#200).
+
 0.6.0 (2026-11-13)
 ------------------
 

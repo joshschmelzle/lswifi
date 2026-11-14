@@ -242,11 +242,27 @@ To make it permanent, add the script to your bash completion directory or source
 echo 'source <(lswifi completion bash)' >> ~/.bashrc
 ```
 
-For zsh, source the script from `~/.zshrc` (or save it as `_lswifi` somewhere on `$fpath`):
+For zsh, either source the script from `~/.zshrc`:
 
 ``` {.sourceCode .bash}
 source <(lswifi completion zsh)
 ```
+
+Or install it as a completion file. zsh only loads files on `$fpath` whose names start with an underscore, so name it `_lswifi`:
+
+``` {.sourceCode .bash}
+mkdir -p ~/.zsh/completions
+lswifi completion zsh > ~/.zsh/completions/_lswifi
+```
+
+In `~/.zshrc`, add that directory to `fpath` before `compinit` runs:
+
+``` {.sourceCode .bash}
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+```
+
+Then start a new shell or run `exec zsh`.
 
 For fish, write the script to the completions directory:
 
