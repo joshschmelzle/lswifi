@@ -82,15 +82,38 @@ class TestCompletions:
         assert "Register-ArgumentCompleter" in result
         assert "lswifi" in result
 
-    def test_get_completion_script_powershell(self):
-        """Returns PowerShell script for 'powershell'."""
-        result = completions.get_completion_script("powershell")
+    def test_generate_bash_script(self):
+        """Returns bash script using compgen."""
+        result = completions.generate_bash_script()
+        assert isinstance(result, str)
+        assert "complete -F _lswifi_completion lswifi" in result
+        assert "--_complete" in result
+
+    def test_generate_zsh_script(self):
+        """Returns zsh script registering compdef."""
+        result = completions.generate_zsh_script()
+        assert isinstance(result, str)
+        assert "#compdef lswifi" in result
+        assert "compdef _lswifi lswifi" in result
+        assert "compadd" in result
+
+    def test_generate_fish_script(self):
+        """Returns fish script registering a completion."""
+        result = completions.generate_fish_script()
+        assert isinstance(result, str)
+        assert "complete -c lswifi" in result
+        assert "commandline -opc" in result
+
+    @pytest.mark.parametrize("shell", completions.SHELLS)
+    def test_get_completion_script_supported(self, shell):
+        """Every advertised shell returns a script."""
+        result = completions.get_completion_script(shell)
         assert result is not None
-        assert "Register-ArgumentCompleter" in result
+        assert "lswifi" in result
 
     def test_get_completion_script_unknown(self):
         """Returns None for unknown shell."""
-        result = completions.get_completion_script("bash")
+        result = completions.get_completion_script("tcsh")
         assert result is None
 
     def test_get_completions_option_with_none_value(self):
