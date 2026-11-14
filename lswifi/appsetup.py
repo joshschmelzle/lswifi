@@ -671,6 +671,8 @@ def setup_parser() -> argparse.ArgumentParser:
         "completion", help="Generate shell completion script"
     )
     completion_parser.add_argument(
-        "shell", choices=["powershell"], help="Shell to generate completion for"
+        "shell",
+        choices=["bash", "fish", "powershell", "zsh"],
+        help="Shell to generate completion for",
     )
     return parser

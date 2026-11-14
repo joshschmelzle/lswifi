@@ -7,7 +7,7 @@
 lswifi.completions
 ~~~~~~~~~~~~~~~~~~
 
-Provides PowerShell tab completion support for lswifi.
+Provides shell tab completion support for lswifi.
 """
 
 from lswifi import helpers
@@ -60,7 +60,7 @@ GLOBAL_OPTIONS = [
 
 CHANNEL_WIDTHS = ["20", "40", "80", "160", "320"]
 
-SHELLS = ["powershell"]
+SHELLS = ["bash", "fish", "powershell", "zsh"]
 
 OPTIONS_WITH_VALUES = {
     "--channel-width": CHANNEL_WIDTHS,
@@ -173,8 +173,71 @@ def generate_powershell_script() -> str:
 """
 
 
+def generate_bash_script() -> str:
+    """Generate the bash tab completion script."""
+    return r"""_lswifi_completion() {
+    local cur args i
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    args=""
+    for ((i = 1; i < COMP_CWORD; i++)); do
+        args+="${COMP_WORDS[i]} "
+    done
+    COMPREPLY=($(compgen -W "$(lswifi --_complete --_complete_args "$args" --_complete_current "$cur" 2>/dev/null)" -- "$cur"))
+}
+complete -F _lswifi_completion lswifi
+"""
+
+
+def generate_zsh_script() -> str:
+    """Generate the zsh tab completion script."""
+    return r"""#compdef lswifi
+
+_lswifi() {
+    local -a args completions
+    local i
+    for ((i = 2; i < CURRENT; i++)); do
+        args+=("${words[i]}")
+    done
+    completions=(${(f)"$(lswifi --_complete --_complete_args "${(j: :)args}" --_complete_current "${words[CURRENT]}" 2>/dev/null)"})
+    if (( ${#completions} )); then
+        compadd -a completions
+    else
+        _default
+    fi
+}
+
+if [ "$funcstack[1]" = "_lswifi" ]; then
+    _lswifi "$@"
+else
+    compdef _lswifi lswifi
+fi
+"""
+
+
+def generate_fish_script() -> str:
+    """Generate the fish tab completion script."""
+    return r"""function __fish_lswifi_completions
+    set -l tokens (commandline -opc)
+    set -l current (commandline -ct)
+    set -l args (string join ' ' $tokens[2..-1])
+    if test (count $args) -eq 0
+        set args ''
+    end
+    lswifi --_complete --_complete_args "$args" --_complete_current "$current" 2>/dev/null
+end
+
+complete -c lswifi -f -a '(__fish_lswifi_completions)'
+"""
+
+
 def get_completion_script(shell: str) -> str | None:
     """Get the completion script for the specified shell."""
+    if shell == "bash":
+        return generate_bash_script()
+    if shell == "fish":
+        return generate_fish_script()
     if shell == "powershell":
         return generate_powershell_script()
+    if shell == "zsh":
+        return generate_zsh_script()
     return None

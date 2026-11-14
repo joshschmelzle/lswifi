@@ -225,8 +225,34 @@ Export scan results to pcap:
 > lswifi -export
 ```
 
-PowerShell Tab Completion
--------------------------
+Tab Completion
+--------------
+
+`lswifi completion <shell>` prints a completion script for `bash`, `fish`, `powershell`, or `zsh`.
+
+To enable bash tab completion for the current session:
+
+``` {.sourceCode .bash}
+source <(lswifi completion bash)
+```
+
+To make it permanent, add the script to your bash completion directory or source it from `~/.bashrc`:
+
+``` {.sourceCode .bash}
+echo 'source <(lswifi completion bash)' >> ~/.bashrc
+```
+
+For zsh, source the script from `~/.zshrc` (or save it as `_lswifi` somewhere on `$fpath`):
+
+``` {.sourceCode .bash}
+source <(lswifi completion zsh)
+```
+
+For fish, write the script to the completions directory:
+
+``` {.sourceCode .bash}
+lswifi completion fish > ~/.config/fish/completions/lswifi.fish
+```
 
 To enable PowerShell tab completion for `lswifi`, run the following command in PowerShell:
 
