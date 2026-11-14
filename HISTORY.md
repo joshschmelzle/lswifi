@@ -4,6 +4,30 @@ Release History
 RELEASED
 --------
 
+0.6.0 (2026-11-13)
+------------------
+
+Breaking text table changes:
+
+- The SECURITY column shows a generation (WPA, WPA2, WPA3, WPA3-192, or WPA2/3) with a [gen] subheader. FT AKM pairs merge by suite, PMF shows Req/Cap/Off, and AKM 13 is FT-.1X-CNSA-SHA384 instead of colliding with FT-.1X-SHA384. JSON and CSV keep full AKM names (#167). Fixes #124.
+
+Other changes:
+
+- `--rssi-stats` samples RSSI and reports the mean, sample standard deviation, and range per interface, BSSID, and band. It measures the connected BSSID by default and takes `-bssid` or `-include` to choose others. `--json` gains a top-level `rssi_stats` list (#174).
+- `--json` gains `security_generation`, and `security_nonconformant` for a 6 GHz BSS that breaks the WPA3 rules (#167).
+- Supported rates keep PHY BSS membership selectors such as `EHT PHY` and `HE PHY` instead of splitting them into rates (#189).
+- `-exportraw` prints one result instead of an extra `raw byte files for None` line (#166).
+- The first Ctrl-C stops the run and exits 130 (#172).
+- A failed scan is logged and skipped instead of printing and exporting the previous scan again (#185). Fixes #184.
+- `--rssi-stats` rejects `-ies`, `--bytes`, `-export`, and `-exportraw` before scanning instead of running forever or reporting nothing (#185). Fixes #183.
+- `--json` replaces an existing file only after the new content is written, so a Ctrl-C or full disk leaves the old file intact (#185). Fixes #173.
+- `-ethers` on its own shows the AP NAME column. Blank or one-word lines in the ethers file are skipped with a warning. `--ap-names` with no terminal leaves caching off. The connected BSSID keeps its `(*)` marker with `--csv` (#185).
+- `-decoderaw` formats the last element like the others, with its length in bytes and its decoded lines in the decoded column (#187).
+- On Linux, a radio that is already scanning is allowed to finish and lswifi then runs its own scan, instead of waiting 30 s and showing cached results (#188).
+- On Windows, a BSSID that connects during a run is marked, each scan's rows carry that scan's timestamp, and a closed `--watchevents --json` pipe stops quietly (#190).
+- lswifi checks PyPI at most once a day and prints one stderr line with the upgrade command when a newer release exists. `--no-update-check` or `LSWIFI_NO_UPDATE_CHECK=1` turns it off (#192).
+- `lswifi completion` also generates scripts for bash, zsh, and fish (#198).
+
 0.5.0 (2026-10-27)
 ------------------
 
