@@ -380,7 +380,7 @@ def setup_parser() -> argparse.ArgumentParser:
         "--time",
         dest="time",
         metavar="#",
-        help="set test in seconds to perform scans for",
+        help="run scans for this many seconds",
     )
     parser.add_argument(
         "-i",
@@ -394,7 +394,7 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         metavar="BSSID",
         nargs="?",
-        help="print extra information about information elements for a specified BSSID",
+        help="print decoded information elements for a specified BSSID",
     )
     thresholds_group = parser.add_mutually_exclusive_group()
     thresholds_group.add_argument(
@@ -404,85 +404,85 @@ def setup_parser() -> argparse.ArgumentParser:
         dest="sensitivity",
         default="-82",
         type=sensitivity,
-        help="threshold which excludes networks with weak signal strength from results (-82 is default)",
+        help="hide networks weaker than this RSSI (-82 by default)",
     )
     thresholds_group.add_argument(
         "-all",
         dest="all",
         action="store_true",
-        help="remove threshold filtering which excludes results with weaker signal",
+        help="show networks of any signal strength, ignoring the threshold",
     )
     parser.add_argument(
         "-g",
         # "-2",  # numbers as args interfere with -t arg
         dest="g",
         action="store_true",
-        help="display filter to limit output by 2.4 GHz band",
+        help="show only 2.4 GHz networks",
     )
     parser.add_argument(
         "-a",
         # "-5",  # numbers as args interfere with -t arg
         dest="a",
         action="store_true",
-        help="display filter to limit output by 5 GHz band",
+        help="show only 5 GHz networks",
     )
     parser.add_argument(
         "-six",
         # "-6",  # numbers as args interfere with -t arg
         dest="six",
         action="store_true",
-        help="display filter to limit output by 6 GHz band",
+        help="show only 6 GHz networks",
     )
     parser.add_argument(
         "-include",
         "-inc",
         dest="include",
         metavar="SSID",
-        help="display filter to limit results by specified SSIDs (partial matching supported)",
+        help="show only networks whose SSID matches this text (partial match)",
     )
     parser.add_argument(
         "-exclude",
         "-exc",
         dest="exclude",
         metavar="SSID",
-        help="display filter to exclude results by specified SSIDs (partial matching supported)",
+        help="hide networks whose SSID matches this text (partial match)",
     )
     parser.add_argument(
         "-bssid",
         "-bss",
         dest="bssid",
         metavar="BSSID",
-        help="display filter to limit results by specified BSSIDs (partial matching supported)",
+        help="show only BSSIDs matching this text (partial match)",
     )
     parser.add_argument(
         "--rssi-stats",
         dest="rssi_stats",
         action="store_true",
-        help="special mode to measure signal strength mean, stdev, and range of the connected BSSID over 10 samples, or of -bssid/-include matches. keep the device still; a run may take several minutes",
+        help="measure signal strength mean, standard deviation, and range over 10 samples, or for -bssid/-include matches. keep the device still; a run can take several minutes",
     )
     parser.add_argument(
         "--ap-names",
         dest="apnames",
         action="store_true",
-        help="adds an ap name column to output and will cache ap names locally to help provide consistent results",
+        help="add an AP name column; names are cached locally",
     )
     parser.add_argument(
         "--qbss",
         dest="qbss",
         action="store_true",
-        help="adds station and utilization columns to output using information from AP beacon QBSS IE",
+        help="add station and utilization columns from the AP's QBSS element",
     )
     parser.add_argument(
         "--tpc",
         dest="tpc",
         action="store_true",
-        help="adds TPC column to output using information from AP beacon 802.11h",
+        help="add a TPC column from the AP's 802.11h element",
     )
     parser.add_argument(
         "--period",
         dest="period",
         action="store_true",
-        help="adds beacon period column to output using information from AP beacon",
+        help="add a beacon period column from the AP's beacon",
     )
     if helpers.uptime_available():
         parser.add_argument(
@@ -490,7 +490,7 @@ def setup_parser() -> argparse.ArgumentParser:
             "-uptime",
             dest="uptime",
             action="store_true",
-            help="sort output by access point uptime based on beacon timestamp",
+            help="sort by AP uptime from the beacon timestamp",
         )
     parser.set_defaults(uptime=False)
     parser.add_argument(
@@ -498,14 +498,14 @@ def setup_parser() -> argparse.ArgumentParser:
         "--country",
         dest="country",
         action="store_true",
-        help="adds country code column to output using information from AP beacon country IE",
+        help="add a country code column from the AP's country element",
     )
     parser.add_argument(
         "-rnr",
         "--rnr",
         dest="rnr",
         action="store_true",
-        help="special mode to create an alternate table based on RNR results",
+        help="show an alternate table built from Reduced Neighbor Reports",
     )
     parser.add_argument(
         "--channel-width",
@@ -513,31 +513,31 @@ def setup_parser() -> argparse.ArgumentParser:
         type=width,
         default="None",
         metavar="20|40|80|160|320",
-        help="display filter to limit output by a specified channel width",
+        help="show only networks of this channel width",
     )
     parser.add_argument(
         "-ethers",
         dest="ethers",
         action="store_true",
-        help="adds an ap name column to output and use an ethers file for the ap names",
+        help="add an AP name column using an ethers file",
     )
     parser.add_argument(
         "--append-ethers",
         metavar="BSSID,APNAME",
         dest="append",
-        help="append BSSID and AP name to ethers file for AP names",
+        help="add a BSSID and AP name to the ethers file",
     )
     parser.add_argument(
         "--display-ethers",
         dest="display_ethers",
         action="store_true",
-        help="display the list of saved ethers; (BSSID,APNAME) mapping",
+        help="print the saved BSSID and AP name mappings",
     )
     parser.add_argument(
         "--data-location",
         dest="data_location",
         action="store_true",
-        help="displays where config items are stored on the local machine",
+        help="print where config files are stored",
     )
     parser.add_argument(
         "-ap",
@@ -555,19 +555,19 @@ def setup_parser() -> argparse.ArgumentParser:
         "-raw",
         dest="raw",
         action="store_true",
-        help="format output as the raw value for other scripts (for -ap and -channel only)",
+        help="print only the raw value, for scripts (-ap and -channel only)",
     )
     parser.add_argument(
         "--get-interfaces",
         dest="get_interface_info",
         action="store_true",
-        help="print current Wi-Fi status and information",
+        help="print Wi-Fi interface status",
     )
     parser.add_argument(
         "--list-interfaces",
         dest="list_interfaces",
         action="store_true",
-        help="print a list of available WLAN interfaces",
+        help="list available WLAN interfaces",
     )
     parser.add_argument(
         "--supported", dest="supported", action="store_true", help=argparse.SUPPRESS
@@ -578,7 +578,7 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         dest="json",
         action=WriteToJSONAction,
-        help="output will be formatted as json",
+        help="write output as JSON",
     )
     parser.add_argument(
         "--indent",
@@ -586,7 +586,7 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="4",
         default=None,
         type=json_indent,
-        help="JSON output will be formatted with pretty print with provided indent level",
+        help="indent JSON output by this many spaces",
     )
     parser.add_argument(
         "--csv",
@@ -594,7 +594,7 @@ def setup_parser() -> argparse.ArgumentParser:
         type=str,
         dest="csv",
         action=WriteToCSVAction,
-        help="output will be formatted as csv",
+        help="write output as CSV",
     )
     parser.add_argument(
         "-exportraw",
@@ -604,7 +604,7 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="BSSID",
         dest="exportraw",
         action=ExportAction,
-        help="export raw bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.",
+        help="export raw BSS and IE byte files (all networks unless you give a BSSID)",
     )
     parser.add_argument(
         "-export",
@@ -614,13 +614,13 @@ def setup_parser() -> argparse.ArgumentParser:
         metavar="BSSID",
         dest="export",
         action=ExportPcapNGAction,
-        help="export scan results to pcapng file. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.",
+        help="export scan results to a pcapng file (all networks unless you give a BSSID)",
     )
     parser.add_argument(
         "-path",
         type=str,
         dest="export_path",
-        help="output path for -export, and directory for -exportraw (a .pcapng path uses its directory); defaults to the app data directory",
+        help="output path for -export, or directory for -exportraw (a .pcapng path uses its directory). defaults to the app data directory",
     )
     parser.add_argument(
         "-decoderaw",
@@ -632,47 +632,47 @@ def setup_parser() -> argparse.ArgumentParser:
         "-decode",
         dest="decode",
         metavar="PCAP_FILE",
-        help="parse scan results from pcap/pcapng file. by default shows all networks in the file, can be combined with filtering options.",
+        help="read scan results from a pcap or pcapng file; shows all networks unless you add a filter",
     )
     parser.add_argument(
         "--bytes",
         metavar="BSSID",
         dest="bytes",
-        help="output debugging bytes for a specified BSSID found in scan results.",
+        help="print debugging bytes for a BSSID from the scan results",
     )
     parser.add_argument(
         "--watchevents",
         dest="event_watcher",
         action="store_true",
-        help="a special mode which watches for notification on a wireless interface such as connection and roaming events",
+        help="watch a wireless interface for connection, roaming, and other events",
     )
     parser.add_argument(
         "--syslog",
         metavar="<server IP>",
         type=syslog_ip,
         dest="syslog",
-        help="syslogs events from --watchevents to a remote syslog server",
+        help="send --watchevents events to a remote syslog server",
     )
     parser.add_argument(
         "--no-update-check",
         dest="no_update_check",
         action="store_true",
-        help="don't check PyPI for a newer lswifi (checked at most once a day); the LSWIFI_NO_UPDATE_CHECK=1 environment variable does the same",
+        help="skip the PyPI version check, which runs at most once a day. LSWIFI_NO_UPDATE_CHECK=1 also turns it off",
     )
     parser.add_argument(
         "--debug",
         action="store_const",
-        help="increase verbosity for debugging",
+        help="print debug messages",
         const=logging.DEBUG,
         default=logging.INFO,
     )
     subparsers = parser.add_subparsers(dest="command", help="commands")
     completion_parser = subparsers.add_parser(
-        "completion", help="Generate shell completion script"
+        "completion", help="print a shell completion script"
     )
     completion_parser.add_argument(
         "shell",
         choices=["bash", "fish", "powershell", "zsh"],
-        help="Shell to generate completion for",
+        help="shell to generate completions for",
     )
     return parser

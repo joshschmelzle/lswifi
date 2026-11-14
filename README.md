@@ -301,58 +301,59 @@ CLI options
 ```ascii
 positional arguments:
   {completion}          commands
-    completion          Generate shell completion script
+    completion          print a shell completion script
 
 options:
   -h, --help            show this help message and exit
   -version, --version, -V
                         show program's version number and exit
   -n, --scans #         set how many scans to do before exiting
-  --time #              set test in seconds to perform scans for
+  --time #              run scans for this many seconds
   -i, --interval #      seconds between scans
-  -ies [BSSID]          print extra information about information elements for a specified BSSID
-  -threshold, -t -82    threshold which excludes networks with weak signal strength from results (-82 is default)
-  -all                  remove threshold filtering which excludes results with weaker signal
-  -g                    display filter to limit output by 2.4 GHz band
-  -a                    display filter to limit output by 5 GHz band
-  -six                  display filter to limit output by 6 GHz band
-  -include, -inc SSID   display filter to limit results by specified SSIDs (partial matching supported)
-  -exclude, -exc SSID   display filter to exclude results by specified SSIDs (partial matching supported)
-  -bssid, -bss BSSID    display filter to limit results by specified BSSIDs (partial matching supported)
-  --rssi-stats          special mode to measure signal strength mean, stdev, and range of the connected BSSID over 10 samples, or of -bssid/-include matches. keep the device still; a run may take several minutes
-  --ap-names            adds an ap name column to output and will cache ap names locally to help provide consistent results
-  --qbss                adds station and utilization columns to output using information from AP beacon QBSS IE
-  --tpc                 adds TPC column to output using information from AP beacon 802.11h
-  --period              adds beacon period column to output using information from AP beacon
-  --uptime, -uptime     sort output by access point uptime based on beacon timestamp
-  -rnr, --rnr           special mode to create an alternate table based on RNR results
+  -ies [BSSID]          print decoded information elements for a specified BSSID
+  -threshold, -t -82    hide networks weaker than this RSSI (-82 by default)
+  -all                  show networks of any signal strength, ignoring the threshold
+  -g                    show only 2.4 GHz networks
+  -a                    show only 5 GHz networks
+  -six                  show only 6 GHz networks
+  -include, -inc SSID   show only networks whose SSID matches this text (partial match)
+  -exclude, -exc SSID   hide networks whose SSID matches this text (partial match)
+  -bssid, -bss BSSID    show only BSSIDs matching this text (partial match)
+  --rssi-stats          measure signal strength mean, standard deviation, and range over 10 samples, or for -bssid/-include matches. keep the device still; a run can take several minutes
+  --ap-names            add an AP name column; names are cached locally
+  --qbss                add station and utilization columns from the AP's QBSS element
+  --tpc                 add a TPC column from the AP's 802.11h element
+  --period              add a beacon period column from the AP's beacon
+  --uptime, -uptime     sort by AP uptime from the beacon timestamp
+  -d, --country         add a country code column from the AP's country element
+  -rnr, --rnr           show an alternate table built from Reduced Neighbor Reports
   --channel-width 20|40|80|160|320
-                        display filter to limit output by a specified channel width
-  -ethers               adds an ap name column to output and use an ethers file for the ap names
+                        show only networks of this channel width
+  -ethers               add an AP name column using an ethers file
   --append-ethers BSSID,APNAME
-                        append BSSID and AP name to ethers file for AP names
-  --display-ethers      display the list of saved ethers; (BSSID,APNAME) mapping
-  --data-location       displays where config items are stored on the local machine
+                        add a BSSID and AP name to the ethers file
+  --display-ethers      print the saved BSSID and AP name mappings
+  --data-location       print where config files are stored
   -ap                   print the BSSID of the connected AP
   -channel              print the channel, band, and frequency of the connected AP
-  -raw                  format output as the raw value for other scripts (for -ap and -channel only)
-  --get-interfaces      print current Wi-Fi status and information
-  --list-interfaces     print a list of available WLAN interfaces
-  --json [JSON]         output will be formatted as json
-  --indent 4            JSON output will be formatted with pretty print with provided indent level
-  --csv [CSV]           output will be formatted as csv
+  -raw                  print only the raw value, for scripts (-ap and -channel only)
+  --get-interfaces      print Wi-Fi interface status
+  --list-interfaces     list available WLAN interfaces
+  --json [JSON]         write output as JSON
+  --indent 4            indent JSON output by this many spaces
+  --csv [CSV]           write output as CSV
   -exportraw, -expraw [BSSID]
-                        export raw bss and ies bytefiles. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
+                        export raw BSS and IE byte files (all networks unless you give a BSSID)
   -export, -exp [BSSID]
-                        export scan results to pcapng file. default behavior will export all from a scan. to export only one, provide full mac address of the BSSID as argument.
-  -path EXPORT_PATH     output path for -export, and directory for -exportraw (a .pcapng path uses its directory); defaults to the app data directory
+                        export scan results to a pcapng file (all networks unless you give a BSSID)
+  -path EXPORT_PATH     output path for -export, or directory for -exportraw (a .pcapng path uses its directory). defaults to the app data directory
   -decoderaw BYTE_FILE  decode a raw .BSS or .IES file
-  -decode PCAP_FILE     parse scan results from pcap/pcapng file. by default shows all networks in the file, can be combined with filtering options.
-  --bytes BSSID         output debugging bytes for a specified BSSID found in scan results.
-  --watchevents         a special mode which watches for notification on a wireless interface such as connection and roaming events
-  --syslog <server IP>  syslogs events from --watchevents to a remote syslog server
-  --no-update-check     don't check PyPI for a newer lswifi (checked at most once a day); the LSWIFI_NO_UPDATE_CHECK=1 environment variable does the same
-  --debug               increase verbosity for debugging
+  -decode PCAP_FILE     read scan results from a pcap or pcapng file; shows all networks unless you add a filter
+  --bytes BSSID         print debugging bytes for a BSSID from the scan results
+  --watchevents         watch a wireless interface for connection, roaming, and other events
+  --syslog <server IP>  send --watchevents events to a remote syslog server
+  --no-update-check     skip the PyPI version check, which runs at most once a day. LSWIFI_NO_UPDATE_CHECK=1 also turns it off
+  --debug               print debug messages
 ```
 
 Upgrading
