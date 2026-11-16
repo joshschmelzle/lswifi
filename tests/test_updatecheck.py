@@ -125,7 +125,7 @@ class TestNotify:
             f"lswifi {newer_than_installed()} is available (you have {INSTALLED})"
             in caplog.text
         )
-        assert "pip install --upgrade lswifi" in caplog.text
+        assert f"upgrade with: {updatecheck.upgrade_command()}" in caplog.text
         assert "--no-update-check" not in caplog.text
 
     def test_same_version_says_nothing(self, data_home, pypi, caplog):
@@ -144,6 +144,44 @@ class TestNotify:
         updatecheck.notify(parse(argv), now=lambda: 1000.0)
         assert calls == []
         assert not (data_home / updatecheck.STATE_FILE).exists()
+
+
+class TestUpgradeCommand:
+    def test_uses_the_running_interpreter(self, monkeypatch):
+        monkeypatch.setattr(updatecheck.sys, "platform", "darwin")
+        monkeypatch.setattr(updatecheck.sys, "executable", "/opt/python3")
+        assert updatecheck.upgrade_command() == (
+            "/opt/python3 -m pip install --upgrade lswifi"
+        )
+
+    def test_windows_uses_the_python_name(self, monkeypatch):
+        monkeypatch.setattr(updatecheck.sys, "platform", "win32")
+        monkeypatch.setattr(
+            updatecheck.sys, "executable", r"C:\Program Files\Python\python.exe"
+        )
+        assert updatecheck.upgrade_command() == (
+            "python -m pip install --upgrade lswifi"
+        )
+
+    def test_quotes_a_posix_path_with_spaces(self, monkeypatch):
+        monkeypatch.setattr(updatecheck.sys, "platform", "darwin")
+        monkeypatch.setattr(updatecheck.sys, "executable", "/opt/my python")
+        assert updatecheck.upgrade_command() == (
+            "'/opt/my python' -m pip install --upgrade lswifi"
+        )
+
+    @pytest.mark.parametrize(
+        ("platform", "interpreter"),
+        [("win32", "python"), ("darwin", "python3")],
+    )
+    def test_frozen_build_uses_the_platform_name(
+        self, monkeypatch, platform, interpreter
+    ):
+        monkeypatch.setattr(updatecheck.sys, "frozen", True, raising=False)
+        monkeypatch.setattr(updatecheck.sys, "platform", platform)
+        assert updatecheck.upgrade_command() == (
+            f"{interpreter} -m pip install --upgrade lswifi"
+        )
 
 
 def test_message_goes_to_stderr_and_json_stays_clean(
