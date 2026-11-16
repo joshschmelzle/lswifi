@@ -389,6 +389,8 @@ Let's install and upgrade lswifi to the latest version available:
 > python -m pip install -U lswifi
 ```
 
+On macOS and Linux, use `python3` in place of `python`.
+
 Check the version installed:
 
 ```bash

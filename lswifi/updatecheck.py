@@ -19,7 +19,9 @@ import json
 import logging
 import os
 import re
+import shlex
 import ssl
+import sys
 import time
 import urllib.request
 from collections.abc import Callable
@@ -105,6 +107,16 @@ def latest_version(
     return latest
 
 
+def upgrade_command() -> str:
+    if getattr(sys, "frozen", False):
+        interpreter = "python" if sys.platform == "win32" else "python3"
+    elif sys.platform == "win32":
+        interpreter = f'"{sys.executable}"'
+    else:
+        interpreter = shlex.quote(sys.executable)
+    return f"{interpreter} -m pip install --upgrade lswifi"
+
+
 def notify(args, now: Callable[[], float] = time.time) -> None:
     if disabled(args):
         return
@@ -115,8 +127,8 @@ def notify(args, now: Callable[[], float] = time.time) -> None:
     latest = latest_version(now(), state_path)
     if latest and is_newer(latest, __version__):
         log.info(
-            "lswifi %s is available (you have %s); upgrade with: "
-            "python -m pip install --upgrade lswifi",
+            "lswifi %s is available (you have %s); upgrade with: %s",
             latest,
             __version__,
+            upgrade_command(),
         )
