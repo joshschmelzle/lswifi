@@ -111,7 +111,7 @@ def upgrade_command() -> str:
     if getattr(sys, "frozen", False):
         interpreter = "python" if sys.platform == "win32" else "python3"
     elif sys.platform == "win32":
-        interpreter = f'"{sys.executable}"'
+        interpreter = "python"
     else:
         interpreter = shlex.quote(sys.executable)
     return f"{interpreter} -m pip install --upgrade lswifi"

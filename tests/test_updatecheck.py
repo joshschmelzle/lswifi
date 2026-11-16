@@ -154,14 +154,20 @@ class TestUpgradeCommand:
             "/opt/python3 -m pip install --upgrade lswifi"
         )
 
-    def test_quotes_a_windows_path_with_spaces(self, monkeypatch):
+    def test_windows_uses_the_python_name(self, monkeypatch):
         monkeypatch.setattr(updatecheck.sys, "platform", "win32")
         monkeypatch.setattr(
             updatecheck.sys, "executable", r"C:\Program Files\Python\python.exe"
         )
         assert updatecheck.upgrade_command() == (
-            r'"C:\Program Files\Python\python.exe" '
-            "-m pip install --upgrade lswifi"
+            "python -m pip install --upgrade lswifi"
+        )
+
+    def test_quotes_a_posix_path_with_spaces(self, monkeypatch):
+        monkeypatch.setattr(updatecheck.sys, "platform", "darwin")
+        monkeypatch.setattr(updatecheck.sys, "executable", "/opt/my python")
+        assert updatecheck.upgrade_command() == (
+            "'/opt/my python' -m pip install --upgrade lswifi"
         )
 
     @pytest.mark.parametrize(
